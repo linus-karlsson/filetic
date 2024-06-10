@@ -8,7 +8,7 @@ global b8 running = false;
 
 LRESULT msg_handler(HWND win, UINT msg, WPARAM w_param, LPARAM l_param)
 {
-    LRESULT result;
+    LRESULT result = 0;
     switch (msg)
     {
         case WM_DESTROY:
@@ -17,16 +17,19 @@ LRESULT msg_handler(HWND win, UINT msg, WPARAM w_param, LPARAM l_param)
             running = false;
             break;
         }
-        default: break;
+        default:
+        {
+            result = DefWindowProc(win, msg, w_param, l_param);
+            break;
+        }
     }
-    result = DefWindowProc(win, msg, w_param, l_param);
     return result;
 }
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line,
                    int show_cmd)
 {
-    WNDCLASS window_class;
+    WNDCLASS window_class = {0};
     HWND win;
     const int width = 600;
     const int height = 300;
