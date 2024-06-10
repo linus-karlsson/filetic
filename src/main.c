@@ -16,7 +16,7 @@ typedef struct OpenGLProperties
 typedef struct File_Attrib
 {
     u8* buffer;
-    u32 size;
+    u64 size;
 } File_Attrib;
 
 global b8 running = false;
@@ -44,9 +44,9 @@ LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_param)
 char* get_last_error()
 {
     DWORD error = GetLastError();
-    if (!error) return NULL;
+    if (!error) return "";
 
-    char* message = NULL;
+    char* message = "";
 
     DWORD size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
@@ -102,7 +102,10 @@ void log_last_error()
 {
     char* message = get_last_error();
     log_error_message(message, strlen(message));
-    LocalFree(message);
+    if (strlen(message))
+    {
+        LocalFree(message);
+    }
 }
 
 OpenGLProperties opengl_init(HWND window)
@@ -167,9 +170,9 @@ void clean_opengl(HWND window, OpenGLProperties* opengl_properties)
     ReleaseDC(window, opengl_properties->hdc);
 }
 
-File_Attrib read_file(const char* file_path, const char* operation)
+File_Attrib read_file(const char* file_path)
 {
-    FILE* file = fopen(file_path, operation);
+    FILE* file = fopen(file_path, "rb");
 
     if (!file)
     {
@@ -179,18 +182,30 @@ File_Attrib read_file(const char* file_path, const char* operation)
 
     File_Attrib file_attrib = { 0 };
     fseek(file, 0, SEEK_END);
-    file_attrib.size = ftell(file);
+    file_attrib.size = (u64)ftell(file);
     rewind(file);
 
-    file_attrib.buffer = (u8*)calloc(file_attrib.size, sizeof(u8));
+    file_attrib.buffer = (u8*)calloc(file_attrib.size + 1, sizeof(u8));
 
-    if (fread(file_attrib.buffer, sizeof(u8), file_attrib.size, file) !=
-        file_attrib.size)
+    if (fread(file_attrib.buffer, 1, file_attrib.size, file) != file_attrib.size)
     {
         log_last_error();
         assert(false);
     }
+    fclose(file);
     return file_attrib;
+}
+
+char* get_shader_error_prefix(u32 type)
+{
+    const char* prefix = "Failed to compile";
+    const char* what_file =
+        type == GL_VERTEX_SHADER ? " vertex shader: " : " fragment shader: ";
+    size_t prefix_message_length = 0;
+    char* prefix_message =
+        concatinate(prefix, strlen(prefix), what_file, strlen(what_file), 0,
+                    &prefix_message_length);
+    return prefix_message;
 }
 
 u32 compile_shader(u32 type, const u8* source)
@@ -203,13 +218,7 @@ u32 compile_shader(u32 type, const u8* source)
     glGetShaderiv(id, GL_COMPILE_STATUS, &result);
     if (result == GL_FALSE)
     {
-        const char* prefix = "Failed to compile";
-        const char* what_file = type == GL_VERTEX_SHADER ? " vertex shader: "
-                                                         : " fragment shader: ";
-        size_t prefix_message_length = 0;
-        char* prefix_message =
-            concatinate(prefix, strlen(prefix), what_file, strlen(what_file), 0,
-                        &prefix_message_length);
+        char* prefix_message = get_shader_error_prefix(type);
 
         int length = 0;
         glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
@@ -217,7 +226,7 @@ u32 compile_shader(u32 type, const u8* source)
         glGetShaderInfoLog(id, length, &length, message);
 
         char* error_message = concatinate(
-            prefix_message, prefix_message_length, message, length, 0, NULL);
+            prefix_message, strlen(prefix_message), message, length, 0, NULL);
 
         log_error_message(error_message, strlen(error_message));
 
@@ -233,7 +242,23 @@ u32 compile_shader(u32 type, const u8* source)
 
 u32 create_shader(const char* vertex_file_path, const char* fragment_file_path)
 {
-    return 0;
+    File_Attrib vertex_file = read_file(vertex_file_path);
+    File_Attrib fragment_file = read_file(fragment_file_path);
+    u32 vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_file.buffer);
+    u32 fragemnt_shader =
+        compile_shader(GL_FRAGMENT_SHADER, fragment_file.buffer);
+
+    u32 program = glCreateProgram();
+
+    glAttachShader(program, vertex_shader);
+    glAttachShader(program, fragemnt_shader);
+    glLinkProgram(program);
+    glValidateProgram(program);
+
+    glDeleteShader(vertex_shader);
+    glDeleteShader(fragemnt_shader);
+
+    return program;
 }
 
 int main(int argc, char** argv)
@@ -258,6 +283,9 @@ int main(int argc, char** argv)
         if (window)
         {
             OpenGLProperties opengl_properties = opengl_init(window);
+
+            u32 shader = create_shader("./res/shaders/vertex.glsl",
+                                       "./res/shaders/fragment.glsl");
 
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_CULL_FACE);

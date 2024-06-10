@@ -1,15 +1,12 @@
-#version 100
+#version 450 core
 
-attribute vec3 vPos;
-attribute vec4 vColor;
+layout(location = 0) in vec4 vPosition;
+layout(location = 1) in vec4 vColor;
 
-uniform mat4 modelView;
-uniform mat4 projection;
-
-varying vec4 fColor;
+layout(location = 1) out vec4 fColor;
 
 void main()
 {
-    gl_Position = projection * modelView * vec4(vPos, 1.0);
+    gl_Position = vPosition;
     fColor = vColor;
 }
