@@ -44,15 +44,28 @@ char* get_last_error()
     return message;
 }
 
+void _log_message(const char* prefix, const size_t prefix_len,
+                  const char* message, const size_t message_len)
+{
+    char* final = (char*)calloc(message_len + prefix_len + 1, 1);
+    memcpy(final, prefix, prefix_len);
+    memcpy(final + prefix_len, message, message_len);
+    OutputDebugString(final);
+    free(final);
+}
+
 void log_message(const char* message, const size_t message_len)
 {
     const char* log = "[LOG]: ";
     const size_t log_len = strlen(log);
+    _log_message(log, log_len, message, message_len);
+}
 
-    char* final = (char*)calloc(message_len + log_len + 1, 1);
-    memcpy(final, log, log_len);
-    memcpy(final + log_len, message, message_len);
-    OutputDebugString(final);
+void error_message(const char* message, const size_t message_len)
+{
+    const char* error = "[ERROR]: ";
+    const size_t error_len = strlen(error);
+    _log_message(error, error_len, message, message_len);
 }
 
 int main(int argc, char** argv)
@@ -68,26 +81,31 @@ int main(int argc, char** argv)
     window_class.lpszClassName = "filetic";
 
     ATOM res = RegisterClass(&window_class);
-    char* message = get_last_error();
-    log_message(message, strlen(message));
-
-    assert(res);
-
-    win = CreateWindowEx(0, window_class.lpszClassName, "FileTic",
-                         WS_OVERLAPPEDWINDOW | WS_VISIBLE, 10, 10, width,
-                         height, 0, 0, window_class.hInstance, 0);
-
-    assert(win);
-
-    running = true;
-    while (running)
+    if (res)
     {
-        MSG msg;
-        while (PeekMessage(&msg, win, 0, 0, PM_REMOVE))
+        win = CreateWindowEx(0, window_class.lpszClassName, "FileTic",
+                             WS_OVERLAPPEDWINDOW | WS_VISIBLE, 10, 10, width,
+                             height, 0, 0, window_class.hInstance, 0);
+
+        assert(win);
+
+        running = true;
+        while (running)
         {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+            MSG msg;
+            while (PeekMessage(&msg, win, 0, 0, PM_REMOVE))
+            {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
         }
+    }
+    else
+    {
+        char* message = get_last_error();
+        error_message(message, strlen(message));
+        LocalFree(message);
+        assert(false);
     }
 }
 
