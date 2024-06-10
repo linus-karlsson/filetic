@@ -226,7 +226,7 @@ char* get_shader_error_prefix(u32 type)
     return prefix_message;
 }
 
-u32 compile_shader(u32 type, const u8* source)
+u32 shader_compile(u32 type, const u8* source)
 {
     u32 id = glCreateShader(type);
     glShaderSource(id, sizeof(u8), (const char**)&source, NULL);
@@ -258,13 +258,13 @@ u32 compile_shader(u32 type, const u8* source)
     return id;
 }
 
-u32 create_shader(const char* vertex_file_path, const char* fragment_file_path)
+u32 shader_create(const char* vertex_file_path, const char* fragment_file_path)
 {
     File_Attrib vertex_file = read_file(vertex_file_path);
     File_Attrib fragment_file = read_file(fragment_file_path);
-    u32 vertex_shader = compile_shader(GL_VERTEX_SHADER, vertex_file.buffer);
+    u32 vertex_shader = shader_compile(GL_VERTEX_SHADER, vertex_file.buffer);
     u32 fragemnt_shader =
-        compile_shader(GL_FRAGMENT_SHADER, fragment_file.buffer);
+        shader_compile(GL_FRAGMENT_SHADER, fragment_file.buffer);
 
     u32 program = glCreateProgram();
 
@@ -277,6 +277,40 @@ u32 create_shader(const char* vertex_file_path, const char* fragment_file_path)
     glDeleteShader(fragemnt_shader);
 
     return program;
+}
+
+void shader_bind(u32 shader)
+{
+    glUseProgram(shader);
+}
+
+void shader_unbind()
+{
+    glUseProgram(0);
+}
+
+void shader_destroy(u32 shader)
+{
+    glDeleteProgram(shader);
+}
+
+u32 vertex_buffer_create(const void* data, u32 size, GLenum usage)
+{
+    u32 vertex_buffer = 0;
+    glGenBuffers(1, &vertex_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+    glBufferData(GL_ARRAY_BUFFER, size, data, usage);
+    return vertex_buffer;
+}
+
+void vertex_buffer_bind(uint32_t vertex_buffer)
+{
+    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+}
+
+void vertex_buffer_unbind()
+{
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 int main(int argc, char** argv)
@@ -302,7 +336,7 @@ int main(int argc, char** argv)
         {
             OpenGLProperties opengl_properties = opengl_init(window);
 
-            u32 shader = create_shader("./res/shaders/vertex.glsll",
+            u32 shader = shader_create("./res/shaders/vertex.glsll",
                                        "./res/shaders/fragment.glsl");
 
             glEnable(GL_DEPTH_TEST);
