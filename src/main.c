@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
@@ -42,6 +44,17 @@ char* get_last_error()
     return message;
 }
 
+void log_message(const char* message, const size_t message_len)
+{
+    const char* log = "[LOG]: ";
+    const size_t log_len = strlen(log);
+
+    char* final = (char*)calloc(message_len + log_len + 1, 1);
+    memcpy(final, log, log_len);
+    memcpy(final + log_len, message, message_len);
+    OutputDebugString(final);
+}
+
 int main(int argc, char** argv)
 {
     WNDCLASS window_class;
@@ -56,6 +69,8 @@ int main(int argc, char** argv)
 
     ATOM res = RegisterClass(&window_class);
     char* message = get_last_error();
+    log_message(message, strlen(message));
+
     assert(res);
 
     win = CreateWindowEx(0, window_class.lpszClassName, "FileTic",
