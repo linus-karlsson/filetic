@@ -68,6 +68,13 @@ void error_message(const char* message, const size_t message_len)
     _log_message(error, error_len, message, message_len);
 }
 
+void log_last_error()
+{
+    char* message = get_last_error();
+    error_message(message, strlen(message));
+    LocalFree(message);
+}
+
 int main(int argc, char** argv)
 {
     WNDCLASS window_class;
@@ -86,65 +93,28 @@ int main(int argc, char** argv)
         win = CreateWindowEx(0, window_class.lpszClassName, "FileTic",
                              WS_OVERLAPPEDWINDOW | WS_VISIBLE, 10, 10, width,
                              height, 0, 0, window_class.hInstance, 0);
-
-        assert(win);
-
-        running = true;
-        while (running)
+        if (win)
         {
-            MSG msg;
-            while (PeekMessage(&msg, win, 0, 0, PM_REMOVE))
+            running = true;
+            while (running)
             {
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
+                MSG msg;
+                while (PeekMessage(&msg, win, 0, 0, PM_REMOVE))
+                {
+                    TranslateMessage(&msg);
+                    DispatchMessage(&msg);
+                }
             }
+        }
+        else
+        {
+            log_last_error();
+            assert(false);
         }
     }
     else
     {
-        char* message = get_last_error();
-        error_message(message, strlen(message));
-        LocalFree(message);
+        log_last_error();
         assert(false);
     }
 }
-
-#if 0
-int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line,
-                   int show_cmd)
-{
-    
-    WNDCLASS window_class = {0};
-    HWND win;
-    const int width = 600;
-    const int height = 300;
-
-    window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-    window_class.lpfnWndProc = msg_handler;
-    window_class.hInstance = instance;
-    window_class.lpszClassName = "filetic";
-
-    ATOM res = RegisterClass(&window_class);
-    assert(res);
-
-    win = CreateWindowEx(0, window_class.lpszClassName, "FileTic",
-                         WS_OVERLAPPEDWINDOW | WS_VISIBLE, 10, 10, width,
-                         height, 0, 0, window_class.hInstance, 0);
-
-    assert(win);
-
-    running = true;
-    while (running)
-    {
-        MSG msg;
-        while(PeekMessage(&msg, win, 0, 0, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
-
-    return 0;
-}
-
-#endif
