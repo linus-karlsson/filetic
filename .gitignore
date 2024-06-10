@@ -1,0 +1,16 @@
+bin/
+bin-obj/
+build/
+Makefile
+tags
+*.o
+*.a
+*.spv
+*.out
+gmon.*
+perf.*
+error_logging.txt
+.vs/
+.cache/
+x64/
+compile_commands.json
