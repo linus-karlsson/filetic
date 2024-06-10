@@ -7,6 +7,41 @@
 
 #include "define.h"
 
+#if 0
+#define WGL_CONTEXT_MAJOR_VERSION_ARB 0x2091
+#define WGL_CONTEXT_MINOR_VERSION_ARB 0X2092
+#define WGL_CONTEXT_FLAGS_ARB 0X2094
+#define WGL_CONTEXT_COREPROFILE_BIT_ARB 0x00000001
+#define WGL_CONTEXT_PROFILE_MASK_ARB 0x9126
+typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int* attribList);
+
+typedef const char* (WINAPI* PFNWGLGETEXTENSIONSSTRINGEXTPROC)(void);
+typedef BOOL (WINAPI* PFNWGLSWAPINTERVALEXTPROC)(int);
+typedef int (WINAPI* PFNWGLGETSWAPINTERVALEXTPROC) (void);
+
+    PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
+    wglCreateContextAttribsARB =
+        (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress(
+            "wglCreateContextAttribsARB");
+
+    const int attribList[] = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB,
+        3,
+        WGL_CONTEXT_MINOR_VERSION_ARB,
+        3,
+        WGL_CONTEXT_FLAGS_ARB,
+        0,
+        WGL_CONTEXT_PROFILE_MASK_ARB,
+        WGL_CONTEXT_COREPROFILE_BIT_ARB,
+        0,
+    };
+
+    HGLRC hglrc = wglCreateContextAttribsARB(hdc, 0, attribList);
+    wglMakeCurrent(NULL, NULL);
+    wglDeleteContext(opengl_rc);
+    wglMakeCurrent(hdc, hglrc);
+#endif
+
 global b8 running = false;
 
 LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_param)
@@ -76,7 +111,13 @@ void log_last_error()
     LocalFree(message);
 }
 
-void opengl_init(HWND window)
+typedef struct OpenGLProperties
+{
+    HDC hdc;
+    HGLRC context;
+} OpenGLProperties;
+
+OpenGLProperties opengl_init(HWND window)
 {
     HDC hdc = GetDC(window);
 
@@ -108,14 +149,14 @@ void opengl_init(HWND window)
         assert(false);
     }
 
-    HGLRC opengl_rc = wglCreateContext(hdc);
-    if (!opengl_rc)
+    HGLRC context = wglCreateContext(hdc);
+    if (!context)
     {
         log_last_error();
         assert(false);
     }
 
-    if (!wglMakeCurrent(hdc, opengl_rc))
+    if (!wglMakeCurrent(hdc, context))
     {
         log_last_error();
         assert(false);
@@ -128,7 +169,14 @@ void opengl_init(HWND window)
         assert(false);
     }
 
-    // TODO: Clean all the resources
+    return (OpenGLProperties){ .hdc = hdc, .context = context };
+}
+
+void clean_opengl(HWND window, OpenGLProperties* opengl_properties)
+{
+    wglMakeCurrent(NULL, NULL);
+    wglDeleteContext(opengl_properties->context);
+    ReleaseDC(window, opengl_properties->hdc);
 }
 
 int main(int argc, char** argv)
@@ -152,7 +200,7 @@ int main(int argc, char** argv)
                                 height, 0, 0, window_class.hInstance, 0);
         if (window)
         {
-            opengl_init(window);
+            OpenGLProperties opengl_properties = opengl_init(window);
 
             running = true;
             while (running)
@@ -163,7 +211,12 @@ int main(int argc, char** argv)
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
                 }
+                glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+
+                SwapBuffers(opengl_properties.hdc);
             }
+            clean_opengl(window, &opengl_properties);
         }
         else
         {
