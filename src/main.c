@@ -313,6 +313,25 @@ void vertex_buffer_unbind()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
+u32 index_buffer_create(const void* data, u32 count, GLenum usage)
+{
+    u32 index_buffer = 0;
+    glGenBuffers(1, &index_buffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, count, data, usage);
+    return index_buffer;
+}
+
+void index_buffer_bind(u32 index_buffer)
+{
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
+}
+
+void index_buffer_unbind()
+{
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
 int main(int argc, char** argv)
 {
     HWND window;
