@@ -7,6 +7,25 @@
 
 #include "define.h"
 
+#define array_create(region, array, array_capacity, data_type)                 \
+    do                                                                         \
+    {                                                                          \
+        (array)->size = 0;                                                     \
+        (array)->capacity = (array_capacity);                                  \
+        (array)->data = calloc(array_capacity, sizeof((*(array)->data)));      \
+    } while (0)
+
+#define array_push(array, value)                                               \
+    do                                                                         \
+    {                                                                          \
+        if ((array)->size >= (array)->capacity)                                \
+        {                                                                      \
+            (array)->capacity = (u32)((array)->capacity * 2.0f);               \
+            (array)->data = realloc((array)->data, (array)->capacity);         \
+        }                                                                      \
+        (array)->data[(array)->size++] = (value);                              \
+    } while (0)
+
 typedef struct OpenGLProperties
 {
     HDC hdc;
@@ -331,6 +350,20 @@ void index_buffer_unbind()
 {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
+
+typedef struct VertexBufferItem
+{
+    u32 type;
+    u32 count;
+    u32 size;
+    u8 normalized;
+} VertexBufferItem;
+
+typedef struct VertexBufferLayout
+{
+    u32 size;
+    VertexBufferItem* items;
+} VertexBufferLayout;
 
 typedef enum DebugLogLevel
 {
