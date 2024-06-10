@@ -27,20 +27,20 @@ IF (WIN32)
 ELSE()
 ENDIF()
 
-add_executable(${EXE} ${SOURCES} ${PLATFORM})
+add_executable(${EXE} ${SOURCES} ${PLATFORM} "${CMAKE_SOURCE_DIR}/lib/glad/src/glad.c")
 
 target_include_directories(${EXE}
     PUBLIC "${CMAKE_SOURCE_DIR}"
     PUBLIC "${CMAKE_SOURCE_DIR}/include"
     PUBLIC "${CMAKE_SOURCE_DIR}/src"
-    PUBLIC "${CMAKE_SOURCE_DIR}/vendor"
+    PUBLIC "${CMAKE_SOURCE_DIR}/lib/glad/include"
 )
 
 IF (WIN32)
     target_link_options(${EXE} PRIVATE "/SUBSYSTEM:WINDOWS" PRIVATE "/ENTRY:mainCRTStartup") 
     # For gcc and g++, clang
     #target_link_options(${EXE} PRIVATE "-mwindows") 
-    target_link_libraries(${EXE} user32 Winmm)
+    target_link_libraries(${EXE} user32 Winmm opengl32)
 
     option(WINDOW_32 "Windows" ON)
     option(LINUX "Linux" OFF)

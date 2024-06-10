@@ -3,12 +3,13 @@
 #include <string.h>
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <glad/glad.h>
 
 #include "define.h"
 
 global b8 running = false;
 
-LRESULT msg_handler(HWND win, UINT msg, WPARAM w_param, LPARAM l_param)
+LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_param)
 {
     LRESULT result = 0;
     switch (msg)
@@ -21,7 +22,7 @@ LRESULT msg_handler(HWND win, UINT msg, WPARAM w_param, LPARAM l_param)
         }
         default:
         {
-            result = DefWindowProc(win, msg, w_param, l_param);
+            result = DefWindowProc(window, msg, w_param, l_param);
             break;
         }
     }
@@ -75,31 +76,89 @@ void log_last_error()
     LocalFree(message);
 }
 
+void opengl_init(HWND window)
+{
+    HDC hdc = GetDC(window);
+
+    PIXELFORMATDESCRIPTOR pixel_format_desc = {
+        .nSize = sizeof(PIXELFORMATDESCRIPTOR),
+        .nVersion = 1,
+        .dwFlags = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
+        .iPixelType = PFD_TYPE_RGBA,
+        .cColorBits = 32,
+        .cDepthBits = 24,
+        .cAlphaBits = 8,
+        .cStencilBits = 8,
+        .iLayerType = PFD_MAIN_PLANE,
+    };
+
+    int pixel_format_index = ChoosePixelFormat(hdc, &pixel_format_desc);
+    if (!pixel_format_index)
+    {
+        log_last_error();
+        assert(false);
+    }
+
+    PIXELFORMATDESCRIPTOR suggested_pixel_format = { 0 };
+    DescribePixelFormat(hdc, pixel_format_index, sizeof(suggested_pixel_format),
+                        &suggested_pixel_format);
+    if (!SetPixelFormat(hdc, pixel_format_index, &suggested_pixel_format))
+    {
+        log_last_error();
+        assert(false);
+    }
+
+    HGLRC opengl_rc = wglCreateContext(hdc);
+    if (!opengl_rc)
+    {
+        log_last_error();
+        assert(false);
+    }
+
+    if (!wglMakeCurrent(hdc, opengl_rc))
+    {
+        log_last_error();
+        assert(false);
+    }
+
+    if (!gladLoadGL())
+    {
+        const char* message = "Could not load glad!";
+        error_message(message, strlen(message));
+        assert(false);
+    }
+
+    // TODO: Clean all the resources
+}
+
 int main(int argc, char** argv)
 {
-    WNDCLASS window_class;
-    HWND win;
+    HWND window;
     const int width = 600;
     const int height = 300;
 
-    window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-    window_class.lpfnWndProc = msg_handler;
-    window_class.hInstance = GetModuleHandle(0);
-    window_class.lpszClassName = "filetic";
+    WNDCLASS window_class = {
+        .style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
+        .lpfnWndProc = msg_handler,
+        .hInstance = GetModuleHandle(0),
+        .lpszClassName = "filetic",
+    };
 
     ATOM res = RegisterClass(&window_class);
     if (res)
     {
-        win = CreateWindowEx(0, window_class.lpszClassName, "FileTic",
-                             WS_OVERLAPPEDWINDOW | WS_VISIBLE, 10, 10, width,
-                             height, 0, 0, window_class.hInstance, 0);
-        if (win)
+        window = CreateWindowEx(0, window_class.lpszClassName, "FileTic",
+                                WS_OVERLAPPEDWINDOW | WS_VISIBLE, 10, 10, width,
+                                height, 0, 0, window_class.hInstance, 0);
+        if (window)
         {
+            opengl_init(window);
+
             running = true;
             while (running)
             {
                 MSG msg;
-                while (PeekMessage(&msg, win, 0, 0, PM_REMOVE))
+                while (PeekMessage(&msg, window, 0, 0, PM_REMOVE))
                 {
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
