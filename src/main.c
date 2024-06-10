@@ -100,12 +100,29 @@ void log_error_message(const char* message, const size_t message_len)
 
 void log_last_error()
 {
-    char* message = get_last_error();
-    log_error_message(message, strlen(message));
-    if (strlen(message))
+    char* last_error_message = get_last_error();
+    log_error_message(last_error_message, strlen(last_error_message));
+    if (strlen(last_error_message))
     {
-        LocalFree(message);
+        LocalFree(last_error_message);
     }
+}
+
+void log_file_error(const char* file_path)
+{
+    char* last_error_message = get_last_error();
+    size_t error_message_length = 0;
+    char* error_message =
+        concatinate(file_path, strlen(file_path), last_error_message,
+                    strlen(last_error_message), ' ', &error_message_length);
+
+    log_error_message(error_message, error_message_length);
+
+    if (strlen(last_error_message))
+    {
+        LocalFree(last_error_message);
+    }
+    free(error_message);
 }
 
 OpenGLProperties opengl_init(HWND window)
@@ -176,7 +193,7 @@ File_Attrib read_file(const char* file_path)
 
     if (!file)
     {
-        log_last_error();
+        log_file_error(file_path);
         assert(false);
     }
 
@@ -187,7 +204,8 @@ File_Attrib read_file(const char* file_path)
 
     file_attrib.buffer = (u8*)calloc(file_attrib.size + 1, sizeof(u8));
 
-    if (fread(file_attrib.buffer, 1, file_attrib.size, file) != file_attrib.size)
+    if (fread(file_attrib.buffer, 1, file_attrib.size, file) !=
+        file_attrib.size)
     {
         log_last_error();
         assert(false);
@@ -284,7 +302,7 @@ int main(int argc, char** argv)
         {
             OpenGLProperties opengl_properties = opengl_init(window);
 
-            u32 shader = create_shader("./res/shaders/vertex.glsl",
+            u32 shader = create_shader("./res/shaders/vertex.glsll",
                                        "./res/shaders/fragment.glsl");
 
             glEnable(GL_DEPTH_TEST);
