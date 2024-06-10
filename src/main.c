@@ -50,7 +50,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line,
 
     running = true;
     while (running)
-        ;
+    {
+        MSG msg;
+        while(PeekMessage(&msg, win, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
 
     return 0;
 }
