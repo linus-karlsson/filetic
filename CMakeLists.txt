@@ -23,7 +23,7 @@ ENDIF()
 file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.c")
 
 IF (WIN32)
-    file(GLOB PLATFORM "${PROJECT_NAME}/src/windows/*.c")
+    file(GLOB PLATFORM "${CMAKE_SOURCE_DIR}/src/windows/*.c")
 ELSE()
 ENDIF()
 
@@ -31,9 +31,9 @@ add_executable(${EXE} ${SOURCES} ${PLATFORM})
 
 target_include_directories(${EXE}
     PUBLIC "${CMAKE_SOURCE_DIR}"
-    PUBLIC "${CMAKE_SOURCE_DIR}\\include"
-    PUBLIC "${CMAKE_SOURCE_DIR}\\src"
-    PUBLIC "${CMAKE_SOURCE_DIR}\\vendor"
+    PUBLIC "${CMAKE_SOURCE_DIR}/include"
+    PUBLIC "${CMAKE_SOURCE_DIR}/src"
+    PUBLIC "${CMAKE_SOURCE_DIR}/vendor"
 )
 
 IF (WIN32)

@@ -4,8 +4,23 @@
 
 #include "define.h"
 
+global b8 running = false;
+
 LRESULT msg_handler(HWND win, UINT msg, WPARAM w_param, LPARAM l_param)
 {
+    LRESULT result;
+    switch (msg)
+    {
+        case WM_DESTROY:
+        case WM_QUIT:
+        {
+            running = false;
+            break;
+        }
+        default: break;
+    }
+    result = DefWindowProc(win, msg, w_param, l_param);
+    return result;
 }
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line,
@@ -29,6 +44,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line,
                          height, 0, 0, window_class.hInstance, 0);
 
     assert(win);
+
+    running = true;
+    while (running)
+        ;
 
     return 0;
 }
