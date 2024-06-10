@@ -57,12 +57,29 @@ char* get_last_error()
     return message;
 }
 
+char* concatinate(const char* first, const size_t first_length,
+                  const char* second, const size_t second_length,
+                  const char delim_between, size_t* result_length)
+{
+    const size_t extra = delim_between != '\0';
+    const size_t length = first_length + second_length + extra;
+    char* result = (char*)calloc(length + 1, sizeof(char));
+
+    memcpy(result, first, first_length);
+    if (delim_between) result[first_length] = delim_between;
+    memcpy(result + first_length + extra, second, second_length);
+    if (result_length)
+    {
+        *result_length = length;
+    }
+    return result;
+}
+
 void _log_message(const char* prefix, const size_t prefix_len,
                   const char* message, const size_t message_len)
 {
-    char* final = (char*)calloc(message_len + prefix_len + 1, 1);
-    memcpy(final, prefix, prefix_len);
-    memcpy(final + prefix_len, message, message_len);
+    char* final =
+        concatinate(prefix, prefix_len, message, message_len, '\0', NULL);
     OutputDebugString(final);
     free(final);
 }
@@ -74,7 +91,7 @@ void log_message(const char* message, const size_t message_len)
     _log_message(log, log_len, message, message_len);
 }
 
-void error_message(const char* message, const size_t message_len)
+void log_error_message(const char* message, const size_t message_len)
 {
     const char* error = "[ERROR]: ";
     const size_t error_len = strlen(error);
@@ -84,7 +101,7 @@ void error_message(const char* message, const size_t message_len)
 void log_last_error()
 {
     char* message = get_last_error();
-    error_message(message, strlen(message));
+    log_error_message(message, strlen(message));
     LocalFree(message);
 }
 
@@ -136,7 +153,7 @@ OpenGLProperties opengl_init(HWND window)
     if (!gladLoadGL())
     {
         const char* message = "Could not load glad!";
-        error_message(message, strlen(message));
+        log_error_message(message, strlen(message));
         assert(false);
     }
 
@@ -160,7 +177,7 @@ File_Attrib read_file(const char* file_path, const char* operation)
         assert(false);
     }
 
-    File_Attrib file_attrib = {0};
+    File_Attrib file_attrib = { 0 };
     fseek(file, 0, SEEK_END);
     file_attrib.size = ftell(file);
     rewind(file);
@@ -176,9 +193,42 @@ File_Attrib read_file(const char* file_path, const char* operation)
     return file_attrib;
 }
 
-u32 compile_shader(u32 type, const char* source)
+u32 compile_shader(u32 type, const u8* source)
 {
-    return 0;
+    u32 id = glCreateShader(type);
+    glShaderSource(id, sizeof(u8), (const char**)&source, NULL);
+    glCompileShader(id);
+
+    int result = GL_FALSE;
+    glGetShaderiv(id, GL_COMPILE_STATUS, &result);
+    if (result == GL_FALSE)
+    {
+        const char* prefix = "Failed to compile";
+        const char* what_file = type == GL_VERTEX_SHADER ? " vertex shader: "
+                                                         : " fragment shader: ";
+        size_t prefix_message_length = 0;
+        char* prefix_message =
+            concatinate(prefix, strlen(prefix), what_file, strlen(what_file), 0,
+                        &prefix_message_length);
+
+        int length = 0;
+        glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
+        char* message = (char*)calloc(length, sizeof(char));
+        glGetShaderInfoLog(id, length, &length, message);
+
+        char* error_message = concatinate(
+            prefix_message, prefix_message_length, message, length, 0, NULL);
+
+        log_error_message(error_message, strlen(error_message));
+
+        free(prefix_message);
+        free(message);
+        free(error_message);
+        glDeleteShader(id);
+        return 0;
+    }
+
+    return id;
 }
 
 u32 create_shader(const char* vertex_file_path, const char* fragment_file_path)
