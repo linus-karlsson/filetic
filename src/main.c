@@ -332,6 +332,69 @@ void index_buffer_unbind()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
+typedef enum DebugLogLevel
+{
+    NONE,
+    HIGH,
+    MEDIUM,
+    LOW,
+    NOTIFICATION,
+} DebugLogLevel;
+
+global DebugLogLevel g_debug_log_level = HIGH;
+
+void set_gldebug_log_level(DebugLogLevel level)
+{
+    g_debug_log_level = level;
+}
+
+void opengl_log_message(GLenum source, GLenum type, GLuint id, GLenum severity,
+                        GLsizei length, const GLchar* message,
+                        const void* userParam)
+{
+    switch (severity)
+    {
+        case GL_DEBUG_SEVERITY_HIGH:
+        {
+            if (g_debug_log_level >= HIGH)
+            {
+                log_error_message(message, strlen(message));
+                assert(false);
+            }
+            break;
+        }
+        case GL_DEBUG_SEVERITY_MEDIUM:
+        {
+            if (g_debug_log_level >= MEDIUM)
+            {
+                log_message(message, strlen(message));
+            }
+            break;
+        }
+        case GL_DEBUG_SEVERITY_LOW:
+        {
+            if (g_debug_log_level >= LOW)
+            {
+                log_message(message, strlen(message));
+            }
+            break;
+        }
+        case GL_DEBUG_SEVERITY_NOTIFICATION:
+        {
+            log_message(message, strlen(message));
+            break;
+        }
+        default: break;
+    }
+}
+
+void enable_gldebugging()
+{
+    glDebugMessageCallback(opengl_log_message, NULL);
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+}
+
 int main(int argc, char** argv)
 {
     HWND window;
@@ -358,6 +421,7 @@ int main(int argc, char** argv)
             u32 shader = shader_create("./res/shaders/vertex.glsll",
                                        "./res/shaders/fragment.glsl");
 
+            enable_gldebugging();
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_CULL_FACE);
             running = true;
