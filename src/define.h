@@ -1,6 +1,9 @@
 #pragma once
 #include <stdint.h>
 
+#define assert(ex)                                                             \
+    if (!(ex)) *(u32*)0 = 0
+
 #define true 1
 #define false 0
 
