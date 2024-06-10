@@ -7,40 +7,17 @@
 
 #include "define.h"
 
-#if 0
-#define WGL_CONTEXT_MAJOR_VERSION_ARB 0x2091
-#define WGL_CONTEXT_MINOR_VERSION_ARB 0X2092
-#define WGL_CONTEXT_FLAGS_ARB 0X2094
-#define WGL_CONTEXT_COREPROFILE_BIT_ARB 0x00000001
-#define WGL_CONTEXT_PROFILE_MASK_ARB 0x9126
-typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int* attribList);
+typedef struct OpenGLProperties
+{
+    HDC hdc;
+    HGLRC context;
+} OpenGLProperties;
 
-typedef const char* (WINAPI* PFNWGLGETEXTENSIONSSTRINGEXTPROC)(void);
-typedef BOOL (WINAPI* PFNWGLSWAPINTERVALEXTPROC)(int);
-typedef int (WINAPI* PFNWGLGETSWAPINTERVALEXTPROC) (void);
-
-    PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
-    wglCreateContextAttribsARB =
-        (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress(
-            "wglCreateContextAttribsARB");
-
-    const int attribList[] = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB,
-        3,
-        WGL_CONTEXT_MINOR_VERSION_ARB,
-        3,
-        WGL_CONTEXT_FLAGS_ARB,
-        0,
-        WGL_CONTEXT_PROFILE_MASK_ARB,
-        WGL_CONTEXT_COREPROFILE_BIT_ARB,
-        0,
-    };
-
-    HGLRC hglrc = wglCreateContextAttribsARB(hdc, 0, attribList);
-    wglMakeCurrent(NULL, NULL);
-    wglDeleteContext(opengl_rc);
-    wglMakeCurrent(hdc, hglrc);
-#endif
+typedef struct File_Attrib
+{
+    u8* buffer;
+    u32 size;
+} File_Attrib;
 
 global b8 running = false;
 
@@ -111,12 +88,6 @@ void log_last_error()
     LocalFree(message);
 }
 
-typedef struct OpenGLProperties
-{
-    HDC hdc;
-    HGLRC context;
-} OpenGLProperties;
-
 OpenGLProperties opengl_init(HWND window)
 {
     HDC hdc = GetDC(window);
@@ -179,6 +150,42 @@ void clean_opengl(HWND window, OpenGLProperties* opengl_properties)
     ReleaseDC(window, opengl_properties->hdc);
 }
 
+File_Attrib read_file(const char* file_path, const char* operation)
+{
+    FILE* file = fopen(file_path, operation);
+
+    if (!file)
+    {
+        log_last_error();
+        assert(false);
+    }
+
+    File_Attrib file_attrib = {0};
+    fseek(file, 0, SEEK_END);
+    file_attrib.size = ftell(file);
+    rewind(file);
+
+    file_attrib.buffer = (u8*)calloc(file_attrib.size, sizeof(u8));
+
+    if (fread(file_attrib.buffer, sizeof(u8), file_attrib.size, file) !=
+        file_attrib.size)
+    {
+        log_last_error();
+        assert(false);
+    }
+    return file_attrib;
+}
+
+u32 compile_shader(u32 type, const char* source)
+{
+    return 0;
+}
+
+u32 create_shader(const char* vertex_file_path, const char* fragment_file_path)
+{
+    return 0;
+}
+
 int main(int argc, char** argv)
 {
     HWND window;
@@ -202,6 +209,8 @@ int main(int argc, char** argv)
         {
             OpenGLProperties opengl_properties = opengl_init(window);
 
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_CULL_FACE);
             running = true;
             while (running)
             {
@@ -211,8 +220,13 @@ int main(int argc, char** argv)
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
                 }
+                RECT client_rect;
+                GetClientRect(window, &client_rect);
+                GLint viewport_width = client_rect.right - client_rect.left;
+                GLint viewport_height = client_rect.bottom - client_rect.top;
+                glViewport(0, 0, viewport_width, viewport_height);
                 glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-                glClear(GL_COLOR_BUFFER_BIT);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
                 SwapBuffers(opengl_properties.hdc);
             }
