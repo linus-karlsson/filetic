@@ -6,20 +6,29 @@
 
 LRESULT msg_handler(HWND win, UINT msg, WPARAM w_param, LPARAM l_param)
 {
-
 }
 
-int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cmd)
+int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line,
+                   int show_cmd)
 {
     WNDCLASS window_class;
     HWND win;
-    const u16 width = 600;
-    const u16 height = 300;
+    const int width = 600;
+    const int height = 300;
 
     window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
     window_class.lpfnWndProc = msg_handler;
     window_class.hInstance = instance;
     window_class.lpszClassName = "filetic";
+
+    ATOM res = RegisterClass(&window_class);
+    assert(res);
+
+    win = CreateWindowEx(0, window_class.lpszClassName, "FileTic",
+                         WS_OVERLAPPEDWINDOW | WS_VISIBLE, 10, 10, width,
+                         height, 0, 0, window_class.hInstance, 0);
+
+    assert(win);
 
     return 0;
 }

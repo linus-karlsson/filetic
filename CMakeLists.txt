@@ -1,10 +1,8 @@
 cmake_minimum_required(VERSION 3.16.3) 
 
-project(Syntics)
+project(FileTic)
 set(EXE ${PROJECT_NAME})
 
-#-march=native -mtune=native
-#set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY bin)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) 
 IF(WIN32)
@@ -22,48 +20,33 @@ ELSE()
     set(CMAKE_C_FLAGS_RELEASE "${STANDARD_FLAGS} -O2 -pedantic -DNDEBUG")
 ENDIF()
 
-option(INCLUDE_TEST "Include testning" OFF)
-
-#set(SOURCES "${PROJECT_NAME}/src/syntics.c")
-file(GLOB STB "${PROJECT_NAME}/vendor/stb/*.c")
-file(GLOB SOURCES "${PROJECT_NAME}/src/*.c")
-file(GLOB MATH "${PROJECT_NAME}/src/math/*.c")
+file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.c")
 
 IF (WIN32)
-    file(GLOB PLATFORM "${PROJECT_NAME}/src/win32/*.c")
+    file(GLOB PLATFORM "${PROJECT_NAME}/src/windows/*.c")
 ELSE()
-    file(GLOB PLATFORM "${PROJECT_NAME}/src/linux/*.c")
 ENDIF()
 
-if(INCLUDE_TEST)
-    add_library(${EXE} STATIC ${SOURCES} ${STB} ${OBJ})
-    add_subdirectory("${CMAKE_SOURCE_DIR}/Test")
-    include(CTest)
-    add_test("Test" "Test/bin/Test" COMMAND "Test/bin/Test")
-else()
-    add_executable(${EXE} ${SOURCES} ${STB} ${MATH} ${PLATFORM})
-endif()
+add_executable(${EXE} ${SOURCES} ${PLATFORM})
 
 target_include_directories(${EXE}
     PUBLIC "${CMAKE_SOURCE_DIR}"
-    PUBLIC "${CMAKE_SOURCE_DIR}\\${PROJECT_NAME}\\headers"
-    PUBLIC "${CMAKE_SOURCE_DIR}\\${PROJECT_NAME}\\src"
-    PUBLIC "${CMAKE_SOURCE_DIR}\\${PROJECT_NAME}\\vendor"
+    PUBLIC "${CMAKE_SOURCE_DIR}\\include"
+    PUBLIC "${CMAKE_SOURCE_DIR}\\src"
+    PUBLIC "${CMAKE_SOURCE_DIR}\\vendor"
 )
 
 IF (WIN32)
-    target_include_directories(${EXE} PUBLIC "C:\\VulkanSDK\\1.3.275.0\\Include")
-    target_link_directories(${EXE} PRIVATE "C:\\VulkanSDK\\1.3.275.0\\Lib")
     target_link_options(${EXE} PRIVATE "/SUBSYSTEM:WINDOWS") 
     # For gcc and g++, clang
     #target_link_options(${EXE} PRIVATE "-mwindows") 
-    target_link_libraries(${EXE} vulkan-1 user32 Winmm pdh)
+    target_link_libraries(${EXE} user32 Winmm)
 
     option(WINDOW_32 "Windows" ON)
     option(LINUX "Linux" OFF)
 
 ELSE()
-    target_link_libraries(${EXE} vulkan xcb xcb-xfixes X11 X11-xcb xcb-cursor m)
+    target_link_libraries(${EXE})
 
     option(WINDOW_32 "Windows" OFF)
     option(LINUX "Linux" ON)
