@@ -7,6 +7,20 @@
 #include <Windows.h>
 #include <stdlib.h>
 
+typedef struct Callbacks
+{
+    OnKeyPressedCallback on_key_pressed;
+    OnKeyReleasedCallback on_key_released;
+    OnButtonPressedCallback on_button_pressed;
+    OnButtonReleasedCallback on_button_released;
+    OnMouseMovedCallback on_mouse_moved;
+    OnMouseWheelCallback on_mouse_wheel;
+    OnWindowFocusedCallback on_window_focused;
+    OnWindowResizeCallback on_window_resize;
+    OnWindowEnterLeaveCallback on_window_enter_leave;
+    OnKeyStrokeCallback on_key_stroke;
+} Callbacks;
+
 typedef struct OpenGLProperties
 {
     HDC hdc;
@@ -18,6 +32,7 @@ typedef struct WindowsPlatformInternal
     HWND window;
     i32 width;
     i32 height;
+    Callbacks callbacks;
     OpenGLProperties opengl_properties;
     b8 running;
 } WindowsPlatformInternal;
@@ -29,6 +44,66 @@ LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_param)
     LRESULT result = 0;
     switch (msg)
     {
+        case WM_CHAR:
+        {
+            char char_code = (char)w_param;
+            platform->callbacks.on_key_stroke(char_code);
+            break;
+        }
+        case WM_SYSKEYDOWN:
+        case WM_KEYDOWN:
+        {
+            u16 key = (u16)w_param;
+            platform->callbacks.on_key_pressed(key);
+            break;
+        }
+        case WM_SYSKEYUP:
+        case WM_KEYUP:
+        {
+            u16 key = (u16)w_param;
+            platform->callbacks.on_key_released(key);
+            break;
+        }
+        case WM_LBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+        {
+            u8 button = (u8)w_param;
+            platform->callbacks.on_button_pressed(button);
+            break;
+        }
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP:
+        {
+            u8 button = (u8)w_param;
+            platform->callbacks.on_button_released(button);
+            break;
+        }
+        case WM_MOUSEMOVE:
+        {
+            i16 position_x = LOWORD(l_param);
+            i16 position_y = HIWORD(l_param);
+            platform->callbacks.on_mouse_moved(position_x, position_y);
+            break;
+        }
+        case WM_MOUSEWHEEL:
+        {
+            i16 z_delta = GET_WHEEL_DELTA_WPARAM(w_param);
+            platform->callbacks.on_mouse_wheel(z_delta);
+            break;
+        }
+        case WM_SIZE:
+        {
+            platform->width = LOWORD(l_param);
+            platform->height = HIWORD(l_param);
+            platform->callbacks.on_window_resize(platform->width,
+                                                 platform->height);
+            break;
+        }
+        // TODO: mouse leave and enter and focus;
+        case WM_MOVE:
+        {
+            break;
+        }
         case WM_DESTROY:
         case WM_QUIT:
         {
@@ -210,4 +285,84 @@ ClientRect platform_get_client_rect(Platform* platform)
         .right = client_rect.right,
         .bottom = client_rect.bottom,
     };
+}
+
+void platform_event_set_on_key_pressed(Platform* platform,
+                                       OnKeyPressedCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_key_pressed = callback;
+}
+
+void platform_event_set_on_key_released(Platform* platform,
+                                        OnKeyReleasedCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_key_released = callback;
+}
+
+void platform_event_set_on_button_pressed(Platform* platform,
+                                          OnButtonPressedCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_button_pressed = callback;
+}
+
+void platform_event_set_on_button_released(Platform* platform,
+                                           OnButtonReleasedCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_button_released = callback;
+}
+
+void platform_event_set_on_mouse_move(Platform* platform,
+                                      OnMouseMovedCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_mouse_moved = callback;
+}
+
+void platform_event_set_on_mouse_wheel(Platform* platform,
+                                       OnMouseWheelCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_mouse_wheel = callback;
+}
+
+void platform_event_set_on_window_focused(Platform* platform,
+                                          OnWindowFocusedCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_window_focused = callback;
+}
+
+void platform_event_set_on_window_resize(Platform* platform,
+                                         OnWindowResizeCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_window_resize = callback;
+}
+
+void platform_event_set_on_window_enter_leave(
+    Platform* platform, OnWindowEnterLeaveCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_window_enter_leave = callback;
+}
+
+void platform_event_set_on_key_stroke(Platform* platform,
+                                      OnKeyStrokeCallback callback)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    platform_internal->callbacks.on_key_stroke = callback;
 }
