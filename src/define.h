@@ -1,6 +1,25 @@
 #pragma once
 #include <stdint.h>
 
+#define array_create(array, array_capacity)                                    \
+    do                                                                         \
+    {                                                                          \
+        (array)->size = 0;                                                     \
+        (array)->capacity = (array_capacity);                                  \
+        (array)->data = calloc(array_capacity, sizeof((*(array)->data)));      \
+    } while (0)
+
+#define array_push(array, value)                                               \
+    do                                                                         \
+    {                                                                          \
+        if ((array)->size >= (array)->capacity)                                \
+        {                                                                      \
+            (array)->capacity = (u32)((array)->capacity * 2.0f);               \
+            (array)->data = realloc((array)->data, (array)->capacity);         \
+        }                                                                      \
+        (array)->data[(array)->size++] = (value);                              \
+    } while (0)
+
 #define ftic_assert(ex)                                                             \
     if (!(ex)) *(u32*)0 = 0
 

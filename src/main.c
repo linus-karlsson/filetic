@@ -10,25 +10,7 @@
 #include "define.h"
 #include "platform/platform.h"
 #include "logging.h"
-
-#define array_create(array, array_capacity)                                    \
-    do                                                                         \
-    {                                                                          \
-        (array)->size = 0;                                                     \
-        (array)->capacity = (array_capacity);                                  \
-        (array)->data = calloc(array_capacity, sizeof((*(array)->data)));      \
-    } while (0)
-
-#define array_push(array, value)                                               \
-    do                                                                         \
-    {                                                                          \
-        if ((array)->size >= (array)->capacity)                                \
-        {                                                                      \
-            (array)->capacity = (u32)((array)->capacity * 2.0f);               \
-            (array)->data = realloc((array)->data, (array)->capacity);         \
-        }                                                                      \
-        (array)->data[(array)->size++] = (value);                              \
-    } while (0)
+#include "buffers.h"
 
 typedef struct File_Attrib
 {
@@ -141,118 +123,6 @@ void shader_unbind()
 void shader_destroy(u32 shader)
 {
     glDeleteProgram(shader);
-}
-
-u32 vertex_buffer_create(const void* data, u32 count, u32 size, GLenum usage)
-{
-    u32 vertex_buffer = 0;
-    glGenBuffers(1, &vertex_buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, size * count, data, usage);
-    return vertex_buffer;
-}
-
-void vertex_buffer_bind(uint32_t vertex_buffer)
-{
-    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-}
-
-void vertex_buffer_unbind()
-{
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
-u32 index_buffer_create(const void* data, u32 count, u32 size, GLenum usage)
-{
-    u32 index_buffer = 0;
-    glGenBuffers(1, &index_buffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, count * size, data, usage);
-    return index_buffer;
-}
-
-void index_buffer_bind(u32 index_buffer)
-{
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
-}
-
-void index_buffer_unbind()
-{
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
-
-typedef struct VertexBufferItem
-{
-    u32 type;
-    u32 count;
-    u32 size;
-} VertexBufferItem;
-
-typedef struct VertexBufferItemArray
-{
-    u32 size;
-    u32 capacity;
-    VertexBufferItem* data;
-} VertexBufferItemArray;
-
-typedef struct VertexBufferLayout
-{
-    u32 size;
-    u32 stride;
-    VertexBufferItemArray items;
-} VertexBufferLayout;
-
-void vertex_buffer_layout_create(const u32 capacity, const u32 type_size,
-                                 VertexBufferLayout* vertex_buffer_layout)
-{
-    vertex_buffer_layout->size = 0;
-    vertex_buffer_layout->stride = type_size;
-    array_create(&vertex_buffer_layout->items, capacity);
-}
-
-void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout,
-                                     const u32 count)
-{
-    const VertexBufferItem item = {
-        .type = GL_FLOAT,
-        .count = count,
-        .size = sizeof(f32) * count,
-    };
-    array_push(&vertex_buffer_layout->items, item);
-}
-
-u32 vertex_array_create()
-{
-    u32 vertex_array = 0;
-    glGenVertexArrays(1, &vertex_array);
-    return vertex_array;
-}
-
-void vertex_array_bind(u32 vertex_array)
-{
-    glBindVertexArray(vertex_array);
-}
-
-void vertex_array_unbind()
-{
-    glBindVertexArray(0);
-}
-
-void vertex_array_add_buffer(const u32 vertex_array, const u32 vertex_buffer,
-                             const VertexBufferLayout* vertex_buffer_layout)
-{
-    vertex_array_bind(vertex_array);
-    vertex_buffer_bind(vertex_buffer);
-
-    u64 offset = 0;
-    for (u32 i = 0; i < vertex_buffer_layout->items.size; ++i)
-    {
-        const VertexBufferItem* item = vertex_buffer_layout->items.data + i;
-        glEnableVertexAttribArray(i);
-        glVertexAttribPointer(i, item->count, item->type, GL_FALSE,
-                              vertex_buffer_layout->stride, (void*)offset);
-        offset += item->size;
-    }
 }
 
 typedef enum DebugLogLevel
