@@ -74,13 +74,13 @@ void platform_init(const char* title, u16 width, u16 height,
         else
         {
             log_last_error();
-            assert(false);
+            ftic_assert(false);
         }
     }
     else
     {
         log_last_error();
-        assert(false);
+        ftic_assert(false);
     }
     SetWindowLongPtrA(platform_internal->window, GWLP_USERDATA,
                       (LONG_PTR)platform_internal);
@@ -143,9 +143,7 @@ void platform_opengl_init(Platform* platform)
         .dwFlags = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
         .iPixelType = PFD_TYPE_RGBA,
         .cColorBits = 32,
-        .cDepthBits = 24,
         .cAlphaBits = 8,
-        .cStencilBits = 8,
         .iLayerType = PFD_MAIN_PLANE,
     };
 
@@ -153,7 +151,7 @@ void platform_opengl_init(Platform* platform)
     if (!pixel_format_index)
     {
         log_last_error();
-        assert(false);
+        ftic_assert(false);
     }
 
     PIXELFORMATDESCRIPTOR suggested_pixel_format = { 0 };
@@ -162,22 +160,21 @@ void platform_opengl_init(Platform* platform)
     if (!SetPixelFormat(hdc, pixel_format_index, &suggested_pixel_format))
     {
         log_last_error();
-        assert(false);
+        ftic_assert(false);
     }
 
     HGLRC context = wglCreateContext(hdc);
     if (!context)
     {
         log_last_error();
-        assert(false);
+        ftic_assert(false);
     }
 
     if (!wglMakeCurrent(hdc, context))
     {
         log_last_error();
-        assert(false);
+        ftic_assert(false);
     }
-
 
     platform_internal->opengl_properties =
         (OpenGLProperties){ .hdc = hdc, .context = context };

@@ -5,6 +5,7 @@
 #define WIN_32_EXTRA_LEAN
 #include <Windows.h>
 #include <glad/glad.h>
+#include <cglm/cglm.h>
 
 #include "define.h"
 #include "platform/platform.h"
@@ -42,7 +43,7 @@ File_Attrib read_file(const char* file_path)
     if (!file)
     {
         log_file_error(file_path);
-        assert(false);
+        ftic_assert(false);
     }
 
     File_Attrib file_attrib = { 0 };
@@ -56,7 +57,7 @@ File_Attrib read_file(const char* file_path)
         file_attrib.size)
     {
         log_last_error();
-        assert(false);
+        ftic_assert(false);
     }
     fclose(file);
     return file_attrib;
@@ -77,7 +78,7 @@ char* get_shader_error_prefix(u32 type)
 u32 shader_compile(u32 type, const u8* source)
 {
     u32 id = glCreateShader(type);
-    glShaderSource(id, sizeof(u8), (const char**)&source, NULL);
+    glShaderSource(id, 1, (const char**)&source, NULL);
     glCompileShader(id);
 
     int result = GL_FALSE;
@@ -142,12 +143,12 @@ void shader_destroy(u32 shader)
     glDeleteProgram(shader);
 }
 
-u32 vertex_buffer_create(const void* data, u32 size, GLenum usage)
+u32 vertex_buffer_create(const void* data, u32 count, u32 size, GLenum usage)
 {
     u32 vertex_buffer = 0;
     glGenBuffers(1, &vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, size, data, usage);
+    glBufferData(GL_ARRAY_BUFFER, size * count, data, usage);
     return vertex_buffer;
 }
 
@@ -161,12 +162,12 @@ void vertex_buffer_unbind()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-u32 index_buffer_create(const void* data, u32 count, GLenum usage)
+u32 index_buffer_create(const void* data, u32 count, u32 size, GLenum usage)
 {
     u32 index_buffer = 0;
     glGenBuffers(1, &index_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, count, data, usage);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, count * size, data, usage);
     return index_buffer;
 }
 
@@ -201,23 +202,57 @@ typedef struct VertexBufferLayout
     VertexBufferItemArray items;
 } VertexBufferLayout;
 
-void vertex_buffer_layout_create(u32 capacity,
+void vertex_buffer_layout_create(const u32 capacity, const u32 type_size,
                                  VertexBufferLayout* vertex_buffer_layout)
 {
     vertex_buffer_layout->size = 0;
+    vertex_buffer_layout->stride = type_size;
     array_create(&vertex_buffer_layout->items, capacity);
 }
 
 void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout,
-                                     u32 count)
+                                     const u32 count)
 {
-    VertexBufferItem item = {
+    const VertexBufferItem item = {
         .type = GL_FLOAT,
         .count = count,
-        .size = sizeof(f32),
+        .size = sizeof(f32) * count,
     };
     array_push(&vertex_buffer_layout->items, item);
-    vertex_buffer_layout->stride += item.count * item.size;
+}
+
+u32 vertex_array_create()
+{
+    u32 vertex_array = 0;
+    glGenVertexArrays(1, &vertex_array);
+    return vertex_array;
+}
+
+void vertex_array_bind(u32 vertex_array)
+{
+    glBindVertexArray(vertex_array);
+}
+
+void vertex_array_unbind()
+{
+    glBindVertexArray(0);
+}
+
+void vertex_array_add_buffer(const u32 vertex_array, const u32 vertex_buffer,
+                             const VertexBufferLayout* vertex_buffer_layout)
+{
+    vertex_array_bind(vertex_array);
+    vertex_buffer_bind(vertex_buffer);
+
+    u64 offset = 0;
+    for (u32 i = 0; i < vertex_buffer_layout->items.size; ++i)
+    {
+        const VertexBufferItem* item = vertex_buffer_layout->items.data + i;
+        glEnableVertexAttribArray(i);
+        glVertexAttribPointer(i, item->count, item->type, GL_FALSE,
+                              vertex_buffer_layout->stride, (void*)offset);
+        offset += item->size;
+    }
 }
 
 typedef enum DebugLogLevel
@@ -247,7 +282,7 @@ void opengl_log_message(GLenum source, GLenum type, GLuint id, GLenum severity,
             if (g_debug_log_level >= HIGH)
             {
                 log_error_message(message, strlen(message));
-                assert(false);
+                ftic_assert(false);
             }
             break;
         }
@@ -283,7 +318,25 @@ void enable_gldebugging()
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 }
 
+typedef struct Vertex
+{
+    vec4 color;
+    vec3 position;
+} Vertex;
 
+typedef struct IndexArray
+{
+    u32 size;
+    u32 capacity;
+    u32* data;
+} IndexArray;
+
+typedef struct VertexArray
+{
+    u32 size;
+    u32 capacity;
+    Vertex* data;
+} VertexArray;
 
 int main(int argc, char** argv)
 {
@@ -294,25 +347,65 @@ int main(int argc, char** argv)
     {
         const char* message = "Could not load glad!";
         log_error_message(message, strlen(message));
-        assert(false);
+        ftic_assert(false);
     }
 
-    u32 shader = shader_create("./res/shaders/vertex.glsll",
+    u32 shader = shader_create("./res/shaders/vertex.glsl",
                                "./res/shaders/fragment.glsl");
 
+    IndexArray index_array = { 0 };
+    array_create(&index_array, 100);
+    array_push(&index_array, 0);
+    array_push(&index_array, 1);
+    array_push(&index_array, 2);
+
+    VertexArray vertex_array = { 0 };
+    array_create(&vertex_array, 100);
+
+    Vertex vertex = {
+        .position = { -0.5f, -0.5f, 0.0f },
+        .color = { 1.0f, 1.0f, 1.0f, 1.0f },
+    };
+    array_push(&vertex_array, vertex);
+    vertex.position[0] = 0.5f;
+    array_push(&vertex_array, vertex);
+    vertex.position[0] = 0.f;
+    vertex.position[1] = 0.5f;
+    array_push(&vertex_array, vertex);
+
+    VertexBufferLayout vertex_buffer_layout = { 0 };
+    vertex_buffer_layout_create(2, sizeof(Vertex), &vertex_buffer_layout);
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 4);
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 3);
+
+    u32 vertex_array_id = vertex_array_create();
+    vertex_array_bind(vertex_array_id);
+
+    u32 vertex_buffer_id = vertex_buffer_create(
+        vertex_array.data, vertex_array.size, sizeof(Vertex), GL_STATIC_DRAW);
+    vertex_array_add_buffer(vertex_array_id, vertex_buffer_id,
+                            &vertex_buffer_layout);
+
+    u32 index_buffer_id = index_buffer_create(
+        index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
+
     enable_gldebugging();
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
     while (platform_is_running(platform))
     {
-        platform_event_fire(platform);
         ClientRect client_rect = platform_get_client_rect(platform);
         GLint viewport_width = client_rect.right - client_rect.left;
         GLint viewport_height = client_rect.bottom - client_rect.top;
         glViewport(0, 0, viewport_width, viewport_height);
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        shader_bind(shader);
+        vertex_array_bind(vertex_array_id);
+        index_buffer_bind(index_buffer_id);
+        glDrawElements(GL_TRIANGLES, index_array.size, GL_UNSIGNED_INT, NULL);
+
         platform_opengl_swap_buffers(platform);
+        platform_event_fire(platform);
     }
     platform_opengl_clean(platform);
 }
