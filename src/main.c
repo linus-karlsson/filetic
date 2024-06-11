@@ -2,12 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #define WIN32_LEAN_AND_MEAN
+#define WIN_32_EXTRA_LEAN
 #include <Windows.h>
 #include <glad/glad.h>
 
 #include "define.h"
 
-#define array_create(region, array, array_capacity, data_type)                 \
+#define array_create(array, array_capacity)                                    \
     do                                                                         \
     {                                                                          \
         (array)->size = 0;                                                     \
@@ -356,14 +357,39 @@ typedef struct VertexBufferItem
     u32 type;
     u32 count;
     u32 size;
-    u8 normalized;
 } VertexBufferItem;
+
+typedef struct VertexBufferItemArray
+{
+    u32 size;
+    u32 capacity;
+    VertexBufferItem* data;
+} VertexBufferItemArray;
 
 typedef struct VertexBufferLayout
 {
     u32 size;
-    VertexBufferItem* items;
+    u32 stride;
+    VertexBufferItemArray items;
 } VertexBufferLayout;
+
+void vertex_buffer_layout_create(u32 capacity,
+                                 VertexBufferLayout* vertex_buffer_layout)
+{
+    vertex_buffer_layout->size = 0;
+    array_create(&vertex_buffer_layout->items, capacity);
+}
+
+void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout, u32 count)
+{
+    VertexBufferItem item = {
+        .type = GL_FLOAT,
+        .count = count,
+        .size = sizeof(f32),
+    };
+    array_push(&vertex_buffer_layout->items, item);
+    vertex_buffer_layout->stride += item.count * item.size;
+}
 
 typedef enum DebugLogLevel
 {
