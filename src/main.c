@@ -7,6 +7,8 @@
 #include <glad/glad.h>
 
 #include "define.h"
+#include "platform/platform.h"
+#include "logging.h"
 
 #define array_create(array, array_capacity)                                    \
     do                                                                         \
@@ -27,185 +29,11 @@
         (array)->data[(array)->size++] = (value);                              \
     } while (0)
 
-typedef struct OpenGLProperties
-{
-    HDC hdc;
-    HGLRC context;
-} OpenGLProperties;
-
 typedef struct File_Attrib
 {
     u8* buffer;
     u64 size;
 } File_Attrib;
-
-global b8 running = false;
-
-LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_param)
-{
-    LRESULT result = 0;
-    switch (msg)
-    {
-        case WM_DESTROY:
-        case WM_QUIT:
-        {
-            running = false;
-            break;
-        }
-        default:
-        {
-            result = DefWindowProc(window, msg, w_param, l_param);
-            break;
-        }
-    }
-    return result;
-}
-
-char* get_last_error()
-{
-    DWORD error = GetLastError();
-    if (!error) return "";
-
-    char* message = "";
-
-    DWORD size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        0, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*)&message, 0,
-        NULL);
-
-    return message;
-}
-
-char* concatinate(const char* first, const size_t first_length,
-                  const char* second, const size_t second_length,
-                  const char delim_between, size_t* result_length)
-{
-    const size_t extra = delim_between != '\0';
-    const size_t length = first_length + second_length + extra;
-    char* result = (char*)calloc(length + 1, sizeof(char));
-
-    memcpy(result, first, first_length);
-    if (delim_between) result[first_length] = delim_between;
-    memcpy(result + first_length + extra, second, second_length);
-    if (result_length)
-    {
-        *result_length = length;
-    }
-    return result;
-}
-
-void _log_message(const char* prefix, const size_t prefix_len,
-                  const char* message, const size_t message_len)
-{
-    char* final =
-        concatinate(prefix, prefix_len, message, message_len, '\0', NULL);
-    OutputDebugString(final);
-    free(final);
-}
-
-void log_message(const char* message, const size_t message_len)
-{
-    const char* log = "[LOG]: ";
-    const size_t log_len = strlen(log);
-    _log_message(log, log_len, message, message_len);
-}
-
-void log_error_message(const char* message, const size_t message_len)
-{
-    const char* error = "[ERROR]: ";
-    const size_t error_len = strlen(error);
-    _log_message(error, error_len, message, message_len);
-}
-
-void log_last_error()
-{
-    char* last_error_message = get_last_error();
-    log_error_message(last_error_message, strlen(last_error_message));
-    if (strlen(last_error_message))
-    {
-        LocalFree(last_error_message);
-    }
-}
-
-void log_file_error(const char* file_path)
-{
-    char* last_error_message = get_last_error();
-    size_t error_message_length = 0;
-    char* error_message =
-        concatinate(file_path, strlen(file_path), last_error_message,
-                    strlen(last_error_message), ' ', &error_message_length);
-
-    log_error_message(error_message, error_message_length);
-
-    if (strlen(last_error_message))
-    {
-        LocalFree(last_error_message);
-    }
-    free(error_message);
-}
-
-OpenGLProperties opengl_init(HWND window)
-{
-    HDC hdc = GetDC(window);
-
-    PIXELFORMATDESCRIPTOR pixel_format_desc = {
-        .nSize = sizeof(PIXELFORMATDESCRIPTOR),
-        .nVersion = 1,
-        .dwFlags = PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
-        .iPixelType = PFD_TYPE_RGBA,
-        .cColorBits = 32,
-        .cDepthBits = 24,
-        .cAlphaBits = 8,
-        .cStencilBits = 8,
-        .iLayerType = PFD_MAIN_PLANE,
-    };
-
-    int pixel_format_index = ChoosePixelFormat(hdc, &pixel_format_desc);
-    if (!pixel_format_index)
-    {
-        log_last_error();
-        assert(false);
-    }
-
-    PIXELFORMATDESCRIPTOR suggested_pixel_format = { 0 };
-    DescribePixelFormat(hdc, pixel_format_index, sizeof(suggested_pixel_format),
-                        &suggested_pixel_format);
-    if (!SetPixelFormat(hdc, pixel_format_index, &suggested_pixel_format))
-    {
-        log_last_error();
-        assert(false);
-    }
-
-    HGLRC context = wglCreateContext(hdc);
-    if (!context)
-    {
-        log_last_error();
-        assert(false);
-    }
-
-    if (!wglMakeCurrent(hdc, context))
-    {
-        log_last_error();
-        assert(false);
-    }
-
-    if (!gladLoadGL())
-    {
-        const char* message = "Could not load glad!";
-        log_error_message(message, strlen(message));
-        assert(false);
-    }
-
-    return (OpenGLProperties){ .hdc = hdc, .context = context };
-}
-
-void clean_opengl(HWND window, OpenGLProperties* opengl_properties)
-{
-    wglMakeCurrent(NULL, NULL);
-    wglDeleteContext(opengl_properties->context);
-    ReleaseDC(window, opengl_properties->hdc);
-}
 
 File_Attrib read_file(const char* file_path)
 {
@@ -380,7 +208,8 @@ void vertex_buffer_layout_create(u32 capacity,
     array_create(&vertex_buffer_layout->items, capacity);
 }
 
-void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout, u32 count)
+void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout,
+                                     u32 count)
 {
     VertexBufferItem item = {
         .type = GL_FLOAT,
@@ -454,65 +283,36 @@ void enable_gldebugging()
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 }
 
+
+
 int main(int argc, char** argv)
 {
-    HWND window;
-    const int width = 600;
-    const int height = 300;
-
-    WNDCLASS window_class = {
-        .style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
-        .lpfnWndProc = msg_handler,
-        .hInstance = GetModuleHandle(0),
-        .lpszClassName = "filetic",
-    };
-
-    ATOM res = RegisterClass(&window_class);
-    if (res)
+    Platform* platform = NULL;
+    platform_init("FileTic", 1000, 600, &platform);
+    platform_opengl_init(platform);
+    if (!gladLoadGL())
     {
-        window = CreateWindowEx(0, window_class.lpszClassName, "FileTic",
-                                WS_OVERLAPPEDWINDOW | WS_VISIBLE, 10, 10, width,
-                                height, 0, 0, window_class.hInstance, 0);
-        if (window)
-        {
-            OpenGLProperties opengl_properties = opengl_init(window);
-
-            u32 shader = shader_create("./res/shaders/vertex.glsll",
-                                       "./res/shaders/fragment.glsl");
-
-            enable_gldebugging();
-            glEnable(GL_DEPTH_TEST);
-            glEnable(GL_CULL_FACE);
-            running = true;
-            while (running)
-            {
-                MSG msg;
-                while (PeekMessage(&msg, window, 0, 0, PM_REMOVE))
-                {
-                    TranslateMessage(&msg);
-                    DispatchMessage(&msg);
-                }
-                RECT client_rect;
-                GetClientRect(window, &client_rect);
-                GLint viewport_width = client_rect.right - client_rect.left;
-                GLint viewport_height = client_rect.bottom - client_rect.top;
-                glViewport(0, 0, viewport_width, viewport_height);
-                glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-                SwapBuffers(opengl_properties.hdc);
-            }
-            clean_opengl(window, &opengl_properties);
-        }
-        else
-        {
-            log_last_error();
-            assert(false);
-        }
-    }
-    else
-    {
-        log_last_error();
+        const char* message = "Could not load glad!";
+        log_error_message(message, strlen(message));
         assert(false);
     }
+
+    u32 shader = shader_create("./res/shaders/vertex.glsll",
+                               "./res/shaders/fragment.glsl");
+
+    enable_gldebugging();
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    while (platform_is_running(platform))
+    {
+        platform_event_fire(platform);
+        ClientRect client_rect = platform_get_client_rect(platform);
+        GLint viewport_width = client_rect.right - client_rect.left;
+        GLint viewport_height = client_rect.bottom - client_rect.top;
+        glViewport(0, 0, viewport_width, viewport_height);
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        platform_opengl_swap_buffers(platform);
+    }
+    platform_opengl_clean(platform);
 }

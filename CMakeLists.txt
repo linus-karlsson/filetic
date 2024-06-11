@@ -23,7 +23,7 @@ ENDIF()
 file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.c")
 
 IF (WIN32)
-    file(GLOB PLATFORM "${CMAKE_SOURCE_DIR}/src/windows/*.c")
+    file(GLOB PLATFORM "${CMAKE_SOURCE_DIR}/src/platform/windows/*.c")
 ELSE()
 ENDIF()
 
