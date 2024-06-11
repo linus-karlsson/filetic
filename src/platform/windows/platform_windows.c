@@ -30,14 +30,14 @@ typedef struct OpenGLProperties
 typedef struct WindowsPlatformInternal
 {
     HWND window;
-    i32 width;
-    i32 height;
+    u16 width;
+    u16 height;
     Callbacks callbacks;
     OpenGLProperties opengl_properties;
     b8 running;
 } WindowsPlatformInternal;
 
-LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_param)
+internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_param)
 {
     WindowsPlatformInternal* platform =
         (WindowsPlatformInternal*)GetWindowLongPtrA(window, GWLP_USERDATA);

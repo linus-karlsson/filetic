@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stdlib.h>
 
 #define array_create(array, array_capacity)                                    \
     do                                                                         \
