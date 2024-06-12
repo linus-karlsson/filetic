@@ -395,6 +395,13 @@ void platform_event_set_on_key_stroke(Platform* platform,
     platform_internal->callbacks.on_key_stroke = callback;
 }
 
+internal char* copy_string(const char* string, const u32 string_length)
+{
+    char* result = (char*)calloc(string_length + 1, sizeof(char));
+    memcpy(result, string, string_length);
+    return result;
+}
+
 Directory platform_get_directory(const char* directory_path,
                                  const u32 directory_len)
 {
@@ -414,11 +421,13 @@ Directory platform_get_directory(const char* directory_path,
                 {
                     continue;
                 }
-                array_push(&directory.sub_directories, ffd.cFileName);
+                array_push(&directory.sub_directories,
+                           copy_string(ffd.cFileName, (u32)strlen(ffd.cFileName)));
             }
             else
             {
-                array_push(&directory.files, ffd.cFileName);
+                array_push(&directory.files,
+                           copy_string(ffd.cFileName, (u32)strlen(ffd.cFileName)));
             }
 
         } while (FindNextFile(file, &ffd));

@@ -15,8 +15,9 @@
     {                                                                          \
         if ((array)->size >= (array)->capacity)                                \
         {                                                                      \
-            (array)->capacity = (u32)((array)->capacity * 2.0f);               \
-            (array)->data = realloc((array)->data, (array)->capacity);         \
+            (array)->capacity *= 2;                                            \
+            (array)->data = realloc(                                           \
+                (array)->data, (array)->capacity * sizeof((*(array)->data)));  \
         }                                                                      \
         (array)->data[(array)->size++] = (value);                              \
     } while (0)
