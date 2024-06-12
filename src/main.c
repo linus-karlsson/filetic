@@ -259,6 +259,9 @@ int main(int argc, char** argv)
     u32 index_buffer_id = index_buffer_create(
         index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
 
+    const char* dir = "C:\\*";
+    Directory directory = platform_get_directory(dir, (u32)strlen(dir));
+
     enable_gldebugging();
     while (platform_is_running(platform))
     {

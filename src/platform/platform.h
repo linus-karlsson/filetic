@@ -21,6 +21,18 @@ typedef struct ClientRect
     int bottom;
 } ClientRect;
 
+typedef struct CharArray {
+    u32 size;
+    u32 capacity;
+    char** data;
+}CharArray;
+
+typedef struct Directory
+{
+   CharArray files;
+   CharArray sub_directories;
+}Directory;
+
 void platform_init(const char* title, u16 width, u16 height, Platform** platform);
 b8   platform_is_running(Platform* platform);
 void platform_event_fire(Platform* platform);
@@ -46,3 +58,4 @@ void platform_event_set_on_window_focused(Platform* platform, OnWindowFocusedCal
 void platform_event_set_on_window_resize(Platform* platform, OnWindowResizeCallback callback);
 void platform_event_set_on_window_enter_leave(Platform* platform, OnWindowEnterLeaveCallback callback);
 void platform_event_set_on_key_stroke(Platform* platform, OnKeyStrokeCallback callback);
+Directory platform_get_directory(const char* directory_path, const u32 directory_len);

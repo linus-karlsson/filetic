@@ -21,7 +21,9 @@
         (array)->data[(array)->size++] = (value);                              \
     } while (0)
 
-#define ftic_assert(ex)                                                             \
+#define array_back(array) ((array)->data + ((array)->size - 1))
+
+#define ftic_assert(ex)                                                        \
     if (!(ex)) *(u32*)0 = 0
 
 #define true 1

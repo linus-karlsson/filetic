@@ -61,5 +61,15 @@ void event_init(Platform* platform)
     array_create(&event_context.events, 20);
 }
 
-void 
+Event* event_subscribe(EventType type)
+{
+    Event event = { .type = type };
+
+    array_push(&event_context.events, event);
+    return array_back(&event_context.events);
+}
+
+void event_unsubscribe(Event* event)
+{
+}
 

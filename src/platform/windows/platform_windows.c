@@ -37,7 +37,8 @@ typedef struct WindowsPlatformInternal
     b8 running;
 } WindowsPlatformInternal;
 
-internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_param)
+internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
+                             LPARAM l_param)
 {
     WindowsPlatformInternal* platform =
         (WindowsPlatformInternal*)GetWindowLongPtrA(window, GWLP_USERDATA);
@@ -46,57 +47,81 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_par
     {
         case WM_CHAR:
         {
-            char char_code = (char)w_param;
-            platform->callbacks.on_key_stroke(char_code);
+            if (platform && platform->callbacks.on_key_stroke)
+            {
+                char char_code = (char)w_param;
+                platform->callbacks.on_key_stroke(char_code);
+            }
             break;
         }
         case WM_SYSKEYDOWN:
         case WM_KEYDOWN:
         {
-            u16 key = (u16)w_param;
-            platform->callbacks.on_key_pressed(key);
+            if (platform && platform->callbacks.on_key_pressed)
+            {
+                u16 key = (u16)w_param;
+                platform->callbacks.on_key_pressed(key);
+            }
             break;
         }
         case WM_SYSKEYUP:
         case WM_KEYUP:
         {
-            u16 key = (u16)w_param;
-            platform->callbacks.on_key_released(key);
+            if (platform && platform->callbacks.on_key_released)
+            {
+                u16 key = (u16)w_param;
+                platform->callbacks.on_key_released(key);
+            }
             break;
         }
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:
         {
-            u8 button = (u8)w_param;
-            platform->callbacks.on_button_pressed(button);
+            if (platform && platform->callbacks.on_button_pressed)
+            {
+                u8 button = (u8)w_param;
+                platform->callbacks.on_button_pressed(button);
+            }
             break;
         }
         case WM_LBUTTONUP:
         case WM_RBUTTONUP:
         {
-            u8 button = (u8)w_param;
-            platform->callbacks.on_button_released(button);
+            if (platform && platform->callbacks.on_button_released)
+            {
+                u8 button = (u8)w_param;
+                platform->callbacks.on_button_released(button);
+            }
             break;
         }
         case WM_MOUSEMOVE:
         {
-            i16 position_x = LOWORD(l_param);
-            i16 position_y = HIWORD(l_param);
-            platform->callbacks.on_mouse_moved(position_x, position_y);
+            if (platform && platform->callbacks.on_mouse_moved)
+            {
+                i16 position_x = LOWORD(l_param);
+                i16 position_y = HIWORD(l_param);
+                platform->callbacks.on_mouse_moved(position_x, position_y);
+            }
             break;
         }
         case WM_MOUSEWHEEL:
         {
-            i16 z_delta = GET_WHEEL_DELTA_WPARAM(w_param);
-            platform->callbacks.on_mouse_wheel(z_delta);
+            if (platform && platform->callbacks.on_mouse_wheel)
+            {
+                i16 z_delta = GET_WHEEL_DELTA_WPARAM(w_param);
+                platform->callbacks.on_mouse_wheel(z_delta);
+            }
             break;
         }
         case WM_SIZE:
         {
-            platform->width = LOWORD(l_param);
-            platform->height = HIWORD(l_param);
-            platform->callbacks.on_window_resize(platform->width,
-                                                 platform->height);
+            if (platform && platform->callbacks.on_window_resize)
+            {
+                platform->width = LOWORD(l_param);
+                platform->height = HIWORD(l_param);
+                platform->callbacks.on_window_resize(platform->width,
+                                                     platform->height);
+            }
             break;
         }
         // TODO: mouse leave and enter and focus;
@@ -107,7 +132,10 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_par
         case WM_DESTROY:
         case WM_QUIT:
         {
-            platform->running = false;
+            if (platform)
+            {
+                platform->running = false;
+            }
             break;
         }
         default:
@@ -365,4 +393,35 @@ void platform_event_set_on_key_stroke(Platform* platform,
     WindowsPlatformInternal* platform_internal =
         (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_key_stroke = callback;
+}
+
+Directory platform_get_directory(const char* directory_path,
+                                 const u32 directory_len)
+{
+    Directory directory = { 0 };
+    array_create(&directory.files, 10);
+    array_create(&directory.sub_directories, 10);
+
+    WIN32_FIND_DATA ffd = { 0 };
+    HANDLE file = FindFirstFile(directory_path, &ffd);
+    if (file != INVALID_HANDLE_VALUE)
+    {
+        do
+        {
+            if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            {
+                if (!strcmp(ffd.cFileName, ".") || !strcmp(ffd.cFileName, ".."))
+                {
+                    continue;
+                }
+                array_push(&directory.sub_directories, ffd.cFileName);
+            }
+            else
+            {
+                array_push(&directory.files, ffd.cFileName);
+            }
+
+        } while (FindNextFile(file, &ffd));
+    }
+    return directory;
 }
