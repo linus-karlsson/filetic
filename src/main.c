@@ -25,7 +25,7 @@ typedef struct Vertex
     V4 color;
     V3 position;
     V2 texture_coordinates;
-    u32 texture_index;
+    f32 texture_index;
 } Vertex;
 
 typedef struct IndexArray
@@ -397,6 +397,18 @@ AABB quad(VertexArray* vertex_array, V3 position, V2 size, V4 color,
                              texture_coordinates);
 }
 
+void generate_indicies(IndexArray* array, u32 offset, u32 indices_count)
+{
+    const u32 INDEX_TABLE[] = { 0, 1, 2, 2, 3, 0 };
+    for (u32 i = 0; i < indices_count; i++)
+    {
+        for (u32 j = 0; j < 6; j++)
+        {
+            array_push(array, ((INDEX_TABLE[j] + (4 * i)) + offset));
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -414,28 +426,22 @@ int main(int argc, char** argv)
 
     IndexArray index_array = { 0 };
     array_create(&index_array, 100);
-    array_push(&index_array, 0);
-    array_push(&index_array, 1);
-    array_push(&index_array, 2);
+    generate_indicies(&index_array, 0, 1);
 
     VertexArray vertex_array = { 0 };
     array_create(&vertex_array, 100);
-
-    Vertex vertex = {
-        .position = v3f(-0.5f, -0.5f, 0.0f),
-        .color = v4f(1.0f, 1.0f, 1.0f, 1.0f),
-    };
-    array_push(&vertex_array, vertex);
-    vertex.position.x = 0.5f;
-    array_push(&vertex_array, vertex);
-    vertex.position.x = 0.f;
-    vertex.position.y = 0.5f;
-    array_push(&vertex_array, vertex);
+    quad(&vertex_array, v3f(-0.5f, -0.5f, 0.0f), v2i(1.0f), v4i(1.0f), 0.0f);
 
     VertexBufferLayout vertex_buffer_layout = { 0 };
-    vertex_buffer_layout_create(2, sizeof(Vertex), &vertex_buffer_layout);
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 4);
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 3);
+    vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 4,
+                                    offsetof(Vertex, color));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 3,
+                                    offsetof(Vertex, position));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 2,
+                                    offsetof(Vertex, texture_coordinates));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 1,
+                                    offsetof(Vertex, texture_index));
 
     u32 vertex_array_id = vertex_array_create();
     vertex_array_bind(vertex_array_id);

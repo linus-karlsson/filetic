@@ -5,7 +5,7 @@ typedef struct VertexBufferItem
 {
     u32 type;
     u32 count;
-    u32 size;
+    u32 offset;
 } VertexBufferItem;
 
 typedef struct VertexBufferItemArray
@@ -31,7 +31,7 @@ void index_buffer_bind(const u32 index_buffer);
 void index_buffer_unbind();
 
 void vertex_buffer_layout_create(const u32 capacity, const u32 type_size, VertexBufferLayout* vertex_buffer_layout);
-void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout, const u32 count);
+void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout, const u32 count, const u32 offset);
 u32  vertex_array_create();
 void vertex_array_bind(const u32 vertex_array);
 void vertex_array_unbind();

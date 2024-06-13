@@ -51,12 +51,12 @@ void vertex_buffer_layout_create(const u32 capacity, const u32 type_size,
 }
 
 void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout,
-                                     const u32 count)
+                                     const u32 count, const u32 offset)
 {
     const VertexBufferItem item = {
         .type = GL_FLOAT,
         .count = count,
-        .size = sizeof(f32) * count,
+        .offset = offset,
     };
     array_push(&vertex_buffer_layout->items, item);
 }
@@ -84,13 +84,12 @@ void vertex_array_add_buffer(const u32 vertex_array, const u32 vertex_buffer,
     vertex_array_bind(vertex_array);
     vertex_buffer_bind(vertex_buffer);
 
-    u64 offset = 0;
     for (u32 i = 0; i < vertex_buffer_layout->items.size; ++i)
     {
         const VertexBufferItem* item = vertex_buffer_layout->items.data + i;
+        u64 offset = (u64)item->offset;
         glEnableVertexAttribArray(i);
         glVertexAttribPointer(i, item->count, item->type, GL_FALSE,
                               vertex_buffer_layout->stride, (void*)offset);
-        offset += item->size;
     }
 }

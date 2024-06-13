@@ -32,9 +32,11 @@ u32 texture_create(TextureProperties* texture_properties, int internal_format,
 
 void texture_bind(u32 texture, int slot)
 {
+    glBindTextureUnit(slot, texture);
 }
 
-void texture_unbind()
+void texture_unbind(int slot)
 {
+    glBindTextureUnit(slot, 0);
 }
 
