@@ -5,13 +5,13 @@
 #define WIN_32_EXTRA_LEAN
 #include <Windows.h>
 #include <glad/glad.h>
-#include <cglm/cglm.h>
 
 #include "define.h"
 #include "platform/platform.h"
 #include "logging.h"
 #include "buffers.h"
 #include "thread_queue.h"
+#include "ftic_math.h"
 
 typedef struct File_Attrib
 {
@@ -21,8 +21,8 @@ typedef struct File_Attrib
 
 typedef struct Vertex
 {
-    vec4 color;
-    vec3 position;
+    V4 color;
+    V3 position;
 } Vertex;
 
 typedef struct IndexArray
@@ -339,6 +339,7 @@ void find_matching_string(const char* start_directory, const u32 length,
     }
 }
 
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -364,14 +365,14 @@ int main(int argc, char** argv)
     array_create(&vertex_array, 100);
 
     Vertex vertex = {
-        .position = { -0.5f, -0.5f, 0.0f },
-        .color = { 1.0f, 1.0f, 1.0f, 1.0f },
+        .position = v3f(-0.5f, -0.5f, 0.0f),
+        .color = v4f(1.0f, 1.0f, 1.0f, 1.0f),
     };
     array_push(&vertex_array, vertex);
-    vertex.position[0] = 0.5f;
+    vertex.position.x = 0.5f;
     array_push(&vertex_array, vertex);
-    vertex.position[0] = 0.f;
-    vertex.position[1] = 0.5f;
+    vertex.position.x = 0.f;
+    vertex.position.y = 0.5f;
     array_push(&vertex_array, vertex);
 
     VertexBufferLayout vertex_buffer_layout = { 0 };
