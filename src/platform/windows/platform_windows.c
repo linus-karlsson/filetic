@@ -422,23 +422,28 @@ Directory platform_get_directory(const char* directory_path,
     {
         do
         {
+            char* path =
+                concatinate(directory_path, directory_len - 1, ffd.cFileName,
+                            (u32)strlen(ffd.cFileName), 0, 2, NULL);
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
                 if (!strcmp(ffd.cFileName, ".") || !strcmp(ffd.cFileName, ".."))
                 {
                     continue;
                 }
-                array_push(
-                    &directory.sub_directories,
-                    copy_string(ffd.cFileName, (u32)strlen(ffd.cFileName)));
+                DirectoryAttrib directory_attrib = {
+                    .path = path,
+                    .name = path + directory_len - 1,
+                };
+                array_push(&directory.sub_directories, directory_attrib);
             }
             else
             {
                 File file = {
                     .size =
                         (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
-                    .name =
-                        copy_string(ffd.cFileName, (u32)strlen(ffd.cFileName)),
+                    .path = path,
+                    .name = path + directory_len - 1,
                 };
                 array_push(&directory.files, file);
             }

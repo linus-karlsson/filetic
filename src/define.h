@@ -24,10 +24,25 @@
 
 #define array_back(array) ((array)->data + ((array)->size - 1))
 
+#define safe_array_push(array, value)                                          \
+    do                                                                         \
+    {                                                                          \
+        platform_mutex_lock(&(array)->mutex);                                  \
+        array_push(array, value);                                              \
+        platform_mutex_unlock(&(array)->mutex);                                \
+    } while (0)
+
+#define safe_array_create(array, array_capacity)                               \
+    do                                                                         \
+    {                                                                          \
+        array_create(array, array_capacity);                                   \
+        (array)->mutex = platform_mutex_create();                              \
+    } while (0)
+
 #define thread_return_value unsigned long
-#define FTicThreadHandle void* 
-#define FTicMutex void* 
-#define FTicSemaphore void* 
+#define FTicThreadHandle void*
+#define FTicMutex void*
+#define FTicSemaphore void*
 
 #define ftic_assert(ex)                                                        \
     if (!(ex)) *(u32*)0 = 0

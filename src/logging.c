@@ -3,14 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 char* concatinate(const char* first, const size_t first_length,
                   const char* second, const size_t second_length,
-                  const char delim_between, size_t* result_length)
+                  const char delim_between, const size_t extra_length,
+                  size_t* result_length)
 {
     const size_t extra = delim_between != '\0';
     const size_t length = first_length + second_length + extra;
-    char* result = (char*)calloc(length + 1, sizeof(char));
+    char* result = (char*)calloc(length + 1 + extra_length, sizeof(char));
 
     memcpy(result, first, first_length);
     if (delim_between) result[first_length] = delim_between;
@@ -26,7 +26,7 @@ void _log_message(const char* prefix, const size_t prefix_len,
                   const char* message, const size_t message_len)
 {
     char* final =
-        concatinate(prefix, prefix_len, message, message_len, '\0', NULL);
+        concatinate(prefix, prefix_len, message, message_len, '\0', 0, NULL);
     platform_print_string(final);
     platform_print_string("\n");
     free(final);
@@ -62,7 +62,7 @@ void log_file_error(const char* file_path)
     size_t error_message_length = 0;
     char* error_message =
         concatinate(file_path, strlen(file_path), last_error_message,
-                    strlen(last_error_message), ' ', &error_message_length);
+                    strlen(last_error_message), ' ', 0, &error_message_length);
 
     log_error_message(error_message, error_message_length);
 

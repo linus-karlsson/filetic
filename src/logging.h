@@ -1,6 +1,6 @@
 #pragma once
 
-char* concatinate(const char* first, const size_t first_length, const char* second, const size_t second_length, const char delim_between, size_t* result_length);
+char* concatinate(const char* first, const size_t first_length, const char* second, const size_t second_length, const char delim_between, const size_t extra_length, size_t* result_length);
 void  _log_message(const char* prefix, const size_t prefix_len, const char* message, const size_t message_len);
 void  log_message(const char* message, const size_t message_len);
 void  log_error_message(const char* message, const size_t message_len);

@@ -19,6 +19,46 @@ typedef struct File_Attrib
     u64 size;
 } File_Attrib;
 
+typedef struct Vertex
+{
+    vec4 color;
+    vec3 position;
+} Vertex;
+
+typedef struct IndexArray
+{
+    u32 size;
+    u32 capacity;
+    u32* data;
+} IndexArray;
+
+typedef struct VertexArray
+{
+    u32 size;
+    u32 capacity;
+    Vertex* data;
+} VertexArray;
+
+typedef struct SafeFileArray
+{
+    u32 size;
+    u32 capacity;
+    File* data;
+    FTicMutex mutex;
+} SafeFileArray;
+
+typedef struct FindingCallbackAttribute
+{
+    ThreadTaskQueue* thread_queue;
+    char* start_directory;
+    u32 start_directory_length;
+    const char* string_to_match;
+    u32 string_to_match_length;
+    SafeFileArray* array;
+} FindingCallbackAttribute;
+
+global b8 running = true;
+
 File_Attrib read_file(const char* file_path)
 {
     FILE* file = fopen(file_path, "rb");
@@ -53,7 +93,7 @@ char* get_shader_error_prefix(u32 type)
         type == GL_VERTEX_SHADER ? " vertex shader: " : " fragment shader: ";
     size_t prefix_message_length = 0;
     char* prefix_message =
-        concatinate(prefix, strlen(prefix), what_file, strlen(what_file), 0,
+        concatinate(prefix, strlen(prefix), what_file, strlen(what_file), 0, 0,
                     &prefix_message_length);
     return prefix_message;
 }
@@ -75,8 +115,9 @@ u32 shader_compile(u32 type, const u8* source)
         char* message = (char*)calloc(length, sizeof(char));
         glGetShaderInfoLog(id, length, &length, message);
 
-        char* error_message = concatinate(
-            prefix_message, strlen(prefix_message), message, length, 0, NULL);
+        char* error_message =
+            concatinate(prefix_message, strlen(prefix_message), message, length,
+                        0, 0, NULL);
 
         log_error_message(error_message, strlen(error_message));
 
@@ -189,48 +230,24 @@ void enable_gldebugging()
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 }
 
-typedef struct Vertex
-{
-    vec4 color;
-    vec3 position;
-} Vertex;
-
-typedef struct IndexArray
-{
-    u32 size;
-    u32 capacity;
-    u32* data;
-} IndexArray;
-
-typedef struct VertexArray
-{
-    u32 size;
-    u32 capacity;
-    Vertex* data;
-} VertexArray;
-
 void parse_all_subdirectories(const char* start_directory, const u32 length)
 {
     Directory directory = platform_get_directory(start_directory, length);
 
     for (u32 i = 0; i < directory.files.size; ++i)
     {
-        char* name = directory.files.data[i].name;
+        const char* name = directory.files.data[i].name;
         log_message(name, strlen(name));
-        free(name);
+        free(directory.files.data[i].path);
     }
     for (u32 i = 0; i < directory.sub_directories.size; ++i)
     {
-        char* name = directory.sub_directories.data[i];
-        size_t directory_name_length = strlen(name);
-        name[directory_name_length++] = '\\';
-        name[directory_name_length++] = '*';
-        char* full_directory =
-            concatinate(start_directory, length - 1, name,
-                        directory_name_length, 0, &directory_name_length);
-        parse_all_subdirectories(full_directory, (u32)directory_name_length);
-        free(full_directory);
-        free(name);
+        char* path = directory.sub_directories.data[i].path;
+        size_t directory_name_length = strlen(path);
+        path[directory_name_length++] = '/';
+        path[directory_name_length++] = '*';
+        parse_all_subdirectories(path, (u32)directory_name_length);
+        free(path);
     }
 }
 
@@ -247,17 +264,6 @@ internal b8 string_contains(const char* string, const u32 string_length,
     return false;
 }
 
-typedef struct FindingCallbackAttribute
-{
-    ThreadTaskQueue* thread_queue;
-    char* start_directory;
-    u32 start_directory_length;
-    const char* string_to_match;
-    u32 string_to_match_length;
-} FindingCallbackAttribute;
-
-global b8 running = true;
-
 void finding_callback(void* data)
 {
     FindingCallbackAttribute* arguments = (FindingCallbackAttribute*)data;
@@ -267,37 +273,39 @@ void finding_callback(void* data)
 
     for (u32 i = 0; i < directory.sub_directories.size && running; ++i)
     {
-        char* name = directory.sub_directories.data[i];
-        size_t directory_name_length = strlen(name);
-        name[directory_name_length++] = '\\';
-        name[directory_name_length++] = '*';
-        char* full_directory = concatinate(
-            arguments->start_directory, arguments->start_directory_length - 1,
-            name, directory_name_length, 0, &directory_name_length);
+        char* path = directory.sub_directories.data[i].path;
+        size_t directory_name_length = strlen(path);
+        path[directory_name_length++] = '\\';
+        path[directory_name_length++] = '*';
 
         FindingCallbackAttribute* next_arguments =
             (FindingCallbackAttribute*)calloc(1,
                                               sizeof(FindingCallbackAttribute));
+        next_arguments->array = arguments->array;
         next_arguments->thread_queue = arguments->thread_queue;
-        next_arguments->start_directory = full_directory;
+        next_arguments->start_directory = path;
         next_arguments->start_directory_length = (u32)directory_name_length;
         next_arguments->string_to_match = arguments->string_to_match;
         next_arguments->string_to_match_length =
             arguments->string_to_match_length;
         ThreadTask task = thread_task(finding_callback, next_arguments);
         thread_tasks_push(next_arguments->thread_queue, &task, 1, NULL);
-        free(name);
     }
 
     for (u32 i = 0; i < directory.files.size && running; ++i)
     {
-        char* name = directory.files.data[i].name;
+        const char* name = directory.files.data[i].name;
+        char* path = directory.files.data[i].path;
         if (string_contains(name, (u32)strlen(name), arguments->string_to_match,
                             arguments->string_to_match_length))
         {
-            log_message(name, strlen(name));
+            safe_array_push(arguments->array, directory.files.data[i]);
+            log_message(path, strlen(path));
         }
-        free(name);
+        else
+        {
+            free(path);
+        }
     }
     free(arguments->start_directory);
     free(data);
@@ -311,27 +319,23 @@ void find_matching_string(const char* start_directory, const u32 length,
 
     for (u32 i = 0; i < directory.files.size; ++i)
     {
-        char* name = directory.files.data[i].name;
+        const char* name = directory.files.data[i].name;
         if (string_contains(name, (u32)strlen(name), string_to_match,
                             string_to_match_length))
         {
             log_message(name, strlen(name));
         }
-        free(name);
+        free(directory.files.data[i].path);
     }
     for (u32 i = 0; i < directory.sub_directories.size; ++i)
     {
-        char* name = directory.sub_directories.data[i];
-        size_t directory_name_length = strlen(name);
-        name[directory_name_length++] = '\\';
-        name[directory_name_length++] = '*';
-        char* full_directory =
-            concatinate(start_directory, length - 1, name,
-                        directory_name_length, 0, &directory_name_length);
-        find_matching_string(full_directory, (u32)directory_name_length,
-                             string_to_match, string_to_match_length);
-        free(full_directory);
-        free(name);
+        char* path = directory.sub_directories.data[i].path;
+        size_t directory_name_length = strlen(path);
+        path[directory_name_length++] = '/';
+        path[directory_name_length++] = '*';
+        find_matching_string(path, (u32)directory_name_length, string_to_match,
+                             string_to_match_length);
+        free(path);
     }
 }
 
@@ -389,6 +393,9 @@ int main(int argc, char** argv)
     ThreadQueue thread_queue = { 0 };
     thread_init(100000, 8, &thread_queue);
 
+    SafeFileArray file_array = { 0 };
+    safe_array_create(&file_array, 10);
+
     const char* dir = "C:\\*";
     char* dir2 = (char*)calloc(strlen(dir) + 1, sizeof(char));
     memcpy(dir2, dir, strlen(dir));
@@ -397,6 +404,7 @@ int main(int argc, char** argv)
     FindingCallbackAttribute* arguments =
         (FindingCallbackAttribute*)calloc(1, sizeof(FindingCallbackAttribute));
     arguments->thread_queue = &thread_queue.task_queue;
+    arguments->array = &file_array;
     arguments->start_directory = dir2;
     arguments->start_directory_length = (u32)strlen(dir2);
     arguments->string_to_match = string_to_match;

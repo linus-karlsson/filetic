@@ -154,11 +154,14 @@ void threads_destroy(ThreadQueue* queue)
     for (u32 i = 0; i < thread_count; i++)
     {
         platform_interlock_exchange(&queue->attribs[i].stop_flag, 1);
-        platform_semaphore_increment(&queue->task_queue.start_semaphore);
     }
-
     for (u32 i = 0; i < thread_count; i++)
     {
+        platform_semaphore_increment(&queue->task_queue.start_semaphore);
+    }
+    for (u32 i = 0; i < thread_count; i++)
+    {
+        platform_thread_join(queue->pool[i]);
         platform_thread_close(queue->pool[i]);
     }
 }
