@@ -24,6 +24,11 @@
 
 #define array_back(array) ((array)->data + ((array)->size - 1))
 
+#define thread_return_value unsigned long
+#define FTicThreadHandle void* 
+#define FTicMutex void* 
+#define FTicSemaphore void* 
+
 #define ftic_assert(ex)                                                        \
     if (!(ex)) *(u32*)0 = 0
 

@@ -63,26 +63,31 @@ void platform_opengl_swap_buffers(Platform* platform);
 ClientRect platform_get_client_rect(Platform* platform);
 
 void platform_event_fire(Platform* platform);
-void platform_event_set_on_key_pressed(Platform* platform,
-                                       OnKeyPressedCallback callback);
-void platform_event_set_on_key_released(Platform* platform,
-                                        OnKeyReleasedCallback callback);
-void platform_event_set_on_button_pressed(Platform* platform,
-                                          OnButtonPressedCallback callback);
-void platform_event_set_on_button_released(Platform* platform,
-                                           OnButtonReleasedCallback callback);
-void platform_event_set_on_mouse_move(Platform* platform,
-                                      OnMouseMovedCallback callback);
-void platform_event_set_on_mouse_wheel(Platform* platform,
-                                       OnMouseWheelCallback callback);
-void platform_event_set_on_window_focused(Platform* platform,
-                                          OnWindowFocusedCallback callback);
-void platform_event_set_on_window_resize(Platform* platform,
-                                         OnWindowResizeCallback callback);
-void platform_event_set_on_window_enter_leave(
-    Platform* platform, OnWindowEnterLeaveCallback callback);
-void platform_event_set_on_key_stroke(Platform* platform,
-                                      OnKeyStrokeCallback callback);
-Directory platform_get_directory(const char* directory_path,
-                                 const u32 directory_len);
+void platform_event_set_on_key_pressed(Platform* platform, OnKeyPressedCallback callback);
+void platform_event_set_on_key_released(Platform* platform, OnKeyReleasedCallback callback);
+void platform_event_set_on_button_pressed(Platform* platform, OnButtonPressedCallback callback);
+void platform_event_set_on_button_released(Platform* platform, OnButtonReleasedCallback callback);
+void platform_event_set_on_mouse_move(Platform* platform, OnMouseMovedCallback callback);
+void platform_event_set_on_mouse_wheel(Platform* platform, OnMouseWheelCallback callback);
+void platform_event_set_on_window_focused(Platform* platform, OnWindowFocusedCallback callback);
+void platform_event_set_on_window_resize(Platform* platform, OnWindowResizeCallback callback);
+void platform_event_set_on_window_enter_leave( Platform* platform, OnWindowEnterLeaveCallback callback);
+void platform_event_set_on_key_stroke(Platform* platform, OnKeyStrokeCallback callback);
+Directory platform_get_directory(const char* directory_path, const u32 directory_len);
+
+FTicMutex platform_mutex_create(void);
+void platform_mutex_lock(FTicMutex* mutex);
+void platform_mutex_unlock(FTicMutex* mutex);
+void platform_mutex_destroy(FTicMutex* mutex);
+
+FTicSemaphore platform_semaphore_create(i32 initial_count, i32 max_count);
+void platform_semaphore_increment(FTicSemaphore* sem);
+void platform_semaphore_wait_and_decrement(FTicSemaphore* sem);
+void platform_semaphore_destroy(FTicSemaphore* sem);
+
+FTicThreadHandle platform_thread_create(void* data, thread_return_value (*thread_function)(void* data), unsigned long creation_flag, unsigned long* thread_id);
+void platform_thread_join(FTicThreadHandle handle);
+void platform_thread_destroy(FTicThreadHandle handle);
+
+u32 platform_get_core_count(void);
 

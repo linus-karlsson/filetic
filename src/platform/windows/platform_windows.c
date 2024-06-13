@@ -447,3 +447,68 @@ Directory platform_get_directory(const char* directory_path,
     }
     return directory;
 }
+
+FTicMutex platform_mutex_create(void)
+{
+    return CreateMutex(NULL, false, NULL);
+}
+
+void platform_mutex_lock(FTicMutex* mutex)
+{
+    WaitForSingleObject(*mutex, INFINITE);
+}
+
+void platform_mutex_unlock(FTicMutex* mutex)
+{
+    ReleaseMutex(*mutex);
+}
+
+void platform_mutex_destroy(FTicMutex* mutex)
+{
+    CloseHandle(*mutex);
+}
+
+FTicSemaphore platform_semaphore_create(i32 initial_count, i32 max_count)
+{
+    return CreateSemaphore(NULL, initial_count, max_count, NULL);
+}
+
+void platform_semaphore_increment(FTicSemaphore* sem)
+{
+    ReleaseSemaphore(*sem, 1, 0);
+}
+
+void platform_semaphore_wait_and_decrement(FTicSemaphore* sem)
+{
+    WaitForSingleObject(*sem, INFINITE);
+}
+
+void platform_semaphore_destroy(FTicSemaphore* sem)
+{
+    CloseHandle(*sem);
+}
+
+FTicThreadHandle
+platform_thread_create(void* data,
+                       thread_return_value (*thread_function)(void* data),
+                       unsigned long creation_flag, unsigned long* thread_id)
+{
+    return CreateThread(0, 0, thread_function, data, creation_flag, thread_id);
+}
+
+void platform_thread_join(FTicThreadHandle handle)
+{
+    WaitForSingleObject(handle, INFINITE);
+}
+
+void platform_thread_destroy(FTicThreadHandle handle)
+{
+    CloseHandle(handle);
+}
+
+u32 platform_get_core_count(void)
+{
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    return sysinfo.dwNumberOfProcessors;
+}
