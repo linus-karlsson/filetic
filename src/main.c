@@ -409,6 +409,18 @@ void generate_indicies(IndexArray* array, u32 offset, u32 indices_count)
     }
 }
 
+int get_uniform_location(u32 shader, const char* name)
+{
+    int location = glGetUniformLocation(shader, name);
+    ftic_assert(location != -1);
+    return location;
+}
+
+void set_uniform_matrix4fv(u32 shader, int uniform_location, M4 value)
+{
+    glUniformMatrix4fv(uniform_location, 1, GL_FALSE, &value.data[0][0]);
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -430,7 +442,7 @@ int main(int argc, char** argv)
 
     VertexArray vertex_array = { 0 };
     array_create(&vertex_array, 100);
-    quad(&vertex_array, v3f(-0.5f, -0.5f, 0.0f), v2i(1.0f), v4i(1.0f), 0.0f);
+    quad(&vertex_array, v3f(10.0f, 10.0f, 0.0f), v2i(400.0f), v4i(1.0f), 0.0f);
 
     VertexBufferLayout vertex_buffer_layout = { 0 };
     vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
@@ -460,7 +472,7 @@ int main(int argc, char** argv)
     SafeFileArray file_array = { 0 };
     safe_array_create(&file_array, 10);
 
-    const char* dir = "C:\\*";
+    const char* dir = "C:\\Users\\linus\\*";
     char* dir2 = (char*)calloc(strlen(dir) + 1, sizeof(char));
     memcpy(dir2, dir, strlen(dir));
     const char* string_to_match = "init.vim";
@@ -475,17 +487,28 @@ int main(int argc, char** argv)
     arguments->string_to_match_length = (u32)strlen(string_to_match);
     finding_callback(arguments);
 
+    u32 proj_location = get_uniform_location(shader, "proj");
+    u32 view_location = get_uniform_location(shader, "view");
+    u32 model_location = get_uniform_location(shader, "model");
+
     enable_gldebugging();
     while (platform_is_running(platform))
     {
         ClientRect client_rect = platform_get_client_rect(platform);
         GLint viewport_width = client_rect.right - client_rect.left;
         GLint viewport_height = client_rect.bottom - client_rect.top;
+        M4 proj = ortho(0.0f, (float)viewport_width, (float)viewport_height,
+                        0.0f, -1.0f, 1.0f);
+        M4 view = m4d();
+        M4 model = m4d();
         glViewport(0, 0, viewport_width, viewport_height);
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader_bind(shader);
+        set_uniform_matrix4fv(shader, proj_location, proj);
+        set_uniform_matrix4fv(shader, view_location, view);
+        set_uniform_matrix4fv(shader, model_location, model);
         vertex_array_bind(vertex_array_id);
         index_buffer_bind(index_buffer_id);
         glDrawElements(GL_TRIANGLES, index_array.size, GL_UNSIGNED_INT, NULL);
