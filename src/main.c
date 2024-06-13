@@ -11,6 +11,7 @@
 #include "logging.h"
 #include "buffers.h"
 #include "thread_queue.h"
+#include "collision.h"
 #include "ftic_math.h"
 
 typedef struct File_Attrib
@@ -23,6 +24,8 @@ typedef struct Vertex
 {
     V4 color;
     V3 position;
+    V2 texture_coordinates;
+    u32 texture_index;
 } Vertex;
 
 typedef struct IndexArray
@@ -339,6 +342,60 @@ void find_matching_string(const char* start_directory, const u32 length,
     }
 }
 
+typedef struct TextureCoordinates
+{
+    V2 coordinates[4];
+} TextureCoordinates;
+
+AABB _set_up_verticies(VertexArray* vertex_array, V3 position, V2 size,
+                       V4 color, f32 texture_index,
+                       TextureCoordinates texture_coordinates)
+{
+    Vertex vertex = {
+        .position = position,
+        .texture_coordinates = texture_coordinates.coordinates[0],
+        .color = color,
+        .texture_index = texture_index,
+    };
+    array_push(vertex_array, vertex);
+    vertex.position.y += size.y;
+    vertex.texture_coordinates = texture_coordinates.coordinates[1];
+    array_push(vertex_array, vertex);
+    vertex.position.x += size.x;
+    vertex.texture_coordinates = texture_coordinates.coordinates[2];
+    array_push(vertex_array, vertex);
+    vertex.position.y -= size.y;
+    vertex.texture_coordinates = texture_coordinates.coordinates[3];
+    array_push(vertex_array, vertex);
+
+    AABB out;
+    out.min = v2_v3(position);
+    out.size = size;
+    return out;
+}
+
+AABB quad_co(VertexArray* vertex_array, V3 position, V2 size, V4 color,
+             V4 texture_coordinates, f32 texture_index)
+{
+    TextureCoordinates _tex_coords = {
+        v2_v4(texture_coordinates),
+        v2f(texture_coordinates.x, texture_coordinates.w),
+        v2f(texture_coordinates.z, texture_coordinates.w),
+        v2f(texture_coordinates.z, texture_coordinates.y)
+    };
+    return _set_up_verticies(vertex_array, position, size, color, texture_index,
+                             _tex_coords);
+}
+
+AABB quad(VertexArray* vertex_array, V3 position, V2 size, V4 color,
+          f32 texture_index)
+{
+    TextureCoordinates texture_coordinates = { v2d(), v2f(0.0f, 1.0f),
+                                               v2f(1.0f, 1.0f),
+                                               v2f(1.0f, 0.0f) };
+    return _set_up_verticies(vertex_array, position, size, color, texture_index,
+                             texture_coordinates);
+}
 
 int main(int argc, char** argv)
 {
