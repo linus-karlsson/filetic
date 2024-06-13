@@ -32,13 +32,14 @@ set(CGLM_STATIC ON)
 set(CGLM_SHARED OFF)
 add_subdirectory("${CMAKE_SOURCE_DIR}/lib/cglm")
 
-add_executable(${EXE} ${SOURCES} ${PLATFORM} ${STB} "${CMAKE_SOURCE_DIR}/lib/glad/src/glad.c")
+add_executable(${EXE} ${SOURCES} ${PLATFORM} ${STB} "${CMAKE_SOURCE_DIR}/lib/glad/src/glad.c" "${CMAKE_SOURCE_DIR}/lib/math/ftic_math.c")
 
 target_include_directories(${EXE}
     PUBLIC "${CMAKE_SOURCE_DIR}"
     PUBLIC "${CMAKE_SOURCE_DIR}/include"
     PUBLIC "${CMAKE_SOURCE_DIR}/src"
     PUBLIC "${CMAKE_SOURCE_DIR}/lib"
+    PUBLIC "${CMAKE_SOURCE_DIR}/lib/math"
     PUBLIC "${CMAKE_SOURCE_DIR}/lib/glad/include"
     PUBLIC "${CMAKE_SOURCE_DIR}/lib/cglm/include"
 )
