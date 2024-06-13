@@ -256,6 +256,8 @@ typedef struct FindingCallbackAttribute
     u32 string_to_match_length;
 } FindingCallbackAttribute;
 
+global b8 running = true;
+
 void finding_callback(void* data)
 {
     FindingCallbackAttribute* arguments = (FindingCallbackAttribute*)data;
@@ -263,7 +265,7 @@ void finding_callback(void* data)
     Directory directory = platform_get_directory(
         arguments->start_directory, arguments->start_directory_length);
 
-    for (u32 i = 0; i < directory.sub_directories.size; ++i)
+    for (u32 i = 0; i < directory.sub_directories.size && running; ++i)
     {
         char* name = directory.sub_directories.data[i];
         size_t directory_name_length = strlen(name);
@@ -287,7 +289,7 @@ void finding_callback(void* data)
         free(name);
     }
 
-    for (u32 i = 0; i < directory.files.size; ++i)
+    for (u32 i = 0; i < directory.files.size && running; ++i)
     {
         char* name = directory.files.data[i].name;
         if (string_contains(name, (u32)strlen(name), arguments->string_to_match,
@@ -385,12 +387,12 @@ int main(int argc, char** argv)
         index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
 
     ThreadQueue thread_queue = { 0 };
-    thread_init(100000, 6, &thread_queue);
+    thread_init(100000, 8, &thread_queue);
 
-    const char* dir = "C:\\Users\\linus\\dev\\*";
+    const char* dir = "C:\\*";
     char* dir2 = (char*)calloc(strlen(dir) + 1, sizeof(char));
     memcpy(dir2, dir, strlen(dir));
-    const char* string_to_match = "logging";
+    const char* string_to_match = "init.vim";
 
     FindingCallbackAttribute* arguments =
         (FindingCallbackAttribute*)calloc(1, sizeof(FindingCallbackAttribute));
@@ -419,6 +421,7 @@ int main(int argc, char** argv)
         platform_opengl_swap_buffers(platform);
         platform_event_fire(platform);
     }
+    running = false;
     platform_opengl_clean(platform);
     threads_destroy(&thread_queue);
     platform_shut_down(platform);

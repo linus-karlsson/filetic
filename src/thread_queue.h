@@ -34,6 +34,7 @@ typedef struct ThreadAttrib
 {
     FTicSemaphore* start_semaphore;
     ThreadTaskQueue* queue;
+    volatile long stop_flag;
     u32 id;
 } ThreadAttrib;
 

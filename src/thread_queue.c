@@ -93,7 +93,17 @@ thread_return_value thread_loop(void* data)
 
     for (;;)
     {
+        if (platform_interlock_compare_exchange(&attrib->stop_flag, 0, 0))
+        {
+            break;
+        }
+
         platform_semaphore_wait_and_decrement(attrib->start_semaphore);
+
+        if (platform_interlock_compare_exchange(&attrib->stop_flag, 0, 0))
+        {
+            break;
+        }
 
         ThreadTaskInternal task = thread_task_pop(attrib->queue);
         task.task.task_callback(task.task.data);
@@ -103,6 +113,7 @@ thread_return_value thread_loop(void* data)
             platform_semaphore_increment(task.semaphore);
         }
     }
+    return 0;
 }
 
 void thread_init(u32 capacity, u32 thread_count, ThreadQueue* queue)
@@ -131,6 +142,7 @@ void thread_init(u32 capacity, u32 thread_count, ThreadQueue* queue)
         ThreadAttrib* ta = queue->attribs + i;
         ta->start_semaphore = &queue->task_queue.start_semaphore;
         ta->queue = &queue->task_queue;
+        ta->stop_flag = 0;
         ta->id = i;
         queue->pool[i] = platform_thread_create(ta, thread_loop, 0, NULL);
     }
@@ -141,6 +153,12 @@ void threads_destroy(ThreadQueue* queue)
     const u32 thread_count = queue->pool_size;
     for (u32 i = 0; i < thread_count; i++)
     {
-        platform_thread_destroy(queue->pool[i]);
+        platform_interlock_exchange(&queue->attribs[i].stop_flag, 1);
+        platform_semaphore_increment(&queue->task_queue.start_semaphore);
+    }
+
+    for (u32 i = 0; i < thread_count; i++)
+    {
+        platform_thread_close(queue->pool[i]);
     }
 }

@@ -501,9 +501,25 @@ void platform_thread_join(FTicThreadHandle handle)
     WaitForSingleObject(handle, INFINITE);
 }
 
-void platform_thread_destroy(FTicThreadHandle handle)
+void platform_thread_close(FTicThreadHandle handle)
 {
     CloseHandle(handle);
+}
+
+void platform_thread_terminate(FTicThreadHandle handle)
+{
+    TerminateThread(handle, 0);
+}
+
+void platform_interlock_exchange(volatile long* target, long value)
+{
+    InterlockedExchange(target, value);
+}
+
+long platform_interlock_compare_exchange(volatile long* dest, long value,
+                                         long compare)
+{
+    return InterlockedCompareExchange(dest, value, compare);
 }
 
 u32 platform_get_core_count(void)

@@ -87,7 +87,10 @@ void platform_semaphore_destroy(FTicSemaphore* sem);
 
 FTicThreadHandle platform_thread_create(void* data, thread_return_value (*thread_function)(void* data), unsigned long creation_flag, unsigned long* thread_id);
 void platform_thread_join(FTicThreadHandle handle);
-void platform_thread_destroy(FTicThreadHandle handle);
+void platform_thread_close(FTicThreadHandle handle);
+void platform_thread_terminate(FTicThreadHandle handle);
+void platform_interlock_exchange(volatile long* target, long value);
+long platform_interlock_compare_exchange(volatile long* dest, long value, long compare);
 
 u32 platform_get_core_count(void);
 
