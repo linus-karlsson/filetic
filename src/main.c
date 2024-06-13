@@ -409,16 +409,54 @@ void generate_indicies(IndexArray* array, u32 offset, u32 indices_count)
     }
 }
 
-int get_uniform_location(u32 shader, const char* name)
+int shader_get_uniform_location(u32 shader, const char* name)
 {
     int location = glGetUniformLocation(shader, name);
     ftic_assert(location != -1);
     return location;
 }
 
-void set_uniform_matrix4fv(u32 shader, int uniform_location, M4 value)
+void shader_set_uniform_matrix4fv(u32 shader, int uniform_location, M4 value)
 {
     glUniformMatrix4fv(uniform_location, 1, GL_FALSE, &value.data[0][0]);
+}
+
+typedef struct ShaderProperties
+{
+    u32 shader;
+    int projection_location;
+    int view_location;
+    int model_location;
+} ShaderProperties;
+
+typedef struct MVP
+{
+    M4 projection;
+    M4 view;
+    M4 model;
+} MVP;
+
+ShaderProperties shader_create_properties(u32 shader, const char* projection,
+                                          const char* view, const char* model)
+{
+    ShaderProperties shader_properties = {
+        .shader = shader,
+        .projection_location = shader_get_uniform_location(shader, projection),
+        .view_location = shader_get_uniform_location(shader, view),
+        .model_location = shader_get_uniform_location(shader, model),
+    };
+    return shader_properties;
+}
+
+void shader_set_MVP(const ShaderProperties* shader_properties, const MVP* mvp)
+{
+    shader_set_uniform_matrix4fv(shader_properties->shader,
+                                 shader_properties->projection_location,
+                                 mvp->projection);
+    shader_set_uniform_matrix4fv(shader_properties->shader,
+                                 shader_properties->view_location, mvp->view);
+    shader_set_uniform_matrix4fv(shader_properties->shader,
+                                 shader_properties->model_location, mvp->model);
 }
 
 int main(int argc, char** argv)
@@ -487,28 +525,27 @@ int main(int argc, char** argv)
     arguments->string_to_match_length = (u32)strlen(string_to_match);
     finding_callback(arguments);
 
-    u32 proj_location = get_uniform_location(shader, "proj");
-    u32 view_location = get_uniform_location(shader, "view");
-    u32 model_location = get_uniform_location(shader, "model");
+    ShaderProperties shader_properties =
+        shader_create_properties(shader, "proj", "view", "model");
 
+    MVP mvp = {0};
+    mvp.view = m4d();
+    mvp.model = m4d();
     enable_gldebugging();
     while (platform_is_running(platform))
     {
         ClientRect client_rect = platform_get_client_rect(platform);
         GLint viewport_width = client_rect.right - client_rect.left;
         GLint viewport_height = client_rect.bottom - client_rect.top;
-        M4 proj = ortho(0.0f, (float)viewport_width, (float)viewport_height,
+        mvp.projection = ortho(0.0f, (float)viewport_width, (float)viewport_height,
                         0.0f, -1.0f, 1.0f);
-        M4 view = m4d();
-        M4 model = m4d();
+        mvp.view = m4d();
         glViewport(0, 0, viewport_width, viewport_height);
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader_bind(shader);
-        set_uniform_matrix4fv(shader, proj_location, proj);
-        set_uniform_matrix4fv(shader, view_location, view);
-        set_uniform_matrix4fv(shader, model_location, model);
+        shader_set_MVP(&shader_properties, &mvp);
         vertex_array_bind(vertex_array_id);
         index_buffer_bind(index_buffer_id);
         glDrawElements(GL_TRIANGLES, index_array.size, GL_UNSIGNED_INT, NULL);
