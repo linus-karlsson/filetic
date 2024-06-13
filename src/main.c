@@ -11,6 +11,7 @@
 #include "platform/platform.h"
 #include "logging.h"
 #include "buffers.h"
+#include "thread_queue.h"
 
 typedef struct File_Attrib
 {
@@ -246,6 +247,60 @@ internal b8 string_contains(const char* string, const u32 string_length,
     return false;
 }
 
+typedef struct FindingCallbackAttribute
+{
+    ThreadTaskQueue* thread_queue;
+    char* start_directory;
+    u32 start_directory_length;
+    const char* string_to_match;
+    u32 string_to_match_length;
+} FindingCallbackAttribute;
+
+void finding_callback(void* data)
+{
+    FindingCallbackAttribute* arguments = (FindingCallbackAttribute*)data;
+
+    Directory directory = platform_get_directory(
+        arguments->start_directory, arguments->start_directory_length);
+
+    for (u32 i = 0; i < directory.sub_directories.size; ++i)
+    {
+        char* name = directory.sub_directories.data[i];
+        size_t directory_name_length = strlen(name);
+        name[directory_name_length++] = '\\';
+        name[directory_name_length++] = '*';
+        char* full_directory = concatinate(
+            arguments->start_directory, arguments->start_directory_length - 1,
+            name, directory_name_length, 0, &directory_name_length);
+
+        FindingCallbackAttribute* next_arguments =
+            (FindingCallbackAttribute*)calloc(1,
+                                              sizeof(FindingCallbackAttribute));
+        next_arguments->thread_queue = arguments->thread_queue;
+        next_arguments->start_directory = full_directory;
+        next_arguments->start_directory_length = (u32)directory_name_length;
+        next_arguments->string_to_match = arguments->string_to_match;
+        next_arguments->string_to_match_length =
+            arguments->string_to_match_length;
+        ThreadTask task = thread_task(finding_callback, next_arguments);
+        thread_tasks_push(next_arguments->thread_queue, &task, 1, NULL);
+        free(name);
+    }
+
+    for (u32 i = 0; i < directory.files.size; ++i)
+    {
+        char* name = directory.files.data[i].name;
+        if (string_contains(name, (u32)strlen(name), arguments->string_to_match,
+                            arguments->string_to_match_length))
+        {
+            log_message(name, strlen(name));
+        }
+        free(name);
+    }
+    free(arguments->start_directory);
+    free(data);
+}
+
 void find_matching_string(const char* start_directory, const u32 length,
                           const char* string_to_match,
                           const u32 string_to_match_length)
@@ -282,7 +337,6 @@ int main(int argc, char** argv)
 {
     Platform* platform = NULL;
     platform_init("FileTic", 1000, 600, &platform);
-    /*
     platform_opengl_init(platform);
     if (!gladLoadGL())
     {
@@ -330,6 +384,23 @@ int main(int argc, char** argv)
     u32 index_buffer_id = index_buffer_create(
         index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
 
+    ThreadQueue thread_queue = { 0 };
+    thread_init(100000, 6, &thread_queue);
+
+    const char* dir = "C:\\Users\\linus\\dev\\*";
+    char* dir2 = (char*)calloc(strlen(dir) + 1, sizeof(char));
+    memcpy(dir2, dir, strlen(dir));
+    const char* string_to_match = "logging";
+
+    FindingCallbackAttribute* arguments =
+        (FindingCallbackAttribute*)calloc(1, sizeof(FindingCallbackAttribute));
+    arguments->thread_queue = &thread_queue.task_queue;
+    arguments->start_directory = dir2;
+    arguments->start_directory_length = (u32)strlen(dir2);
+    arguments->string_to_match = string_to_match;
+    arguments->string_to_match_length = (u32)strlen(string_to_match);
+    finding_callback(arguments);
+
     enable_gldebugging();
     while (platform_is_running(platform))
     {
@@ -349,11 +420,6 @@ int main(int argc, char** argv)
         platform_event_fire(platform);
     }
     platform_opengl_clean(platform);
-    */
-    const char* dir = "C:\\Users\\linus\\dev\\filetic\\*";
-    const char* string_to_match = "logging";
-    find_matching_string(dir, (u32)strlen(dir), string_to_match,
-                         (u32)strlen(string_to_match));
-
+    threads_destroy(&thread_queue);
     platform_shut_down(platform);
 }

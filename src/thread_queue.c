@@ -62,12 +62,12 @@ void thread_tasks_push(ThreadTaskQueue* task_queue, ThreadTask* tasks,
                 platform_semaphore_create(0, task_count);
         }
         semaphore_counter->count = task_count;
-
-        for (u32 i = 0; i < task_count; i++)
-        {
-            thread_task_push_(task_queue, tasks[i],
-                              semaphore_counter->semaphore);
-        }
+    }
+    for (u32 i = 0; i < task_count; i++)
+    {
+        thread_task_push_(task_queue, tasks[i],
+                          semaphore_counter ? semaphore_counter->semaphore
+                                            : NULL);
     }
 }
 
