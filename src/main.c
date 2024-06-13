@@ -208,10 +208,81 @@ typedef struct VertexArray
     Vertex* data;
 } VertexArray;
 
+void parse_all_subdirectories(const char* start_directory, const u32 length)
+{
+    Directory directory = platform_get_directory(start_directory, length);
+
+    for (u32 i = 0; i < directory.files.size; ++i)
+    {
+        char* name = directory.files.data[i].name;
+        log_message(name, strlen(name));
+        free(name);
+    }
+    for (u32 i = 0; i < directory.sub_directories.size; ++i)
+    {
+        char* name = directory.sub_directories.data[i];
+        size_t directory_name_length = strlen(name);
+        name[directory_name_length++] = '\\';
+        name[directory_name_length++] = '*';
+        char* full_directory =
+            concatinate(start_directory, length - 1, name,
+                        directory_name_length, 0, &directory_name_length);
+        parse_all_subdirectories(full_directory, (u32)directory_name_length);
+        free(full_directory);
+        free(name);
+    }
+}
+
+internal b8 string_contains(const char* string, const u32 string_length,
+                            const char* value, const u32 value_length)
+{
+    if (value_length > string_length) return false;
+
+    for (u32 i = 0, j = 0; i < string_length; ++i)
+    {
+        j = string[i] == value[j] ? j + 1 : 0;
+        if (j == value_length) return true;
+    }
+    return false;
+}
+
+void find_matching_string(const char* start_directory, const u32 length,
+                          const char* string_to_match,
+                          const u32 string_to_match_length)
+{
+    Directory directory = platform_get_directory(start_directory, length);
+
+    for (u32 i = 0; i < directory.files.size; ++i)
+    {
+        char* name = directory.files.data[i].name;
+        if (string_contains(name, (u32)strlen(name), string_to_match,
+                            string_to_match_length))
+        {
+            log_message(name, strlen(name));
+        }
+        free(name);
+    }
+    for (u32 i = 0; i < directory.sub_directories.size; ++i)
+    {
+        char* name = directory.sub_directories.data[i];
+        size_t directory_name_length = strlen(name);
+        name[directory_name_length++] = '\\';
+        name[directory_name_length++] = '*';
+        char* full_directory =
+            concatinate(start_directory, length - 1, name,
+                        directory_name_length, 0, &directory_name_length);
+        find_matching_string(full_directory, (u32)directory_name_length,
+                             string_to_match, string_to_match_length);
+        free(full_directory);
+        free(name);
+    }
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
     platform_init("FileTic", 1000, 600, &platform);
+    /*
     platform_opengl_init(platform);
     if (!gladLoadGL())
     {
@@ -259,9 +330,6 @@ int main(int argc, char** argv)
     u32 index_buffer_id = index_buffer_create(
         index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
 
-    const char* dir = "C:\\*";
-    Directory directory = platform_get_directory(dir, (u32)strlen(dir));
-
     enable_gldebugging();
     while (platform_is_running(platform))
     {
@@ -281,4 +349,11 @@ int main(int argc, char** argv)
         platform_event_fire(platform);
     }
     platform_opengl_clean(platform);
+    */
+    const char* dir = "C:\\Users\\linus\\dev\\filetic\\*";
+    const char* string_to_match = "logging";
+    find_matching_string(dir, (u32)strlen(dir), string_to_match,
+                         (u32)strlen(string_to_match));
+
+    platform_shut_down(platform);
 }

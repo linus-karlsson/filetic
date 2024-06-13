@@ -28,6 +28,7 @@ void _log_message(const char* prefix, const size_t prefix_len,
     char* final =
         concatinate(prefix, prefix_len, message, message_len, '\0', NULL);
     platform_print_string(final);
+    platform_print_string("\n");
     free(final);
 }
 

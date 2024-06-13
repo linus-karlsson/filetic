@@ -190,6 +190,13 @@ void platform_init(const char* title, u16 width, u16 height,
     *platform = (Platform*)platform_internal;
 }
 
+void platform_shut_down(Platform* platform)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+    DestroyWindow(platform_internal->window);
+}
+
 b8 platform_is_running(Platform* platform)
 {
     return ((WindowsPlatformInternal*)platform)->running;
@@ -397,7 +404,7 @@ void platform_event_set_on_key_stroke(Platform* platform,
 
 internal char* copy_string(const char* string, const u32 string_length)
 {
-    char* result = (char*)calloc(string_length + 1, sizeof(char));
+    char* result = (char*)calloc(string_length + 3, sizeof(char));
     memcpy(result, string, string_length);
     return result;
 }
@@ -410,8 +417,8 @@ Directory platform_get_directory(const char* directory_path,
     array_create(&directory.sub_directories, 10);
 
     WIN32_FIND_DATA ffd = { 0 };
-    HANDLE file = FindFirstFile(directory_path, &ffd);
-    if (file != INVALID_HANDLE_VALUE)
+    HANDLE file_handle = FindFirstFile(directory_path, &ffd);
+    if (file_handle != INVALID_HANDLE_VALUE)
     {
         do
         {
@@ -421,16 +428,22 @@ Directory platform_get_directory(const char* directory_path,
                 {
                     continue;
                 }
-                array_push(&directory.sub_directories,
-                           copy_string(ffd.cFileName, (u32)strlen(ffd.cFileName)));
+                array_push(
+                    &directory.sub_directories,
+                    copy_string(ffd.cFileName, (u32)strlen(ffd.cFileName)));
             }
             else
             {
-                array_push(&directory.files,
-                           copy_string(ffd.cFileName, (u32)strlen(ffd.cFileName)));
+                File file = {
+                    .size =
+                        (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
+                    .name =
+                        copy_string(ffd.cFileName, (u32)strlen(ffd.cFileName)),
+                };
+                array_push(&directory.files, file);
             }
 
-        } while (FindNextFile(file, &ffd));
+        } while (FindNextFile(file_handle, &ffd));
     }
     return directory;
 }
