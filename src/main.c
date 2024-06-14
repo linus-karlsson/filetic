@@ -6,6 +6,7 @@
 #include <Windows.h>
 #include <glad/glad.h>
 #include <stb/stb_truetype.h>
+#include <math.h>
 
 #include "define.h"
 #include "platform/platform.h"
@@ -355,12 +356,30 @@ b8 directory_item_list(V3 starting_position, const f32 scale,
     return hit;
 }
 
+typedef struct DirectoryPage
+{
+    f32 text_y;
+    f32 offset;
+    f32 scroll_offset;
+    Directory directory;
+} DirectoryPage;
+
 typedef struct DirectoryArray
 {
     u32 size;
     u32 capacity;
-    Directory* data;
+    DirectoryPage* data;
 } DirectoryArray;
+
+f32 clampf32_low(f32 value, f32 low)
+{
+    return value < low ? low : value;
+}
+
+f32 clampf32_high(f32 value, f32 high)
+{
+    return value > high ? high : value;
+}
 
 int main(int argc, char** argv)
 {
@@ -475,16 +494,19 @@ int main(int argc, char** argv)
     DirectoryArray directory_history = { 0 };
     array_create(&directory_history, 10);
     const char* dir = "C:\\*";
-    array_push(&directory_history,
-               platform_get_directory(dir, (u32)strlen(dir)));
-    Directory* current_directory = array_back(&directory_history);
+    DirectoryPage page = { 0 };
+    page.directory = platform_get_directory(dir, (u32)strlen(dir));
+    array_push(&directory_history, page);
+    DirectoryPage* current_directory = array_back(&directory_history);
 
     Event* mouse_move = event_subscribe(MOUSE_MOVE);
     Event* mouse_button = event_subscribe(MOUSE_BUTTON);
-    Event* mouse_wheel_event = event_subscribe(MOUSE_WHEEL);
+    Event* mouse_wheel = event_subscribe(MOUSE_WHEEL);
 
     i32 hit_index = -1;
-    f32 text_y = 100.0f;
+    f32 scroll_speed = 0.2f;
+    f64 last_time = platform_get_time();
+    f32 delta_time = 0.0f;
     MVP mvp = { 0 };
     mvp.view = m4d();
     mvp.model = m4d();
@@ -496,6 +518,7 @@ int main(int argc, char** argv)
         client_rect = platform_get_client_rect(platform);
         viewport_width = client_rect.right - client_rect.left;
         viewport_height = client_rect.bottom - client_rect.top;
+        dimensions = v2f((f32)viewport_width, (f32)viewport_height);
         mvp.projection = ortho(0.0f, (float)viewport_width,
                                (float)viewport_height, 0.0f, -1.0f, 1.0f);
         glViewport(0, 0, viewport_width, viewport_height);
@@ -507,14 +530,16 @@ int main(int argc, char** argv)
         {
             if (directory_history.size > 1)
             {
-                platform_reset_directory(array_back(&directory_history));
+                platform_reset_directory(
+                    &array_back(&directory_history)->directory);
                 directory_history.size -= 1;
                 current_directory = array_back(&directory_history);
             }
         }
 
         rendering_properties_clear(font_render);
-        V3 text_starting_position = v3f(rect.min.x, text_y, 0.0f);
+        V3 text_starting_position =
+            v3f(rect.min.x, current_directory->text_y, 0.0f);
         text_starting_position.x += rect.size.width + 20.0f;
         const float scale = 1.0f;
         const float padding_top = 30.0f;
@@ -523,13 +548,14 @@ int main(int argc, char** argv)
             scale * font.pixel_height + padding_top + padding_bottom;
         b8 hit = false;
         i32 index = 0;
-        for (; index < (i32)current_directory->sub_directories.size; ++index)
+        for (; index < (i32)current_directory->directory.sub_directories.size;
+             ++index)
         {
-            hit =
-                directory_item(hit, index, text_starting_position, scale,
-                               padding_top, padding_bottom, quad_height,
-                               &current_directory->sub_directories.data[index],
-                               &font, mouse_move, &hit_index, font_render);
+            hit = directory_item(
+                hit, index, text_starting_position, scale, padding_top,
+                padding_bottom, quad_height,
+                &current_directory->directory.sub_directories.data[index],
+                &font, mouse_move, &hit_index, font_render);
             text_starting_position.y += quad_height;
         }
         b8 skip = false;
@@ -539,12 +565,14 @@ int main(int argc, char** argv)
             if (hit)
             {
                 char* path =
-                    current_directory->sub_directories.data[hit_index].path;
+                    current_directory->directory.sub_directories.data[hit_index]
+                        .path;
                 u32 length = (u32)strlen(path);
                 path[length++] = '/';
                 path[length++] = '*';
-                array_push(&directory_history,
-                           platform_get_directory(path, length));
+                DirectoryPage new_page = { 0 };
+                new_page.directory = platform_get_directory(path, length);
+                array_push(&directory_history, new_page);
                 path[length - 2] = '\0';
 
                 current_directory = array_back(&directory_history);
@@ -553,12 +581,14 @@ int main(int argc, char** argv)
         }
         if (!skip)
         {
-            for (i32 i = 0; i < (i32)current_directory->files.size; ++i)
+            for (i32 i = 0; i < (i32)current_directory->directory.files.size;
+                 ++i)
             {
-                hit = directory_item(hit, i + index, text_starting_position, scale,
-                                     padding_top, padding_bottom, quad_height,
-                                     &current_directory->files.data[i], &font,
-                                     mouse_move, &hit_index, font_render);
+                hit = directory_item(
+                    hit, i + index, text_starting_position, scale, padding_top,
+                    padding_bottom, quad_height,
+                    &current_directory->directory.files.data[i], &font,
+                    mouse_move, &hit_index, font_render);
                 text_starting_position.y += quad_height;
             }
         }
@@ -570,12 +600,29 @@ int main(int argc, char** argv)
                             sizeof(Vertex) * font_render->vertices.size,
                             font_render->vertices.data);
 
+        if (mouse_wheel->activated)
+        {
+            f32 total_height = text_starting_position.y - current_directory->text_y;
+            f32 z_delta = (f32)mouse_wheel->mouse_wheel_event.z_delta;
+            if ((z_delta > 0) || ((total_height + current_directory->offset) > dimensions.y))
+            {
+                current_directory->offset += z_delta;
+            }
+            current_directory->offset =
+                clampf32_high(current_directory->offset, 0.0f);
+        }
+        current_directory->scroll_offset +=
+            (current_directory->offset - current_directory->scroll_offset) *
+            scroll_speed;
+        current_directory->text_y = current_directory->scroll_offset;
+
         for (u32 i = 0; i < rendering_properties.size; ++i)
         {
             rendering_properties_draw(&rendering_properties.data[i], &mvp);
         }
         platform_opengl_swap_buffers(platform);
         poll_event(platform);
+        delta_time = (f32)(platform_get_time() - last_time);
     }
     running = false;
     for (u32 i = 0; i < rendering_properties.size; ++i)

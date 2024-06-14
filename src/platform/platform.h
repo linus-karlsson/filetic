@@ -92,4 +92,4 @@ long platform_interlock_compare_exchange(volatile long* dest, long value,
                                          long compare);
 
 u32 platform_get_core_count(void);
-
+f64 platform_get_time(void);

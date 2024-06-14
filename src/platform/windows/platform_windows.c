@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <Windows.h>
 #include <stdlib.h>
+#include <time.h>
 
 typedef struct Callbacks
 {
@@ -561,3 +562,10 @@ u32 platform_get_core_count(void)
     GetSystemInfo(&sysinfo);
     return sysinfo.dwNumberOfProcessors;
 }
+
+f64 platform_get_time(void)
+{
+    struct timespec now;
+    timespec_get(&now, TIME_UTC);
+    return now.tv_sec + (now.tv_nsec * 0.000000001);
+} 
