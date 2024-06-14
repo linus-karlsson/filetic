@@ -9,7 +9,7 @@ b8 collision_point_in_point(V2 point_pos, V2 target, V2 target_size)
             point_pos.y < target.y + target_size.y);
 }
 
-b8 collision_point_in_aabb_2d(V2 point_pos, const AABB* target)
+b8 collision_point_in_aabb(V2 point_pos, const AABB* target)
 {
     b8 res = point_pos.x >= target->min.x && point_pos.y >= target->min.y &&
              point_pos.x < target->min.x + target->size.x &&

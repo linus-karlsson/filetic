@@ -14,7 +14,7 @@ typedef struct EventContextInternal
 
 EventContextInternal event_context = { 0 };
 
-internal void _on_key_event(u16 key, u8 action)
+internal void on_key_event(u16 key, u8 action)
 {
     for (u32 i = 0; i < event_context.events.size; ++i)
     {
@@ -30,12 +30,12 @@ internal void _on_key_event(u16 key, u8 action)
 
 internal void on_key_pressed_event(u16 key)
 {
-    _on_key_event(key, 1);
+    on_key_event(key, 1);
 }
 
 internal void on_key_released_event(u16 key)
 {
-    _on_key_event(key, 0);
+    on_key_event(key, 0);
 }
 
 internal void on_mouse_move_event(i16 x, i16 y)
@@ -52,11 +52,26 @@ internal void on_mouse_move_event(i16 x, i16 y)
     }
 }
 
+internal void on_mouse_button_pressed_event(u8 key, b8 double_clicked)
+{
+    for (u32 i = 0; i < event_context.events.size; ++i)
+    {
+        Event* event = event_context.events.data + i;
+        if (event->type == MOUSE_BUTTON)
+        {
+            event->mouse_button_event.key = key;
+            event->mouse_button_event.double_clicked |= double_clicked;
+            event->activated = true;
+        }
+    }
+}
+
 void event_init(Platform* platform)
 {
     platform_event_set_on_key_pressed(platform, on_key_pressed_event);
     platform_event_set_on_key_released(platform, on_key_released_event);
     platform_event_set_on_mouse_move(platform, on_mouse_move_event);
+    platform_event_set_on_button_pressed(platform, on_mouse_button_pressed_event);
 
     array_create(&event_context.events, 20);
 }
@@ -67,6 +82,10 @@ void poll_event(Platform* platform)
     {
         Event* event = event_context.events.data + i;
         event->activated = false;
+        if(event->type == MOUSE_BUTTON)
+        {
+            event->mouse_button_event.double_clicked = false;
+        }
     }
     platform_event_fire(platform);
 }

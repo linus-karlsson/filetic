@@ -10,4 +10,4 @@ typedef struct AABB
 } AABB;
 
 b8 collision_point_in_point(V2 point_pos, V2 target, V2 target_size);
-b8 collision_point_in_aabb_2d(V2 point_pos, const AABB* target);
+b8 collision_point_in_aabb(V2 point_pos, const AABB* target);

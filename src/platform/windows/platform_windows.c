@@ -42,6 +42,7 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
 {
     WindowsPlatformInternal* platform =
         (WindowsPlatformInternal*)GetWindowLongPtrA(window, GWLP_USERDATA);
+    b8 double_clicked = false;
     LRESULT result = 0;
     switch (msg)
     {
@@ -74,13 +75,18 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
             }
             break;
         }
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDBLCLK:
+        {
+            double_clicked = true;
+        }
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:
         {
             if (platform && platform->callbacks.on_button_pressed)
             {
                 u8 button = (u8)w_param;
-                platform->callbacks.on_button_pressed(button);
+                platform->callbacks.on_button_pressed(button, double_clicked);
             }
             break;
         }
@@ -154,7 +160,7 @@ void platform_init(const char* title, u16 width, u16 height,
         (WindowsPlatformInternal*)calloc(1, sizeof(WindowsPlatformInternal));
 
     WNDCLASS window_class = {
-        .style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
+        .style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS,
         .lpfnWndProc = msg_handler,
         .hInstance = GetModuleHandle(0),
         .lpszClassName = "filetic",
@@ -451,6 +457,22 @@ Directory platform_get_directory(const char* directory_path,
         } while (FindNextFile(file_handle, &ffd));
     }
     return directory;
+}
+
+void platform_reset_directory(Directory* directory)
+{
+    for(u32 i = 0; i < directory->files.size; ++i)
+    {
+        free(directory->files.data[i].path);
+    }
+    for(u32 i = 0; i < directory->sub_directories.size; ++i)
+    {
+        free(directory->sub_directories.data[i].path);
+    }
+    free(directory->files.data);
+    free(directory->sub_directories.data);
+    directory->files = (FileArray) {0};
+    directory->sub_directories = (DirectoryAttribArray) {0};
 }
 
 FTicMutex platform_mutex_create(void)

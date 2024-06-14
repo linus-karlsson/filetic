@@ -410,7 +410,9 @@ int main(int argc, char** argv)
     Directory current_directory = platform_get_directory(dir, (u32)strlen(dir));
 
     Event* mouse_move = event_subscribe(MOUSE_MOVE);
+    Event* mouse_button = event_subscribe(MOUSE_BUTTON);
 
+    i32 hit_index = -1;
     MVP mvp = { 0 };
     mvp.view = m4d();
     mvp.model = m4d();
@@ -430,26 +432,77 @@ int main(int argc, char** argv)
 
         rendering_properties_clear(font_render);
         starting_position = v3_v2(rect.min);
-        starting_position.y += 100;
         starting_position.x += rect.size.width + 20.0f;
         const float scale = 1.0f;
-        const float padding = 30.0f;
-        const float quad_height = scale * font.pixel_height + padding * 2;
-        for (u32 i = 0; i < current_directory.sub_directories.size; ++i)
+        const float padding_top = 30.0f;
+        const float padding_bottom = 10.0f;
+        const float quad_height =
+            scale * font.pixel_height + padding_top + padding_bottom;
+        b8 hit = false;
+        for (i32 i = 0; i < (i32)current_directory.sub_directories.size; ++i)
         {
+            const V4 color = i == hit_index ? v4ic(0.3f) : v4ic(0.1f);
             AABB aabb = quad(&font_render->vertices, starting_position,
-                             v2f(200.0f, quad_height),
-                             v4f(0.3f, 0.3f, 0.3f, 1.0f), 0.0f);
+                             v2f(200.0f, quad_height), color, 0.0f);
             font_render->index_count += 1;
 
+            V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
+                                    mouse_move->mouse_move_event.position_y);
+            if (!hit && collision_point_in_aabb(mouse_position, &aabb))
+            {
+                hit_index = i;
+                hit = true;
+            }
+
             const V3 text_position =
-                v3_add(starting_position, v3f(padding, padding, 0.0f));
+                v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
             font_render->index_count += text_generation(
                 font.chars, current_directory.sub_directories.data[i].name,
                 1.0f, text_position, scale, font.pixel_height, NULL, NULL,
                 &font_render->vertices);
             starting_position.y += quad_height;
         }
+        if (hit)
+        {
+            if(mouse_button->mouse_button_event.double_clicked)
+            {
+                char* path = current_directory.sub_directories.data[hit_index].path;
+                u32 length = (u32)strlen(path);
+                path[length++] = '\\';
+                path[length++] = '*';
+                Directory new_directory = platform_get_directory(path, length);
+                platform_reset_directory(&current_directory);
+                current_directory = new_directory;
+            }
+        }
+        for (i32 i = 0; i < (i32)current_directory.files.size; ++i)
+        {
+            const V4 color = i == hit_index ? v4ic(0.3f) : v4ic(0.1f);
+            AABB aabb = quad(&font_render->vertices, starting_position,
+                             v2f(200.0f, quad_height), color, 0.0f);
+            font_render->index_count += 1;
+
+            V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
+                                    mouse_move->mouse_move_event.position_y);
+            if (!hit && collision_point_in_aabb(mouse_position, &aabb))
+            {
+                hit_index = i;
+                hit = true;
+            }
+
+            const V3 text_position =
+                v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
+            font_render->index_count += text_generation(
+                font.chars, current_directory.files.data[i].name,
+                1.0f, text_position, scale, font.pixel_height, NULL, NULL,
+                &font_render->vertices);
+            starting_position.y += quad_height;
+        }
+        if(!hit)
+        {
+            hit_index = -1;
+        }
+
         buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                             sizeof(Vertex) * font_render->vertices.size,
                             font_render->vertices.data);
