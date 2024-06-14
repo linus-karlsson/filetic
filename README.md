@@ -22,30 +22,30 @@ A lightweight file management application designed to provide basic file operati
 ### Installation
 
 1. **Clone the repository**
-    \`\`\`bash
+    ```bash
     git clone https://github.com/linus-karlsson/filetic.git
     cd filetic
-    \`\`\`
+    ```
 
 2. **Compile using CMake**
-    \`\`\`bash
+    ```bash
     .\Commands\Make\configDebug.bat
     cmake --build build
-    \`\`\`
+    ```
 
 3. **Compile using Ninja**
-    \`\`\`bash
+    ```bash
     .\Commands\Ninja\configDebug.bat
     cmake --build build
-    \`\`\`
+    ```
 
 ## Usage
 
 ### Running the Application
 
-\`\`\`bash
+```bash
 .\build\bin\FileTic.exe
-\`\`\`
+```
 
 ## License
 
