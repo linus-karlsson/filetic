@@ -28,13 +28,13 @@ A lightweight file management application designed to provide basic file operati
     cd filetic
     ```
 
-2. **Compile using CMake**
+2. **Build using CMake**
     ```bash
-    .\Commands\Make\configDebug.bat
-    cmake --build build
+    .\Commands\Make\config.bat
+    cmake --build build --config Debug
     ```
 
-3. **Compile using Ninja**
+3. **Build using Ninja**
     ```bash
     .\Commands\Ninja\configDebug.bat
     cmake --build build
