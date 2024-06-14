@@ -18,6 +18,7 @@
 #include "util.h"
 #include "font.h"
 #include "opengl_util.h"
+#include "shader.h"
 
 global b8 running = true;
 
@@ -38,89 +39,6 @@ typedef struct FindingCallbackAttribute
     u32 string_to_match_length;
     SafeFileArray* array;
 } FindingCallbackAttribute;
-
-char* get_shader_error_prefix(u32 type)
-{
-    const char* prefix = "Failed to compile";
-    const char* what_file =
-        type == GL_VERTEX_SHADER ? " vertex shader: " : " fragment shader: ";
-    size_t prefix_message_length = 0;
-    char* prefix_message =
-        concatinate(prefix, strlen(prefix), what_file, strlen(what_file), 0, 0,
-                    &prefix_message_length);
-    return prefix_message;
-}
-
-u32 shader_compile(u32 type, const u8* source)
-{
-    u32 id = glCreateShader(type);
-    glShaderSource(id, 1, (const char**)&source, NULL);
-    glCompileShader(id);
-
-    int result = GL_FALSE;
-    glGetShaderiv(id, GL_COMPILE_STATUS, &result);
-    if (result == GL_FALSE)
-    {
-        char* prefix_message = get_shader_error_prefix(type);
-
-        int length = 0;
-        glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
-        char* message = (char*)calloc(length, sizeof(char));
-        glGetShaderInfoLog(id, length, &length, message);
-
-        char* error_message =
-            concatinate(prefix_message, strlen(prefix_message), message, length,
-                        0, 0, NULL);
-
-        log_error_message(error_message, strlen(error_message));
-
-        free(prefix_message);
-        free(message);
-        free(error_message);
-        glDeleteShader(id);
-        return 0;
-    }
-
-    return id;
-}
-
-u32 shader_create(const char* vertex_file_path, const char* fragment_file_path)
-{
-    FileAttrib vertex_file = read_file(vertex_file_path);
-    FileAttrib fragment_file = read_file(fragment_file_path);
-    u32 vertex_shader = shader_compile(GL_VERTEX_SHADER, vertex_file.buffer);
-    u32 fragemnt_shader =
-        shader_compile(GL_FRAGMENT_SHADER, fragment_file.buffer);
-    free(vertex_file.buffer);
-    free(fragment_file.buffer);
-
-    u32 program = glCreateProgram();
-
-    glAttachShader(program, vertex_shader);
-    glAttachShader(program, fragemnt_shader);
-    glLinkProgram(program);
-    glValidateProgram(program);
-
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragemnt_shader);
-
-    return program;
-}
-
-void shader_bind(u32 shader)
-{
-    glUseProgram(shader);
-}
-
-void shader_unbind()
-{
-    glUseProgram(0);
-}
-
-void shader_destroy(u32 shader)
-{
-    glDeleteProgram(shader);
-}
 
 typedef enum DebugLogLevel
 {
@@ -293,55 +211,69 @@ void find_matching_string(const char* start_directory, const u32 length,
         free(path);
     }
 }
-
-int shader_get_uniform_location(u32 shader, const char* name)
+void buffer_set_sub_data(u32 vertex_buffer, u32 target, intptr_t offset,
+                         signed long long int size, const void* data)
 {
-    int location = glGetUniformLocation(shader, name);
-    ftic_assert(location != -1);
-    return location;
+    vertex_buffer_bind(vertex_buffer);
+    glBufferSubData(target, offset, size, data);
 }
 
-void shader_set_uniform_matrix4fv(u32 shader, int uniform_location, M4 value)
+typedef struct RenderingProperties
 {
-    glUniformMatrix4fv(uniform_location, 1, GL_FALSE, &value.data[0][0]);
+    u32 vertex_buffer_id;
+    u32 vertex_array_id;
+    u32 index_buffer_id;
+    u32 index_count;
+    u32 texture;
+
+    ShaderProperties shader_properties;
+    VertexArray vertices;
+
+} RenderingProperties;
+
+typedef struct RenderingPropertiesArray
+{
+    u32 size;
+    u32 capacity;
+    RenderingProperties* data;
+} RenderingPropertiesArray;
+
+RenderingProperties
+rendering_properties_init(u32 shader_id, u32 texture, u32 index_buffer_id,
+                          const VertexBufferLayout* vertex_buffer_layout,
+                          u32 vertex_buffer_size)
+{
+    RenderingProperties rendering_properties = { 0 };
+    array_create(&rendering_properties.vertices, vertex_buffer_size);
+    rendering_properties.vertex_array_id = vertex_array_create();
+    vertex_array_bind(rendering_properties.vertex_array_id);
+
+    rendering_properties.vertex_buffer_id =
+        vertex_buffer_create(NULL, rendering_properties.vertices.capacity,
+                             sizeof(Vertex), GL_STREAM_DRAW);
+    vertex_array_add_buffer(rendering_properties.vertex_array_id,
+                            rendering_properties.vertex_buffer_id,
+                            vertex_buffer_layout);
+
+    rendering_properties.index_buffer_id = index_buffer_id;
+    rendering_properties.texture = texture;
+    rendering_properties.shader_properties =
+        shader_create_properties(shader_id, "proj", "view", "model");
+
+    return rendering_properties;
 }
 
-typedef struct ShaderProperties
+void rendering_properties_draw(const RenderingProperties* rendering_properties,
+                               const MVP* mvp)
 {
-    u32 shader;
-    int projection_location;
-    int view_location;
-    int model_location;
-} ShaderProperties;
+    shader_bind(rendering_properties->shader_properties.shader);
+    shader_set_mvp(&rendering_properties->shader_properties, mvp);
 
-typedef struct MVP
-{
-    M4 projection;
-    M4 view;
-    M4 model;
-} MVP;
-
-ShaderProperties shader_create_properties(u32 shader, const char* projection,
-                                          const char* view, const char* model)
-{
-    ShaderProperties shader_properties = {
-        .shader = shader,
-        .projection_location = shader_get_uniform_location(shader, projection),
-        .view_location = shader_get_uniform_location(shader, view),
-        .model_location = shader_get_uniform_location(shader, model),
-    };
-    return shader_properties;
-}
-
-void shader_set_MVP(const ShaderProperties* shader_properties, const MVP* mvp)
-{
-    shader_set_uniform_matrix4fv(shader_properties->shader,
-                                 shader_properties->projection_location,
-                                 mvp->projection);
-    shader_set_uniform_matrix4fv(shader_properties->shader,
-                                 shader_properties->view_location, mvp->view);
-    shader_set_uniform_matrix4fv(shader_properties->shader,
-                                 shader_properties->model_location, mvp->model);
+    texture_bind(rendering_properties->texture, 0);
+    vertex_array_bind(rendering_properties->vertex_array_id);
+    index_buffer_bind(rendering_properties->index_buffer_id);
+    glDrawElements(GL_TRIANGLES, rendering_properties->index_count * 6,
+                   GL_UNSIGNED_INT, NULL);
 }
 
 int main(int argc, char** argv)
@@ -359,7 +291,7 @@ int main(int argc, char** argv)
     FontTTF font = { 0 };
     const i32 width_atlas = 512;
     const i32 height_atlas = 512;
-    const f32 pixel_height = 32;
+    const f32 pixel_height = 16;
     u8* font_bitmap = (u8*)calloc(width_atlas * height_atlas, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
                    "res/fonts/arial.ttf", font_bitmap, &font);
@@ -370,23 +302,29 @@ int main(int argc, char** argv)
         .bytes = font_bitmap,
     };
     u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
+    free(texture_properties.bytes);
+    texture_properties.width = 1;
+    texture_properties.height = 1;
+    texture_properties.bytes = (u8*)calloc(4, sizeof(u8));
+    for (u32 i = 0; i < 4; ++i)
+    {
+        texture_properties.bytes[i] = UINT8_MAX;
+    }
+    u32 default_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    free(texture_properties.bytes);
 
     u32 font_shader = shader_create("./res/shaders/vertex.glsl",
                                     "./res/shaders/font_fragment.glsl");
-    ftic_assert(font_shader);
-
     u32 shader2 = shader_create("./res/shaders/vertex.glsl",
                                 "./res/shaders/fragment.glsl");
+    ftic_assert(font_shader);
 
     IndexArray index_array = { 0 };
     array_create(&index_array, 100);
-    generate_indicies(&index_array, 0, 1000);
-
-    VertexArray vertex_array = { 0 };
-    array_create(&vertex_array, 100);
-    u32 count =
-        text_gen(font.chars, "Hello testing", 0.0f, v3f(100.0f, 100.0f, 0.0f),
-                 1.0f, font.pixel_height, NULL, NULL, &vertex_array);
+    generate_indicies(&index_array, 0, 10000);
+    u32 index_buffer_id = index_buffer_create(
+        index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
 
     VertexBufferLayout vertex_buffer_layout = { 0 };
     vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
@@ -399,16 +337,19 @@ int main(int argc, char** argv)
     vertex_buffer_layout_push_float(&vertex_buffer_layout, 1,
                                     offsetof(Vertex, texture_index));
 
-    u32 vertex_array_id = vertex_array_create();
-    vertex_array_bind(vertex_array_id);
+    RenderingPropertiesArray rendering_properties = { 0 };
+    array_create(&rendering_properties, 2);
+    array_push(&rendering_properties,
+               rendering_properties_init(shader2, default_texture,
+                                         index_buffer_id, &vertex_buffer_layout,
+                                         10000 * 4));
+    array_push(&rendering_properties,
+               rendering_properties_init(font_shader, font_texture,
+                                         index_buffer_id, &vertex_buffer_layout,
+                                         10000 * 4));
 
-    u32 vertex_buffer_id = vertex_buffer_create(
-        vertex_array.data, vertex_array.size, sizeof(Vertex), GL_STATIC_DRAW);
-    vertex_array_add_buffer(vertex_array_id, vertex_buffer_id,
-                            &vertex_buffer_layout);
-
-    u32 index_buffer_id = index_buffer_create(
-        index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
+    RenderingProperties* default_render = rendering_properties.data;
+    RenderingProperties* font_render = rendering_properties.data + 1;
 
     ThreadQueue thread_queue = { 0 };
     thread_init(100000, 8, &thread_queue);
@@ -416,6 +357,7 @@ int main(int argc, char** argv)
     SafeFileArray file_array = { 0 };
     safe_array_create(&file_array, 10);
 
+    /*
     const char* dir = "C:\\Users\\linus\\*";
     char* dir2 = (char*)calloc(strlen(dir) + 1, sizeof(char));
     memcpy(dir2, dir, strlen(dir));
@@ -430,40 +372,78 @@ int main(int argc, char** argv)
     arguments->string_to_match = string_to_match;
     arguments->string_to_match_length = (u32)strlen(string_to_match);
     finding_callback(arguments);
+    */
 
-    ShaderProperties shader_properties =
-        shader_create_properties(font_shader, "proj", "view", "model");
+    ClientRect client_rect = platform_get_client_rect(platform);
+    GLint viewport_width = client_rect.right - client_rect.left;
+    GLint viewport_height = client_rect.bottom - client_rect.top;
+    V2 dimensions = v2f((f32)viewport_width, (f32)viewport_height);
+
+    V3 starting_pos = v3f(10.0f, 10.0f, 0.0f);
+    AABB rect = quad_with_border(&default_render->vertices,
+                                 &default_render->index_count,
+                                 v4f(1.0f, 1.0f, 0.2f, 1.0f), starting_pos,
+                                 v2f(100.0f, dimensions.height), 2.0f, 0.0f);
+    buffer_set_sub_data(default_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
+                        sizeof(Vertex) * default_render->vertices.size,
+                        default_render->vertices.data);
+    default_render->vertices.size = 0;
+
+    const char* dir = "C:\\*";
+    Directory current_directory = platform_get_directory(dir, (u32)strlen(dir));
+
+    starting_pos = v3_v2(rect.min);
+    starting_pos.y += 100;
+    starting_pos.x += rect.size.width + 20.0f;
+    const float scale = 1.0f;
+    for (u32 i = 0; i < current_directory.sub_directories.size; ++i)
+    {
+        font_render->index_count +=
+            text_gen(font.chars, current_directory.sub_directories.data[i].name,
+                     0.0f, starting_pos, scale, font.pixel_height, NULL, NULL,
+                     &font_render->vertices);
+        starting_pos.y += scale * font.pixel_height;
+    }
+    buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
+                        sizeof(Vertex) * font_render->vertices.size,
+                        font_render->vertices.data);
+    font_render->vertices.size = 0;
 
     MVP mvp = { 0 };
     mvp.view = m4d();
     mvp.model = m4d();
     enable_gldebugging();
-
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (platform_is_running(platform))
     {
-        ClientRect client_rect = platform_get_client_rect(platform);
-        GLint viewport_width = client_rect.right - client_rect.left;
-        GLint viewport_height = client_rect.bottom - client_rect.top;
+        client_rect = platform_get_client_rect(platform);
+        viewport_width = client_rect.right - client_rect.left;
+        viewport_height = client_rect.bottom - client_rect.top;
         mvp.projection = ortho(0.0f, (float)viewport_width,
                                (float)viewport_height, 0.0f, -1.0f, 1.0f);
-        mvp.view = m4d();
         glViewport(0, 0, viewport_width, viewport_height);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shader_bind(font_shader);
-        shader_set_MVP(&shader_properties, &mvp);
-        texture_bind(font_texture, 0);
-        vertex_array_bind(vertex_array_id);
-        index_buffer_bind(index_buffer_id);
-        glDrawElements(GL_TRIANGLES, count * 6, GL_UNSIGNED_INT, NULL);
-
+        for (u32 i = 0; i < rendering_properties.size; ++i)
+        {
+            rendering_properties_draw(&rendering_properties.data[i], &mvp);
+        }
         platform_opengl_swap_buffers(platform);
         platform_event_fire(platform);
     }
     running = false;
+    for (u32 i = 0; i < rendering_properties.size; ++i)
+    {
+        RenderingProperties* rp = rendering_properties.data + i;
+        buffer_delete(rp->vertex_buffer_id);
+        buffer_delete(rp->index_buffer_id);
+    }
+    texture_delete(font_texture);
+    texture_delete(default_texture);
+    shader_destroy(font_shader);
+    shader_destroy(shader2);
     platform_opengl_clean(platform);
     threads_destroy(&thread_queue);
     platform_shut_down(platform);

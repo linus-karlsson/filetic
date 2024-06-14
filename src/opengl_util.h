@@ -15,3 +15,6 @@ AABB quad(VertexArray* vertex_array, V3 position, V2 size, V4 color,
           f32 texture_index);
 
 void generate_indicies(IndexArray* array, u32 offset, u32 indices_count);
+
+AABB quad_with_border(VertexArray* vert_array, u32* num_indices, V4 border_color,
+                V3 top_left, V2 size, f32 thickness, f32 tex_index);

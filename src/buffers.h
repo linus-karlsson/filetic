@@ -36,3 +36,4 @@ u32  vertex_array_create();
 void vertex_array_bind(const u32 vertex_array);
 void vertex_array_unbind();
 void vertex_array_add_buffer(const u32 vertex_array, const u32 vertex_buffer, const VertexBufferLayout* vertex_buffer_layout);
+void buffer_delete(u32 buffer);

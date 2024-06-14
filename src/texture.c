@@ -38,3 +38,9 @@ void texture_unbind(int slot)
     glBindTextureUnit(slot, 0);
 }
 
+void texture_delete(u32 texture)
+{
+    glDeleteTextures(1, &texture);
+}
+
+

@@ -93,3 +93,8 @@ void vertex_array_add_buffer(const u32 vertex_array, const u32 vertex_buffer,
                               vertex_buffer_layout->stride, (void*)offset);
     }
 }
+
+void buffer_delete(u32 buffer)
+{
+    glDeleteBuffers(1, &buffer);
+}

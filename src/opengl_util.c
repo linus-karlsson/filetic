@@ -61,3 +61,31 @@ void generate_indicies(IndexArray* array, u32 offset, u32 indices_count)
         }
     }
 }
+
+AABB quad_with_border(VertexArray* vert_array, u32* num_indices, V4 border_color,
+                V3 top_left, V2 size, f32 thickness, f32 tex_index)
+{
+    V2 h_size = v2f(size.x, thickness);
+    V2 v_size = v2f(thickness, size.y);
+
+    quad(vert_array, top_left, h_size, border_color, tex_index);
+
+    quad(vert_array,
+         v3f(top_left.x, top_left.y + v_size.y - thickness, top_left.z), h_size,
+         border_color, tex_index);
+
+    quad(vert_array, top_left, v_size, border_color, tex_index);
+
+    quad(vert_array,
+         v3f(top_left.x + h_size.x - thickness, top_left.y, top_left.z), v_size,
+         border_color, tex_index);
+
+    if(num_indices)
+    {
+        *num_indices += 4;
+    }
+    AABB out = { 0 };
+    out.min = v2_v3(top_left);
+    out.size = size;
+    return out;
+}
