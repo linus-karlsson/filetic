@@ -44,6 +44,12 @@ A lightweight file management application designed to provide basic file operati
 
 ### Running the Application
 
+**Running using CMake**
+```bash
+.\build\bin\Debug\FileTic.exe
+```
+
+**Running using Ninja**
 ```bash
 .\build\bin\FileTic.exe
 ```
