@@ -15,34 +15,11 @@
 #include "collision.h"
 #include "ftic_math.h"
 #include "texture.h"
+#include "util.h"
+#include "font.h"
+#include "opengl_util.h"
 
-typedef struct FileAttrib
-{
-    u8* buffer;
-    u64 size;
-} FileAttrib;
-
-typedef struct Vertex
-{
-    V4 color;
-    V3 position;
-    V2 texture_coordinates;
-    f32 texture_index;
-} Vertex;
-
-typedef struct IndexArray
-{
-    u32 size;
-    u32 capacity;
-    u32* data;
-} IndexArray;
-
-typedef struct VertexArray
-{
-    u32 size;
-    u32 capacity;
-    Vertex* data;
-} VertexArray;
+global b8 running = true;
 
 typedef struct SafeFileArray
 {
@@ -61,35 +38,6 @@ typedef struct FindingCallbackAttribute
     u32 string_to_match_length;
     SafeFileArray* array;
 } FindingCallbackAttribute;
-
-global b8 running = true;
-
-FileAttrib read_file(const char* file_path)
-{
-    FILE* file = fopen(file_path, "rb");
-
-    if (!file)
-    {
-        log_file_error(file_path);
-        ftic_assert(false);
-    }
-
-    FileAttrib file_attrib = { 0 };
-    fseek(file, 0, SEEK_END);
-    file_attrib.size = (u64)ftell(file);
-    rewind(file);
-
-    file_attrib.buffer = (u8*)calloc(file_attrib.size + 1, sizeof(u8));
-
-    if (fread(file_attrib.buffer, 1, file_attrib.size, file) !=
-        file_attrib.size)
-    {
-        log_last_error();
-        ftic_assert(false);
-    }
-    fclose(file);
-    return file_attrib;
-}
 
 char* get_shader_error_prefix(u32 type)
 {
@@ -346,73 +294,6 @@ void find_matching_string(const char* start_directory, const u32 length,
     }
 }
 
-typedef struct TextureCoordinates
-{
-    V2 coordinates[4];
-} TextureCoordinates;
-
-internal AABB set_up_verticies(VertexArray* vertex_array, V3 position, V2 size,
-                               V4 color, f32 texture_index,
-                               TextureCoordinates texture_coordinates)
-{
-    Vertex vertex = {
-        .position = position,
-        .texture_coordinates = texture_coordinates.coordinates[0],
-        .color = color,
-        .texture_index = texture_index,
-    };
-    array_push(vertex_array, vertex);
-    vertex.position.y += size.y;
-    vertex.texture_coordinates = texture_coordinates.coordinates[1];
-    array_push(vertex_array, vertex);
-    vertex.position.x += size.x;
-    vertex.texture_coordinates = texture_coordinates.coordinates[2];
-    array_push(vertex_array, vertex);
-    vertex.position.y -= size.y;
-    vertex.texture_coordinates = texture_coordinates.coordinates[3];
-    array_push(vertex_array, vertex);
-
-    AABB out;
-    out.min = v2_v3(position);
-    out.size = size;
-    return out;
-}
-
-AABB quad_co(VertexArray* vertex_array, V3 position, V2 size, V4 color,
-             V4 texture_coordinates, f32 texture_index)
-{
-    TextureCoordinates _tex_coords = {
-        v2_v4(texture_coordinates),
-        v2f(texture_coordinates.x, texture_coordinates.w),
-        v2f(texture_coordinates.z, texture_coordinates.w),
-        v2f(texture_coordinates.z, texture_coordinates.y)
-    };
-    return set_up_verticies(vertex_array, position, size, color, texture_index,
-                            _tex_coords);
-}
-
-AABB quad(VertexArray* vertex_array, V3 position, V2 size, V4 color,
-          f32 texture_index)
-{
-    TextureCoordinates texture_coordinates = { v2d(), v2f(0.0f, 1.0f),
-                                               v2f(1.0f, 1.0f),
-                                               v2f(1.0f, 0.0f) };
-    return set_up_verticies(vertex_array, position, size, color, texture_index,
-                            texture_coordinates);
-}
-
-void generate_indicies(IndexArray* array, u32 offset, u32 indices_count)
-{
-    const u32 INDEX_TABLE[] = { 0, 1, 2, 2, 3, 0 };
-    for (u32 i = 0; i < indices_count; i++)
-    {
-        for (u32 j = 0; j < 6; j++)
-        {
-            array_push(array, ((INDEX_TABLE[j] + (4 * i)) + offset));
-        }
-    }
-}
-
 int shader_get_uniform_location(u32 shader, const char* name)
 {
     int location = glGetUniformLocation(shader, name);
@@ -463,95 +344,6 @@ void shader_set_MVP(const ShaderProperties* shader_properties, const MVP* mvp)
                                  shader_properties->model_location, mvp->model);
 }
 
-typedef struct CharacterTTF
-{
-    V2 dimensions;
-    V2 offset;
-    V4 text_coords;
-    f32 x_advance;
-} CharacterTTF;
-
-typedef struct FontTTF
-{
-    f32 tex_index;
-    f32 line_height;
-    f32 pixel_height;
-    u32 char_count;
-    CharacterTTF* chars;
-} FontTTF;
-
-void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
-                    u32 glyph_count, u32 glyph_offset,
-                    const char* font_file_path, u8* bitmap, FontTTF* font_out)
-{
-    FileAttrib file = read_file(font_file_path);
-    stbtt_bakedchar* data =
-        (stbtt_bakedchar*)calloc(glyph_count, sizeof(stbtt_bakedchar));
-    stbtt_BakeFontBitmap(file.buffer, 0, pixel_height, bitmap, 512, 512,
-                         glyph_offset, glyph_count, data);
-
-    FontTTF font = { 0 };
-    font.line_height = pixel_height;
-    font.pixel_height = pixel_height;
-    font.char_count = glyph_count;
-    font.chars = (CharacterTTF*)calloc(glyph_count, sizeof(CharacterTTF));
-    for (u32 i = 0; i < glyph_count; i++)
-    {
-        CharacterTTF* c_ttf = &font.chars[i];
-        stbtt_bakedchar bc = data[i];
-        c_ttf->dimensions = v2f((f32)(bc.x1 - bc.x0), (f32)(bc.y1 - bc.y0));
-        c_ttf->offset = v2f(bc.xoff, bc.yoff);
-        c_ttf->x_advance = bc.xadvance;
-        c_ttf->text_coords =
-            v4f((f32)bc.x0 / width_atlas, (f32)bc.y0 / height_atlas,
-                (f32)bc.x1 / width_atlas, (f32)bc.y1 / height_atlas);
-    }
-    *font_out = font;
-    free(data);
-    free(file.buffer);
-}
-
-u32 text_gen(const CharacterTTF* c_ttf, const char* text, float texture_index,
-             V3 pos, f32 scale, f32 line_height, u32* new_lines_count,
-             f32* x_advance, VertexArray* array)
-{
-    u32 count = 0;
-    f32 start_x = pos.x;
-    u32 new_lines = 0;
-    for (; *text; text++)
-    {
-        char current_char = *text;
-        if (current_char == '\n')
-        {
-            pos.y += line_height * scale;
-            pos.x = start_x;
-            new_lines++;
-            continue;
-        }
-        if (closed_interval(0, (current_char - 32), 96))
-        {
-            const CharacterTTF* c = c_ttf + (current_char - 32);
-
-            V2 size = v2_s_multi(c->dimensions, scale);
-            V3 curr_pos = v3_add(pos, v3_v2(v2_s_multi(c->offset, scale)));
-            quad_co(array, curr_pos, size, v4i(1.0f), c->text_coords,
-                    texture_index);
-
-            pos.x += c->x_advance * scale;
-            count++;
-        }
-    }
-    if (new_lines_count)
-    {
-        *new_lines_count = new_lines;
-    }
-    if (x_advance)
-    {
-        *x_advance = pos.x - start_x;
-    }
-    return count;
-}
-
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -567,7 +359,7 @@ int main(int argc, char** argv)
     FontTTF font = { 0 };
     const i32 width_atlas = 512;
     const i32 height_atlas = 512;
-    const f32 pixel_height = 48;
+    const f32 pixel_height = 32;
     u8* font_bitmap = (u8*)calloc(width_atlas * height_atlas, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
                    "res/fonts/arial.ttf", font_bitmap, &font);
@@ -658,7 +450,7 @@ int main(int argc, char** argv)
                                (float)viewport_height, 0.0f, -1.0f, 1.0f);
         mvp.view = m4d();
         glViewport(0, 0, viewport_width, viewport_height);
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader_bind(font_shader);
