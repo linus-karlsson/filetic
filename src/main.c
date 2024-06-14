@@ -5,6 +5,7 @@
 #define WIN_32_EXTRA_LEAN
 #include <Windows.h>
 #include <glad/glad.h>
+#include <stb/stb_truetype.h>
 
 #include "define.h"
 #include "platform/platform.h"
@@ -13,12 +14,13 @@
 #include "thread_queue.h"
 #include "collision.h"
 #include "ftic_math.h"
+#include "texture.h"
 
-typedef struct File_Attrib
+typedef struct FileAttrib
 {
     u8* buffer;
     u64 size;
-} File_Attrib;
+} FileAttrib;
 
 typedef struct Vertex
 {
@@ -62,7 +64,7 @@ typedef struct FindingCallbackAttribute
 
 global b8 running = true;
 
-File_Attrib read_file(const char* file_path)
+FileAttrib read_file(const char* file_path)
 {
     FILE* file = fopen(file_path, "rb");
 
@@ -72,7 +74,7 @@ File_Attrib read_file(const char* file_path)
         ftic_assert(false);
     }
 
-    File_Attrib file_attrib = { 0 };
+    FileAttrib file_attrib = { 0 };
     fseek(file, 0, SEEK_END);
     file_attrib.size = (u64)ftell(file);
     rewind(file);
@@ -136,11 +138,13 @@ u32 shader_compile(u32 type, const u8* source)
 
 u32 shader_create(const char* vertex_file_path, const char* fragment_file_path)
 {
-    File_Attrib vertex_file = read_file(vertex_file_path);
-    File_Attrib fragment_file = read_file(fragment_file_path);
+    FileAttrib vertex_file = read_file(vertex_file_path);
+    FileAttrib fragment_file = read_file(fragment_file_path);
     u32 vertex_shader = shader_compile(GL_VERTEX_SHADER, vertex_file.buffer);
     u32 fragemnt_shader =
         shader_compile(GL_FRAGMENT_SHADER, fragment_file.buffer);
+    free(vertex_file.buffer);
+    free(fragment_file.buffer);
 
     u32 program = glCreateProgram();
 
@@ -384,7 +388,7 @@ AABB quad_co(VertexArray* vertex_array, V3 position, V2 size, V4 color,
         v2f(texture_coordinates.z, texture_coordinates.y)
     };
     return set_up_verticies(vertex_array, position, size, color, texture_index,
-                             _tex_coords);
+                            _tex_coords);
 }
 
 AABB quad(VertexArray* vertex_array, V3 position, V2 size, V4 color,
@@ -394,7 +398,7 @@ AABB quad(VertexArray* vertex_array, V3 position, V2 size, V4 color,
                                                v2f(1.0f, 1.0f),
                                                v2f(1.0f, 0.0f) };
     return set_up_verticies(vertex_array, position, size, color, texture_index,
-                             texture_coordinates);
+                            texture_coordinates);
 }
 
 void generate_indicies(IndexArray* array, u32 offset, u32 indices_count)
@@ -476,7 +480,36 @@ typedef struct FontTTF
     CharacterTTF* chars;
 } FontTTF;
 
-void init_ttf_atlas();
+void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
+                    u32 glyph_count, u32 glyph_offset,
+                    const char* font_file_path, u8* bitmap, FontTTF* font_out)
+{
+    FileAttrib file = read_file(font_file_path);
+    stbtt_bakedchar* data =
+        (stbtt_bakedchar*)calloc(glyph_count, sizeof(stbtt_bakedchar));
+    stbtt_BakeFontBitmap(file.buffer, 0, pixel_height, bitmap, 512, 512,
+                         glyph_offset, glyph_count, data);
+
+    FontTTF font = { 0 };
+    font.line_height = pixel_height;
+    font.pixel_height = pixel_height;
+    font.char_count = glyph_count;
+    font.chars = (CharacterTTF*)calloc(glyph_count, sizeof(CharacterTTF));
+    for (u32 i = 0; i < glyph_count; i++)
+    {
+        CharacterTTF* c_ttf = &font.chars[i];
+        stbtt_bakedchar bc = data[i];
+        c_ttf->dimensions = v2f((f32)(bc.x1 - bc.x0), (f32)(bc.y1 - bc.y0));
+        c_ttf->offset = v2f(bc.xoff, bc.yoff);
+        c_ttf->x_advance = bc.xadvance;
+        c_ttf->text_coords =
+            v4f((f32)bc.x0 / width_atlas, (f32)bc.y0 / height_atlas,
+                (f32)bc.x1 / width_atlas, (f32)bc.y1 / height_atlas);
+    }
+    *font_out = font;
+    free(data);
+    free(file.buffer);
+}
 
 int main(int argc, char** argv)
 {
@@ -489,6 +522,21 @@ int main(int argc, char** argv)
         log_error_message(message, strlen(message));
         ftic_assert(false);
     }
+
+    FontTTF font = { 0 };
+    const i32 width_atlas = 512;
+    const i32 height_atlas = 512;
+    const f32 pixel_height = 48;
+    u8* font_bitmap = (u8*)calloc(width_atlas * height_atlas, sizeof(u8));
+    init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
+                   "res/fonts/arial.ttf", font_bitmap, &font);
+
+    TextureProperties texture_properties = {
+        .width = width_atlas,
+        .height = height_atlas,
+        .bytes = font_bitmap,
+    };
+    u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
 
     u32 shader = shader_create("./res/shaders/vertex.glsl",
                                "./res/shaders/fragment.glsl");
@@ -565,6 +613,7 @@ int main(int argc, char** argv)
 
         shader_bind(shader);
         shader_set_MVP(&shader_properties, &mvp);
+        texture_bind(font_texture, 0);
         vertex_array_bind(vertex_array_id);
         index_buffer_bind(index_buffer_id);
         glDrawElements(GL_TRIANGLES, index_array.size, GL_UNSIGNED_INT, NULL);

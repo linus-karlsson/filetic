@@ -11,6 +11,6 @@ uniform sampler2D texures[1];
 void main()
 {
     int index = int(fTexIndex);
-    vec4 fTexure = texture(texures[index], fTexCoord) * fColor;
-    finalColor = fTexure;
+    vec4 fTexure = texture(texures[index], fTexCoord);
+    finalColor = vec4(fColor.rgb, fTexure.r);
 }

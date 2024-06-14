@@ -10,7 +10,7 @@ void texture_load(const char* file_path, TextureProperties* texture_properties)
         &texture_properties->channels, 4);
 }
 
-u32 texture_create(TextureProperties* texture_properties, int internal_format,
+u32 texture_create(const TextureProperties* texture_properties, int internal_format,
                    u32 format)
 {
     uint32_t texture;
@@ -24,8 +24,6 @@ u32 texture_create(TextureProperties* texture_properties, int internal_format,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    stbi_image_free(texture_properties->bytes);
-    texture_properties->bytes = NULL;
 
     return texture;
 }
