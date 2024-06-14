@@ -83,6 +83,7 @@ typedef enum EventType
     KEY,
     MOUSE_MOVE,
     MOUSE_BUTTON,
+    MOUSE_WHEEL,
 } EventType;
 
 typedef struct KeyEvent
@@ -97,11 +98,16 @@ typedef struct MouseMoveEvent
     i16 position_y;
 } MouseMoveEvent;
 
-typedef struct MouseButton
+typedef struct MouseButtonEvent
 {
     u8 key;
     b8 double_clicked;
-} MouseButton;
+} MouseButtonEvent;
+
+typedef struct MouseWheelEvent
+{
+    i16 z_delta;
+} MouseWheelEvent;
 
 typedef struct Event
 {
@@ -111,7 +117,8 @@ typedef struct Event
     {
         KeyEvent key_event;
         MouseMoveEvent mouse_move_event;
-        MouseButton mouse_button_event;
+        MouseButtonEvent mouse_button_event;
+        MouseWheelEvent mouse_wheel_event;
     };
 } Event;
 

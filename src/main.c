@@ -355,6 +355,13 @@ b8 directory_item_list(V3 starting_position, const f32 scale,
     return hit;
 }
 
+typedef struct DirectoryArray
+{
+    u32 size;
+    u32 capacity;
+    Directory* data;
+} DirectoryArray;
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -465,13 +472,19 @@ int main(int argc, char** argv)
                         default_render->vertices.data);
     default_render->vertices.size = 0;
 
+    DirectoryArray directory_history = { 0 };
+    array_create(&directory_history, 10);
     const char* dir = "C:\\*";
-    Directory current_directory = platform_get_directory(dir, (u32)strlen(dir));
+    array_push(&directory_history,
+               platform_get_directory(dir, (u32)strlen(dir)));
+    Directory* current_directory = array_back(&directory_history);
 
     Event* mouse_move = event_subscribe(MOUSE_MOVE);
     Event* mouse_button = event_subscribe(MOUSE_BUTTON);
+    Event* mouse_wheel_event = event_subscribe(MOUSE_WHEEL);
 
     i32 hit_index = -1;
+    f32 text_y = 100.0f;
     MVP mvp = { 0 };
     mvp.view = m4d();
     mvp.model = m4d();
@@ -489,9 +502,20 @@ int main(int argc, char** argv)
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        if (mouse_button->activated &&
+            mouse_button->mouse_button_event.key == FTIC_RIGHT_BUTTON)
+        {
+            if (directory_history.size > 1)
+            {
+                platform_reset_directory(array_back(&directory_history));
+                directory_history.size -= 1;
+                current_directory = array_back(&directory_history);
+            }
+        }
+
         rendering_properties_clear(font_render);
-        starting_position = v3_v2(rect.min);
-        starting_position.x += rect.size.width + 20.0f;
+        V3 text_starting_position = v3f(rect.min.x, text_y, 0.0f);
+        text_starting_position.x += rect.size.width + 20.0f;
         const float scale = 1.0f;
         const float padding_top = 30.0f;
         const float padding_bottom = 10.0f;
@@ -499,47 +523,49 @@ int main(int argc, char** argv)
             scale * font.pixel_height + padding_top + padding_bottom;
         b8 hit = false;
         i32 index = 0;
-        for (; index < (i32)current_directory.sub_directories.size; ++index)
+        for (; index < (i32)current_directory->sub_directories.size; ++index)
         {
-            hit = directory_item(hit, index, starting_position, scale,
-                                 padding_top, padding_bottom, quad_height,
-                                 &current_directory.sub_directories.data[index],
-                                 &font, mouse_move, &hit_index, font_render);
-            starting_position.y += quad_height;
+            hit =
+                directory_item(hit, index, text_starting_position, scale,
+                               padding_top, padding_bottom, quad_height,
+                               &current_directory->sub_directories.data[index],
+                               &font, mouse_move, &hit_index, font_render);
+            text_starting_position.y += quad_height;
         }
         b8 skip = false;
-        if (mouse_button->mouse_button_event.double_clicked)
+        if (mouse_button->mouse_button_event.key == FTIC_LEFT_BUTTON &&
+            mouse_button->mouse_button_event.double_clicked)
         {
             if (hit)
             {
                 char* path =
-                    current_directory.sub_directories.data[hit_index].path;
+                    current_directory->sub_directories.data[hit_index].path;
                 u32 length = (u32)strlen(path);
-                path[length++] = '\\';
+                path[length++] = '/';
                 path[length++] = '*';
-                Directory new_directory = platform_get_directory(path, length);
-                platform_reset_directory(&current_directory);
-                current_directory = new_directory;
+                array_push(&directory_history,
+                           platform_get_directory(path, length));
+                path[length - 2] = '\0';
+
+                current_directory = array_back(&directory_history);
                 skip = true;
             }
         }
-        if(!skip)
+        if (!skip)
         {
-            for (i32 i = 0; i < (i32)current_directory.files.size; ++i)
+            for (i32 i = 0; i < (i32)current_directory->files.size; ++i)
             {
-                hit =
-                    directory_item(hit, i + index, starting_position, scale,
-                                   padding_top, padding_bottom, quad_height,
-                                   &current_directory.files.data[i],
-                                   &font, mouse_move, &hit_index, font_render);
-                starting_position.y += quad_height;
+                hit = directory_item(hit, i + index, text_starting_position, scale,
+                                     padding_top, padding_bottom, quad_height,
+                                     &current_directory->files.data[i], &font,
+                                     mouse_move, &hit_index, font_render);
+                text_starting_position.y += quad_height;
             }
         }
         if (!hit)
         {
             hit_index = -1;
         }
-
         buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                             sizeof(Vertex) * font_render->vertices.size,
                             font_render->vertices.data);

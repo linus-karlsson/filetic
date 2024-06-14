@@ -4,6 +4,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define WIN_32_EXTRA_LEAN
+#include <stdio.h>
 #include <Windows.h>
 #include <stdlib.h>
 
@@ -73,6 +74,11 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
                 u16 key = (u16)w_param;
                 platform->callbacks.on_key_released(key);
             }
+            break;
+        }
+        case WM_XBUTTONDOWN:
+        {
+            WORD xButton = GET_XBUTTON_WPARAM(w_param);
             break;
         }
         case WM_LBUTTONDBLCLK:
