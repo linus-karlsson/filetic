@@ -298,9 +298,9 @@ void rendering_properties_clear(RenderingProperties* rendering_properties)
 }
 
 b8 directory_item(b8 hit, i32 index, V3 starting_position, const f32 scale,
-                  const f32 padding_top, const f32 padding_bottom,
-                  const f32 quad_height, const DirectoryItem* item,
-                  const FontTTF* font, const Event* mouse_move, i32* hit_index,
+                  const f32 padding_top, const f32 quad_height,
+                  const DirectoryItem* item, const FontTTF* font,
+                  const Event* mouse_move, i32* hit_index,
                   RenderingProperties* render)
 {
     const V4 color = index == (*hit_index) ? v4ic(0.3f) : v4ic(0.1f);
@@ -539,21 +539,19 @@ int main(int argc, char** argv)
 
         rendering_properties_clear(font_render);
         V3 text_starting_position =
-            v3f(rect.min.x, current_directory->text_y, 0.0f);
+            v3f(rect.min.x, 30.0f + current_directory->text_y, 0.0f);
         text_starting_position.x += rect.size.width + 20.0f;
         const float scale = 1.0f;
-        const float padding_top = 30.0f;
-        const float padding_bottom = 10.0f;
-        const float quad_height =
-            scale * font.pixel_height + padding_top + padding_bottom;
+        const float padding_top = 2.0f;
+        const float quad_height = scale * font.pixel_height + padding_top * 5.0f;
         b8 hit = false;
         i32 index = 0;
         for (; index < (i32)current_directory->directory.sub_directories.size;
              ++index)
         {
             hit = directory_item(
-                hit, index, text_starting_position, scale, padding_top,
-                padding_bottom, quad_height,
+                hit, index, text_starting_position, scale,
+                font.pixel_height + padding_top, quad_height,
                 &current_directory->directory.sub_directories.data[index],
                 &font, mouse_move, &hit_index, font_render);
             text_starting_position.y += quad_height;
@@ -585,10 +583,9 @@ int main(int argc, char** argv)
                  ++i)
             {
                 hit = directory_item(
-                    hit, i + index, text_starting_position, scale, padding_top,
-                    padding_bottom, quad_height,
-                    &current_directory->directory.files.data[i], &font,
-                    mouse_move, &hit_index, font_render);
+                    hit, i + index, text_starting_position, scale, font.pixel_height + padding_top,
+                    quad_height, &current_directory->directory.files.data[i],
+                    &font, mouse_move, &hit_index, font_render);
                 text_starting_position.y += quad_height;
             }
         }
@@ -602,9 +599,11 @@ int main(int argc, char** argv)
 
         if (mouse_wheel->activated)
         {
-            f32 total_height = text_starting_position.y - current_directory->text_y;
+            f32 total_height =
+                text_starting_position.y - current_directory->text_y;
             f32 z_delta = (f32)mouse_wheel->mouse_wheel_event.z_delta;
-            if ((z_delta > 0) || ((total_height + current_directory->offset) > dimensions.y))
+            if ((z_delta > 0) ||
+                ((total_height + current_directory->offset) > dimensions.y))
             {
                 current_directory->offset += z_delta;
             }

@@ -9,6 +9,16 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define FTIC_NORMAL_CURSOR 0
+#define FTIC_HAND_CURSOR 1
+#define FTIC_RESIZE_H_CURSOR 2
+#define FTIC_RESIZE_V_CURSOR 3
+#define FTIC_RESIZE_NW_CURSOR 4
+#define FTIC_MOVE_CURSOR 5
+#define FTIC_HIDDEN_CURSOR 6
+
+#define TOTAL_CURSORS 7
+
 typedef struct Callbacks
 {
     OnKeyPressedCallback on_key_pressed;
@@ -31,11 +41,16 @@ typedef struct OpenGLProperties
 
 typedef struct WindowsPlatformInternal
 {
+    HINSTANCE instance;
     HWND window;
     u16 width;
     u16 height;
     Callbacks callbacks;
     OpenGLProperties opengl_properties;
+
+    u32 current_cursor;
+    HCURSOR cursors[TOTAL_CURSORS];
+
     b8 running;
 } WindowsPlatformInternal;
 
@@ -137,6 +152,14 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
             }
             break;
         }
+        case WM_SETCURSOR:
+        {
+            if (platform)
+            {
+                SetCursor(platform->cursors[platform->current_cursor]);
+            }
+            break;
+        }
         // TODO: mouse leave and enter and focus;
         case WM_MOVE:
         {
@@ -166,12 +189,27 @@ void platform_init(const char* title, u16 width, u16 height,
     WindowsPlatformInternal* platform_internal =
         (WindowsPlatformInternal*)calloc(1, sizeof(WindowsPlatformInternal));
 
+    platform_internal->cursors[FTIC_NORMAL_CURSOR] = LoadCursor(0, IDC_ARROW);
+    platform_internal->cursors[FTIC_HAND_CURSOR] = LoadCursor(0, IDC_HAND);
+    platform_internal->cursors[FTIC_RESIZE_H_CURSOR] =
+        LoadCursor(0, IDC_SIZEWE);
+    platform_internal->cursors[FTIC_RESIZE_V_CURSOR] =
+        LoadCursor(0, IDC_SIZENS);
+    platform_internal->cursors[FTIC_RESIZE_NW_CURSOR] =
+        LoadCursor(0, IDC_SIZENWSE);
+    platform_internal->cursors[FTIC_MOVE_CURSOR] = LoadCursor(0, IDC_SIZEALL);
+    platform_internal->cursors[FTIC_HIDDEN_CURSOR] = NULL;
+
     WNDCLASS window_class = {
         .style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS,
         .lpfnWndProc = msg_handler,
         .hInstance = GetModuleHandle(0),
         .lpszClassName = "filetic",
+        .hCursor = platform_internal->cursors[FTIC_NORMAL_CURSOR],
     };
+
+    platform_internal->instance = window_class.hInstance;
+    platform_internal->current_cursor = FTIC_NORMAL_CURSOR;
 
     ATOM res = RegisterClass(&window_class);
     if (res)
@@ -415,6 +453,21 @@ void platform_event_set_on_key_stroke(Platform* platform,
     platform_internal->callbacks.on_key_stroke = callback;
 }
 
+void platform_change_cursor(Platform* platform, u32 cursor_id)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+
+    if(platform_internal->current_cursor != cursor_id)
+    {
+        if(cursor_id < TOTAL_CURSORS)
+        {
+            platform_internal->current_cursor = cursor_id;
+            SetCursor(platform_internal->cursors[platform_internal->current_cursor]);
+        }
+    }
+}
+
 internal char* copy_string(const char* string, const u32 string_length)
 {
     char* result = (char*)calloc(string_length + 3, sizeof(char));
@@ -468,18 +521,18 @@ Directory platform_get_directory(const char* directory_path,
 
 void platform_reset_directory(Directory* directory)
 {
-    for(u32 i = 0; i < directory->files.size; ++i)
+    for (u32 i = 0; i < directory->files.size; ++i)
     {
         free(directory->files.data[i].path);
     }
-    for(u32 i = 0; i < directory->sub_directories.size; ++i)
+    for (u32 i = 0; i < directory->sub_directories.size; ++i)
     {
         free(directory->sub_directories.data[i].path);
     }
     free(directory->files.data);
     free(directory->sub_directories.data);
-    directory->files = (DirectoryItemArray) {0};
-    directory->sub_directories = (DirectoryItemArray) {0};
+    directory->files = (DirectoryItemArray){ 0 };
+    directory->sub_directories = (DirectoryItemArray){ 0 };
 }
 
 FTicMutex platform_mutex_create(void)
@@ -568,4 +621,4 @@ f64 platform_get_time(void)
     struct timespec now;
     timespec_get(&now, TIME_UTC);
     return now.tv_sec + (now.tv_nsec * 0.000000001);
-} 
+}
