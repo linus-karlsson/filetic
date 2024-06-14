@@ -17,7 +17,8 @@ A lightweight file management application designed to provide basic file operati
 
 ### Prerequisites
 
-- OpenGL and CMake
+- OpenGL
+- CMake
 
 ### Installation
 
