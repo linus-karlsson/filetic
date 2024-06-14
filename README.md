@@ -37,7 +37,7 @@ A lightweight file management application designed to provide basic file operati
     cmake --build build --config Debug
     ```
 
-3. **Build using Ninja**
+2. **Build using Ninja**
     ```bash
     .\Commands\Ninja\configDebug.bat
     cmake --build build
