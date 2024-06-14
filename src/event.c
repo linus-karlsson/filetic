@@ -61,6 +61,16 @@ void event_init(Platform* platform)
     array_create(&event_context.events, 20);
 }
 
+void poll_event(Platform* platform)
+{
+    for (u32 i = 0; i < event_context.events.size; ++i)
+    {
+        Event* event = event_context.events.data + i;
+        event->activated = false;
+    }
+    platform_event_fire(platform);
+}
+
 Event* event_subscribe(EventType type)
 {
     Event event = { .type = type };

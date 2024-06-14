@@ -16,8 +16,7 @@ uniform mat4 model;
 void main()
 {
     gl_Position = proj * view * model * vec4(vPosition, 1.0);
-    // fColor = vColor;
-    fColor = vec4(1.0);
+    fColor = vColor;
     fTexCoord = vTexCoord;
     fTexIndex = vTexIndex;
 }

@@ -10,8 +10,8 @@ void texture_load(const char* file_path, TextureProperties* texture_properties)
         &texture_properties->channels, 4);
 }
 
-u32 texture_create(const TextureProperties* texture_properties, int internal_format,
-                   u32 format)
+u32 texture_create(const TextureProperties* texture_properties,
+                   int internal_format, u32 format)
 {
     uint32_t texture;
     glCreateTextures(GL_TEXTURE_2D, 1, &texture);
@@ -30,6 +30,8 @@ u32 texture_create(const TextureProperties* texture_properties, int internal_for
 
 void texture_bind(u32 texture, int slot)
 {
+    // glActiveTexture(GL_TEXTURE0 + slot);
+    // glBindTexture(GL_TEXTURE_2D, texture);
     glBindTextureUnit(slot, texture);
 }
 
@@ -42,5 +44,4 @@ void texture_delete(u32 texture)
 {
     glDeleteTextures(1, &texture);
 }
-
 

@@ -6,11 +6,11 @@ layout(location = 2) in flat float fTexIndex;
 
 layout(location = 0) out vec4 finalColor;
 
-uniform sampler2D texures[1];
+uniform sampler2D textures[2];
 
 void main()
 {
     int index = int(fTexIndex);
-    vec4 fTexure = texture(texures[index], fTexCoord);
+    vec4 fTexure = texture(textures[index], fTexCoord);
     finalColor = vec4(fColor.rgb, fTexure.r);
 }

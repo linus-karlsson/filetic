@@ -108,4 +108,5 @@ typedef struct Event
 } Event;
 
 void event_init(Platform* platform);
+void poll_event(Platform* platform);
 Event* event_subscribe(EventType type);

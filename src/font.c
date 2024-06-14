@@ -33,7 +33,7 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
     free(file.buffer);
 }
 
-u32 text_gen(const CharacterTTF* c_ttf, const char* text, float texture_index,
+u32 text_generation(const CharacterTTF* c_ttf, const char* text, float texture_index,
              V3 pos, f32 scale, f32 line_height, u32* new_lines_count,
              f32* x_advance, VertexArray* array)
 {

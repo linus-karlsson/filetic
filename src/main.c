@@ -19,6 +19,7 @@
 #include "font.h"
 #include "opengl_util.h"
 #include "shader.h"
+#include "event.h"
 
 global b8 running = true;
 
@@ -224,7 +225,8 @@ typedef struct RenderingProperties
     u32 vertex_array_id;
     u32 index_buffer_id;
     u32 index_count;
-    u32 texture;
+    u32 texture_count;
+    u32* textures;
 
     ShaderProperties shader_properties;
     VertexArray vertices;
@@ -238,10 +240,9 @@ typedef struct RenderingPropertiesArray
     RenderingProperties* data;
 } RenderingPropertiesArray;
 
-RenderingProperties
-rendering_properties_init(u32 shader_id, u32 texture, u32 index_buffer_id,
-                          const VertexBufferLayout* vertex_buffer_layout,
-                          u32 vertex_buffer_size)
+RenderingProperties rendering_properties_init(
+    u32 shader_id, u32* textures, u32 texture_count, u32 index_buffer_id,
+    const VertexBufferLayout* vertex_buffer_layout, u32 vertex_buffer_size)
 {
     RenderingProperties rendering_properties = { 0 };
     array_create(&rendering_properties.vertices, vertex_buffer_size);
@@ -256,7 +257,8 @@ rendering_properties_init(u32 shader_id, u32 texture, u32 index_buffer_id,
                             vertex_buffer_layout);
 
     rendering_properties.index_buffer_id = index_buffer_id;
-    rendering_properties.texture = texture;
+    rendering_properties.texture_count = texture_count;
+    rendering_properties.textures = textures;
     rendering_properties.shader_properties =
         shader_create_properties(shader_id, "proj", "view", "model");
 
@@ -269,11 +271,29 @@ void rendering_properties_draw(const RenderingProperties* rendering_properties,
     shader_bind(rendering_properties->shader_properties.shader);
     shader_set_mvp(&rendering_properties->shader_properties, mvp);
 
-    texture_bind(rendering_properties->texture, 0);
+    int textures[10] = { 0 };
+    for (u32 i = 0; i < rendering_properties->texture_count; ++i)
+    {
+        textures[i] = (int)i;
+    }
+    int location = glGetUniformLocation(
+        rendering_properties->shader_properties.shader, "textures");
+    glUniform1iv(location, rendering_properties->texture_count, textures);
+
+    for (u32 i = 0; i < rendering_properties->texture_count; ++i)
+    {
+        texture_bind(rendering_properties->textures[i], (int)i);
+    }
     vertex_array_bind(rendering_properties->vertex_array_id);
     index_buffer_bind(rendering_properties->index_buffer_id);
     glDrawElements(GL_TRIANGLES, rendering_properties->index_count * 6,
                    GL_UNSIGNED_INT, NULL);
+}
+
+void rendering_properties_clear(RenderingProperties* rendering_properties)
+{
+    rendering_properties->index_count = 0;
+    rendering_properties->vertices.size = 0;
 }
 
 int main(int argc, char** argv)
@@ -287,11 +307,12 @@ int main(int argc, char** argv)
         log_error_message(message, strlen(message));
         ftic_assert(false);
     }
+    event_init(platform);
 
     FontTTF font = { 0 };
     const i32 width_atlas = 512;
     const i32 height_atlas = 512;
-    const f32 pixel_height = 16;
+    const f32 pixel_height = 14;
     u8* font_bitmap = (u8*)calloc(width_atlas * height_atlas, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
                    "res/fonts/arial.ttf", font_bitmap, &font);
@@ -305,14 +326,9 @@ int main(int argc, char** argv)
     free(texture_properties.bytes);
     texture_properties.width = 1;
     texture_properties.height = 1;
-    texture_properties.bytes = (u8*)calloc(4, sizeof(u8));
-    for (u32 i = 0; i < 4; ++i)
-    {
-        texture_properties.bytes[i] = UINT8_MAX;
-    }
-    u32 default_texture =
-        texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
-    free(texture_properties.bytes);
+    u8 pixel = UINT8_MAX;
+    texture_properties.bytes = &pixel;
+    u32 default_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
 
     u32 font_shader = shader_create("./res/shaders/vertex.glsl",
                                     "./res/shaders/font_fragment.glsl");
@@ -340,11 +356,12 @@ int main(int argc, char** argv)
     RenderingPropertiesArray rendering_properties = { 0 };
     array_create(&rendering_properties, 2);
     array_push(&rendering_properties,
-               rendering_properties_init(shader2, default_texture,
+               rendering_properties_init(font_shader, &default_texture, 1,
                                          index_buffer_id, &vertex_buffer_layout,
                                          10000 * 4));
+    u32 textures[2] = { default_texture, font_texture };
     array_push(&rendering_properties,
-               rendering_properties_init(font_shader, font_texture,
+               rendering_properties_init(font_shader, textures, 2,
                                          index_buffer_id, &vertex_buffer_layout,
                                          10000 * 4));
 
@@ -379,11 +396,11 @@ int main(int argc, char** argv)
     GLint viewport_height = client_rect.bottom - client_rect.top;
     V2 dimensions = v2f((f32)viewport_width, (f32)viewport_height);
 
-    V3 starting_pos = v3f(10.0f, 10.0f, 0.0f);
-    AABB rect = quad_with_border(&default_render->vertices,
-                                 &default_render->index_count,
-                                 v4f(1.0f, 1.0f, 0.2f, 1.0f), starting_pos,
-                                 v2f(100.0f, dimensions.height), 2.0f, 0.0f);
+    V3 starting_position = v3f(10.0f, 10.0f, 0.0f);
+    AABB rect = quad_with_border(
+        &default_render->vertices, &default_render->index_count,
+        v4f(0.3f, 0.3f, 0.3f, 1.0f), starting_position,
+        v2f(100.0f, dimensions.height - 50.0f), 2.0f, 0.0f);
     buffer_set_sub_data(default_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                         sizeof(Vertex) * default_render->vertices.size,
                         default_render->vertices.data);
@@ -392,22 +409,7 @@ int main(int argc, char** argv)
     const char* dir = "C:\\*";
     Directory current_directory = platform_get_directory(dir, (u32)strlen(dir));
 
-    starting_pos = v3_v2(rect.min);
-    starting_pos.y += 100;
-    starting_pos.x += rect.size.width + 20.0f;
-    const float scale = 1.0f;
-    for (u32 i = 0; i < current_directory.sub_directories.size; ++i)
-    {
-        font_render->index_count +=
-            text_gen(font.chars, current_directory.sub_directories.data[i].name,
-                     0.0f, starting_pos, scale, font.pixel_height, NULL, NULL,
-                     &font_render->vertices);
-        starting_pos.y += scale * font.pixel_height;
-    }
-    buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
-                        sizeof(Vertex) * font_render->vertices.size,
-                        font_render->vertices.data);
-    font_render->vertices.size = 0;
+    Event* mouse_move = event_subscribe(MOUSE_MOVE);
 
     MVP mvp = { 0 };
     mvp.view = m4d();
@@ -426,12 +428,38 @@ int main(int argc, char** argv)
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        rendering_properties_clear(font_render);
+        starting_position = v3_v2(rect.min);
+        starting_position.y += 100;
+        starting_position.x += rect.size.width + 20.0f;
+        const float scale = 1.0f;
+        const float padding = 30.0f;
+        const float quad_height = scale * font.pixel_height + padding * 2;
+        for (u32 i = 0; i < current_directory.sub_directories.size; ++i)
+        {
+            AABB aabb = quad(&font_render->vertices, starting_position,
+                             v2f(200.0f, quad_height),
+                             v4f(0.3f, 0.3f, 0.3f, 1.0f), 0.0f);
+            font_render->index_count += 1;
+
+            const V3 text_position =
+                v3_add(starting_position, v3f(padding, padding, 0.0f));
+            font_render->index_count += text_generation(
+                font.chars, current_directory.sub_directories.data[i].name,
+                1.0f, text_position, scale, font.pixel_height, NULL, NULL,
+                &font_render->vertices);
+            starting_position.y += quad_height;
+        }
+        buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
+                            sizeof(Vertex) * font_render->vertices.size,
+                            font_render->vertices.data);
+
         for (u32 i = 0; i < rendering_properties.size; ++i)
         {
             rendering_properties_draw(&rendering_properties.data[i], &mvp);
         }
         platform_opengl_swap_buffers(platform);
-        platform_event_fire(platform);
+        poll_event(platform);
     }
     running = false;
     for (u32 i = 0; i < rendering_properties.size; ++i)
