@@ -347,9 +347,9 @@ typedef struct TextureCoordinates
     V2 coordinates[4];
 } TextureCoordinates;
 
-AABB _set_up_verticies(VertexArray* vertex_array, V3 position, V2 size,
-                       V4 color, f32 texture_index,
-                       TextureCoordinates texture_coordinates)
+internal AABB set_up_verticies(VertexArray* vertex_array, V3 position, V2 size,
+                               V4 color, f32 texture_index,
+                               TextureCoordinates texture_coordinates)
 {
     Vertex vertex = {
         .position = position,
@@ -383,7 +383,7 @@ AABB quad_co(VertexArray* vertex_array, V3 position, V2 size, V4 color,
         v2f(texture_coordinates.z, texture_coordinates.w),
         v2f(texture_coordinates.z, texture_coordinates.y)
     };
-    return _set_up_verticies(vertex_array, position, size, color, texture_index,
+    return set_up_verticies(vertex_array, position, size, color, texture_index,
                              _tex_coords);
 }
 
@@ -393,7 +393,7 @@ AABB quad(VertexArray* vertex_array, V3 position, V2 size, V4 color,
     TextureCoordinates texture_coordinates = { v2d(), v2f(0.0f, 1.0f),
                                                v2f(1.0f, 1.0f),
                                                v2f(1.0f, 0.0f) };
-    return _set_up_verticies(vertex_array, position, size, color, texture_index,
+    return set_up_verticies(vertex_array, position, size, color, texture_index,
                              texture_coordinates);
 }
 
@@ -458,6 +458,25 @@ void shader_set_MVP(const ShaderProperties* shader_properties, const MVP* mvp)
     shader_set_uniform_matrix4fv(shader_properties->shader,
                                  shader_properties->model_location, mvp->model);
 }
+
+typedef struct CharacterTTF
+{
+    V2 dimensions;
+    V2 offset;
+    V4 text_coords;
+    f32 x_advance;
+} CharacterTTF;
+
+typedef struct FontTTF
+{
+    f32 tex_index;
+    f32 line_height;
+    f32 pixel_height;
+    u32 char_count;
+    CharacterTTF* chars;
+} FontTTF;
+
+void init_ttf_atlas();
 
 int main(int argc, char** argv)
 {
@@ -528,7 +547,7 @@ int main(int argc, char** argv)
     ShaderProperties shader_properties =
         shader_create_properties(shader, "proj", "view", "model");
 
-    MVP mvp = {0};
+    MVP mvp = { 0 };
     mvp.view = m4d();
     mvp.model = m4d();
     enable_gldebugging();
@@ -537,8 +556,8 @@ int main(int argc, char** argv)
         ClientRect client_rect = platform_get_client_rect(platform);
         GLint viewport_width = client_rect.right - client_rect.left;
         GLint viewport_height = client_rect.bottom - client_rect.top;
-        mvp.projection = ortho(0.0f, (float)viewport_width, (float)viewport_height,
-                        0.0f, -1.0f, 1.0f);
+        mvp.projection = ortho(0.0f, (float)viewport_width,
+                               (float)viewport_height, 0.0f, -1.0f, 1.0f);
         mvp.view = m4d();
         glViewport(0, 0, viewport_width, viewport_height);
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
