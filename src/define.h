@@ -47,6 +47,10 @@
 #define ftic_assert(ex)                                                        \
     if (!(ex)) *(u32*)0 = 0
 
+#define b_switch(val) (val) = (val) ? false : true
+#define closed_interval(low, val, high) ((val) >= (low) && (val) <= (high))
+#define open_interval(low, val, high) ((val) > (low) && (val) < (high))
+
 #define true 1
 #define false 0
 

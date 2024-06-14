@@ -511,6 +511,47 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
     free(file.buffer);
 }
 
+u32 text_gen(const CharacterTTF* c_ttf, const char* text, float texture_index,
+             V3 pos, f32 scale, f32 line_height, u32* new_lines_count,
+             f32* x_advance, VertexArray* array)
+{
+    u32 count = 0;
+    f32 start_x = pos.x;
+    u32 new_lines = 0;
+    for (; *text; text++)
+    {
+        char current_char = *text;
+        if (current_char == '\n')
+        {
+            pos.y += line_height * scale;
+            pos.x = start_x;
+            new_lines++;
+            continue;
+        }
+        if (closed_interval(0, (current_char - 32), 96))
+        {
+            const CharacterTTF* c = c_ttf + (current_char - 32);
+
+            V2 size = v2_s_multi(c->dimensions, scale);
+            V3 curr_pos = v3_add(pos, v3_v2(v2_s_multi(c->offset, scale)));
+            quad_co(array, curr_pos, size, v4i(1.0f), c->text_coords,
+                    texture_index);
+
+            pos.x += c->x_advance * scale;
+            count++;
+        }
+    }
+    if (new_lines_count)
+    {
+        *new_lines_count = new_lines;
+    }
+    if (x_advance)
+    {
+        *x_advance = pos.x - start_x;
+    }
+    return count;
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -538,16 +579,22 @@ int main(int argc, char** argv)
     };
     u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
 
-    u32 shader = shader_create("./res/shaders/vertex.glsl",
-                               "./res/shaders/fragment.glsl");
+    u32 font_shader = shader_create("./res/shaders/vertex.glsl",
+                                    "./res/shaders/font_fragment.glsl");
+    ftic_assert(font_shader);
+
+    u32 shader2 = shader_create("./res/shaders/vertex.glsl",
+                                "./res/shaders/fragment.glsl");
 
     IndexArray index_array = { 0 };
     array_create(&index_array, 100);
-    generate_indicies(&index_array, 0, 1);
+    generate_indicies(&index_array, 0, 1000);
 
     VertexArray vertex_array = { 0 };
     array_create(&vertex_array, 100);
-    quad(&vertex_array, v3f(10.0f, 10.0f, 0.0f), v2i(400.0f), v4i(1.0f), 0.0f);
+    u32 count =
+        text_gen(font.chars, "Hello testing", 0.0f, v3f(100.0f, 100.0f, 0.0f),
+                 1.0f, font.pixel_height, NULL, NULL, &vertex_array);
 
     VertexBufferLayout vertex_buffer_layout = { 0 };
     vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
@@ -593,12 +640,15 @@ int main(int argc, char** argv)
     finding_callback(arguments);
 
     ShaderProperties shader_properties =
-        shader_create_properties(shader, "proj", "view", "model");
+        shader_create_properties(font_shader, "proj", "view", "model");
 
     MVP mvp = { 0 };
     mvp.view = m4d();
     mvp.model = m4d();
     enable_gldebugging();
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (platform_is_running(platform))
     {
         ClientRect client_rect = platform_get_client_rect(platform);
@@ -611,12 +661,12 @@ int main(int argc, char** argv)
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shader_bind(shader);
+        shader_bind(font_shader);
         shader_set_MVP(&shader_properties, &mvp);
         texture_bind(font_texture, 0);
         vertex_array_bind(vertex_array_id);
         index_buffer_bind(index_buffer_id);
-        glDrawElements(GL_TRIANGLES, index_array.size, GL_UNSIGNED_INT, NULL);
+        glDrawElements(GL_TRIANGLES, count * 6, GL_UNSIGNED_INT, NULL);
 
         platform_opengl_swap_buffers(platform);
         platform_event_fire(platform);
