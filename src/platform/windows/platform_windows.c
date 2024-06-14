@@ -437,21 +437,21 @@ Directory platform_get_directory(const char* directory_path,
                 {
                     continue;
                 }
-                DirectoryAttrib directory_attrib = {
+                DirectoryItem directory_item = {
                     .path = path,
                     .name = path + directory_len - 1,
                 };
-                array_push(&directory.sub_directories, directory_attrib);
+                array_push(&directory.sub_directories, directory_item);
             }
             else
             {
-                File file = {
+                DirectoryItem directory_item = {
                     .size =
                         (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
                     .path = path,
                     .name = path + directory_len - 1,
                 };
-                array_push(&directory.files, file);
+                array_push(&directory.files, directory_item);
             }
 
         } while (FindNextFile(file_handle, &ffd));
@@ -471,8 +471,8 @@ void platform_reset_directory(Directory* directory)
     }
     free(directory->files.data);
     free(directory->sub_directories.data);
-    directory->files = (FileArray) {0};
-    directory->sub_directories = (DirectoryAttribArray) {0};
+    directory->files = (DirectoryItemArray) {0};
+    directory->sub_directories = (DirectoryItemArray) {0};
 }
 
 FTicMutex platform_mutex_create(void)

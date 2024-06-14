@@ -21,37 +21,24 @@ typedef struct ClientRect
     int bottom;
 } ClientRect;
 
-typedef struct File
+typedef struct DirectoryItem
 {
     u64 size;
     const char* name;
     char* path;
-} File;
+} DirectoryItem;
 
-typedef struct DirectoryAttrib
-{
-    const char* name;
-    char* path;
-} DirectoryAttrib;
-
-typedef struct FileArray
+typedef struct DirectoryItemArray
 {
     u32 size;
     u32 capacity;
-    File* data;
-} FileArray;
-
-typedef struct DirectoryAttribArray
-{
-    u32 size;
-    u32 capacity;
-    DirectoryAttrib* data;
-} DirectoryAttribArray;
+    DirectoryItem* data;
+} DirectoryItemArray;
 
 typedef struct Directory
 {
-    FileArray files;
-    DirectoryAttribArray sub_directories;
+    DirectoryItemArray files;
+    DirectoryItemArray sub_directories;
 } Directory;
 
 void platform_init(const char* title, u16 width, u16 height, Platform** platform);

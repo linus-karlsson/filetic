@@ -27,7 +27,7 @@ typedef struct SafeFileArray
 {
     u32 size;
     u32 capacity;
-    File* data;
+    DirectoryItem* data;
     FTicMutex mutex;
 } SafeFileArray;
 
@@ -296,6 +296,65 @@ void rendering_properties_clear(RenderingProperties* rendering_properties)
     rendering_properties->vertices.size = 0;
 }
 
+b8 directory_item(b8 hit, i32 index, V3 starting_position, const f32 scale,
+                  const f32 padding_top, const f32 padding_bottom,
+                  const f32 quad_height, const DirectoryItem* item,
+                  const FontTTF* font, const Event* mouse_move, i32* hit_index,
+                  RenderingProperties* render)
+{
+    const V4 color = index == (*hit_index) ? v4ic(0.3f) : v4ic(0.1f);
+    AABB aabb = quad(&render->vertices, starting_position,
+                     v2f(200.0f, quad_height), color, 0.0f);
+    render->index_count += 1;
+
+    V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
+                            mouse_move->mouse_move_event.position_y);
+    if (!hit && collision_point_in_aabb(mouse_position, &aabb))
+    {
+        *hit_index = index;
+        hit = true;
+    }
+
+    const V3 text_position =
+        v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
+    render->index_count +=
+        text_generation(font->chars, item->name, 1.0f, text_position, scale,
+                        font->pixel_height, NULL, NULL, &render->vertices);
+    return hit;
+}
+
+b8 directory_item_list(V3 starting_position, const f32 scale,
+                       const f32 padding_top, const f32 padding_bottom,
+                       const f32 quad_height, const DirectoryItemArray* items,
+                       const FontTTF* font, const Event* mouse_move,
+                       i32* hit_index, RenderingProperties* render)
+{
+    b8 hit = false;
+    for (i32 i = 0; i < (i32)items->size; ++i)
+    {
+        const V4 color = i == (*hit_index) ? v4ic(0.3f) : v4ic(0.1f);
+        AABB aabb = quad(&render->vertices, starting_position,
+                         v2f(200.0f, quad_height), color, 0.0f);
+        render->index_count += 1;
+
+        V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
+                                mouse_move->mouse_move_event.position_y);
+        if (!hit && collision_point_in_aabb(mouse_position, &aabb))
+        {
+            *hit_index = i;
+            hit = true;
+        }
+
+        const V3 text_position =
+            v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
+        render->index_count += text_generation(
+            font->chars, items->data[i].name, 1.0f, text_position, scale,
+            font->pixel_height, NULL, NULL, &render->vertices);
+        starting_position.y += quad_height;
+    }
+    return hit;
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -312,7 +371,7 @@ int main(int argc, char** argv)
     FontTTF font = { 0 };
     const i32 width_atlas = 512;
     const i32 height_atlas = 512;
-    const f32 pixel_height = 14;
+    const f32 pixel_height = 16;
     u8* font_bitmap = (u8*)calloc(width_atlas * height_atlas, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
                    "res/fonts/arial.ttf", font_bitmap, &font);
@@ -439,66 +498,44 @@ int main(int argc, char** argv)
         const float quad_height =
             scale * font.pixel_height + padding_top + padding_bottom;
         b8 hit = false;
-        for (i32 i = 0; i < (i32)current_directory.sub_directories.size; ++i)
+        i32 index = 0;
+        for (; index < (i32)current_directory.sub_directories.size; ++index)
         {
-            const V4 color = i == hit_index ? v4ic(0.3f) : v4ic(0.1f);
-            AABB aabb = quad(&font_render->vertices, starting_position,
-                             v2f(200.0f, quad_height), color, 0.0f);
-            font_render->index_count += 1;
-
-            V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
-                                    mouse_move->mouse_move_event.position_y);
-            if (!hit && collision_point_in_aabb(mouse_position, &aabb))
-            {
-                hit_index = i;
-                hit = true;
-            }
-
-            const V3 text_position =
-                v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
-            font_render->index_count += text_generation(
-                font.chars, current_directory.sub_directories.data[i].name,
-                1.0f, text_position, scale, font.pixel_height, NULL, NULL,
-                &font_render->vertices);
+            hit = directory_item(hit, index, starting_position, scale,
+                                 padding_top, padding_bottom, quad_height,
+                                 &current_directory.sub_directories.data[index],
+                                 &font, mouse_move, &hit_index, font_render);
             starting_position.y += quad_height;
         }
-        if (hit)
+        b8 skip = false;
+        if (mouse_button->mouse_button_event.double_clicked)
         {
-            if(mouse_button->mouse_button_event.double_clicked)
+            if (hit)
             {
-                char* path = current_directory.sub_directories.data[hit_index].path;
+                char* path =
+                    current_directory.sub_directories.data[hit_index].path;
                 u32 length = (u32)strlen(path);
                 path[length++] = '\\';
                 path[length++] = '*';
                 Directory new_directory = platform_get_directory(path, length);
                 platform_reset_directory(&current_directory);
                 current_directory = new_directory;
+                skip = true;
             }
         }
-        for (i32 i = 0; i < (i32)current_directory.files.size; ++i)
+        if(!skip)
         {
-            const V4 color = i == hit_index ? v4ic(0.3f) : v4ic(0.1f);
-            AABB aabb = quad(&font_render->vertices, starting_position,
-                             v2f(200.0f, quad_height), color, 0.0f);
-            font_render->index_count += 1;
-
-            V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
-                                    mouse_move->mouse_move_event.position_y);
-            if (!hit && collision_point_in_aabb(mouse_position, &aabb))
+            for (i32 i = 0; i < (i32)current_directory.files.size; ++i)
             {
-                hit_index = i;
-                hit = true;
+                hit =
+                    directory_item(hit, i + index, starting_position, scale,
+                                   padding_top, padding_bottom, quad_height,
+                                   &current_directory.files.data[i],
+                                   &font, mouse_move, &hit_index, font_render);
+                starting_position.y += quad_height;
             }
-
-            const V3 text_position =
-                v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
-            font_render->index_count += text_generation(
-                font.chars, current_directory.files.data[i].name,
-                1.0f, text_position, scale, font.pixel_height, NULL, NULL,
-                &font_render->vertices);
-            starting_position.y += quad_height;
         }
-        if(!hit)
+        if (!hit)
         {
             hit_index = -1;
         }
