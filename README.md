@@ -5,12 +5,15 @@
 
 A lightweight file management application designed to provide basic file operations with minimal resource consumption. It is ideal for users who need a simple and efficient way to manage files without the overhead of more complex solutions.
 
+## Platform
+
+- **Windows**: Works only on Windows (might expand later).
+
 ## Features
 
 - **File Browsing**: Navigate through directories and view file contents.
 - **File Operations**: Perform basic file operations such as create, read, update, delete, and rename.
 - **Search Functionality**: Quickly find files and directories based on name.
-- **Platform**: Works only on Windows (might expand later).
 - **Lightweight**: Minimal dependencies and low memory usage.
 
 ## Getting Started
