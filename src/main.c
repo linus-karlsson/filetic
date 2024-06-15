@@ -618,8 +618,8 @@ int main(int argc, char** argv)
                 clampf32_high(current_directory->offset, 0.0f);
         }
         current_directory->scroll_offset +=
-            (current_directory->offset - current_directory->scroll_offset) *
-            scroll_speed;
+            (f32)((current_directory->offset - current_directory->scroll_offset) *
+            (delta_time * 15.0f));
         current_directory->text_y = current_directory->scroll_offset;
 
         for (u32 i = 0; i < rendering_properties.size; ++i)
@@ -628,6 +628,7 @@ int main(int argc, char** argv)
         }
         platform_opengl_swap_buffers(platform);
         poll_event(platform);
+
         f64 now = platform_get_time();
         delta_time = now - last_time;
         const u32 target_milliseconds = 8;
