@@ -506,7 +506,7 @@ int main(int argc, char** argv)
     i32 hit_index = -1;
     f32 scroll_speed = 0.2f;
     f64 last_time = platform_get_time();
-    f32 delta_time = 0.0f;
+    f64 delta_time = 0.0f;
     MVP mvp = { 0 };
     mvp.view = m4d();
     mvp.model = m4d();
@@ -543,7 +543,8 @@ int main(int argc, char** argv)
         text_starting_position.x += rect.size.width + 20.0f;
         const float scale = 1.0f;
         const float padding_top = 2.0f;
-        const float quad_height = scale * font.pixel_height + padding_top * 5.0f;
+        const float quad_height =
+            scale * font.pixel_height + padding_top * 5.0f;
         b8 hit = false;
         i32 index = 0;
         for (; index < (i32)current_directory->directory.sub_directories.size;
@@ -583,14 +584,20 @@ int main(int argc, char** argv)
                  ++i)
             {
                 hit = directory_item(
-                    hit, i + index, text_starting_position, scale, font.pixel_height + padding_top,
-                    quad_height, &current_directory->directory.files.data[i],
-                    &font, mouse_move, &hit_index, font_render);
+                    hit, i + index, text_starting_position, scale,
+                    font.pixel_height + padding_top, quad_height,
+                    &current_directory->directory.files.data[i], &font,
+                    mouse_move, &hit_index, font_render);
                 text_starting_position.y += quad_height;
             }
         }
-        if (!hit)
+        if (hit)
         {
+            platform_change_cursor(platform, FTIC_HAND_CURSOR);
+        }
+        else
+        {
+            platform_change_cursor(platform, FTIC_NORMAL_CURSOR);
             hit_index = -1;
         }
         buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
@@ -621,7 +628,19 @@ int main(int argc, char** argv)
         }
         platform_opengl_swap_buffers(platform);
         poll_event(platform);
-        delta_time = (f32)(platform_get_time() - last_time);
+        f64 now = platform_get_time();
+        delta_time = now - last_time;
+        const u32 target_milliseconds = 8;
+        const u64 curr_milliseconds = (u64)(delta_time * 1000.0f);
+        if (target_milliseconds > curr_milliseconds)
+        {
+            const u64 milli_to_sleep =
+                (u64)(target_milliseconds - curr_milliseconds);
+            platform_sleep(milli_to_sleep);
+            now = platform_get_time();
+            delta_time = now - last_time;
+        }
+        last_time = now;
     }
     running = false;
     for (u32 i = 0; i < rendering_properties.size; ++i)

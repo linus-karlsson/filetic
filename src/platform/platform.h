@@ -1,6 +1,17 @@
 #pragma once
 #include "define.h"
 
+#define FTIC_NORMAL_CURSOR 0
+#define FTIC_HAND_CURSOR 1
+#define FTIC_RESIZE_H_CURSOR 2
+#define FTIC_RESIZE_V_CURSOR 3
+#define FTIC_RESIZE_NW_CURSOR 4
+#define FTIC_MOVE_CURSOR 5
+#define FTIC_HIDDEN_CURSOR 6
+
+#define TOTAL_CURSORS 7
+
+
 typedef void Platform;
 typedef void (*OnKeyPressedCallback)(u16 key);
 typedef void (*OnKeyReleasedCallback)(u16 key);
@@ -67,6 +78,9 @@ void platform_event_set_on_window_focused(Platform* platform, OnWindowFocusedCal
 void platform_event_set_on_window_resize(Platform* platform, OnWindowResizeCallback callback);
 void platform_event_set_on_window_enter_leave(Platform* platform, OnWindowEnterLeaveCallback callback);
 void platform_event_set_on_key_stroke(Platform* platform, OnKeyStrokeCallback callback);
+
+void platform_change_cursor(Platform* platform, u32 cursor_id);
+
 Directory platform_get_directory(const char* directory_path, const u32 directory_len);
 void platform_reset_directory(Directory* directory);
 
@@ -93,3 +107,4 @@ long platform_interlock_compare_exchange(volatile long* dest, long value,
 
 u32 platform_get_core_count(void);
 f64 platform_get_time(void);
+void platform_sleep(u64 milliseconds);
