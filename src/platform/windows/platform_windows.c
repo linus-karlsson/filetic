@@ -485,6 +485,7 @@ Directory platform_get_directory(const char* directory_path,
             {
                 if (!strcmp(ffd.cFileName, ".") || !strcmp(ffd.cFileName, ".."))
                 {
+                    free(path);
                     continue;
                 }
                 DirectoryItem directory_item = {
