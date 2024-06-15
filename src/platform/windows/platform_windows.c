@@ -2,8 +2,6 @@
 #include "platform/platform.h"
 #include "logging.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define WIN_32_EXTRA_LEAN
 #include <stdio.h>
 #include <Windows.h>
 #include <stdlib.h>
@@ -448,12 +446,13 @@ void platform_change_cursor(Platform* platform, u32 cursor_id)
     WindowsPlatformInternal* platform_internal =
         (WindowsPlatformInternal*)platform;
 
-    if(platform_internal->current_cursor != cursor_id)
+    if (platform_internal->current_cursor != cursor_id)
     {
-        if(cursor_id < TOTAL_CURSORS)
+        if (cursor_id < TOTAL_CURSORS)
         {
             platform_internal->current_cursor = cursor_id;
-            SetCursor(platform_internal->cursors[platform_internal->current_cursor]);
+            SetCursor(
+                platform_internal->cursors[platform_internal->current_cursor]);
         }
     }
 }
@@ -622,3 +621,30 @@ void platform_sleep(u64 milli)
 {
     Sleep((DWORD)milli);
 }
+
+void platform_open_file(const Platform* platform, const char* file_path)
+{
+    WindowsPlatformInternal* platform_internal =
+        (WindowsPlatformInternal*)platform;
+
+    HINSTANCE result = ShellExecute(platform_internal->window, "open", file_path,
+                                    NULL, NULL, SW_SHOWNORMAL);
+
+    if ((int)result <= 32)
+    {
+        SHELLEXECUTEINFO sei = {
+            .cbSize = sizeof(SHELLEXECUTEINFO),
+            .fMask = SEE_MASK_INVOKEIDLIST,
+            .hwnd = platform_internal->window,
+            .lpVerb = "openas",
+            .lpFile = file_path,
+            .lpParameters = NULL,
+            .lpDirectory = NULL,
+            .nShow = SW_SHOWNORMAL,
+            .hInstApp = NULL,
+        };
+
+        ShellExecuteEx(&sei);
+    }
+}
+

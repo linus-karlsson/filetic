@@ -109,3 +109,5 @@ long platform_interlock_compare_exchange(volatile long* dest, long value,
 u32 platform_get_core_count(void);
 f64 platform_get_time(void);
 void platform_sleep(u64 milliseconds);
+
+void platform_open_file(const Platform* platform, const char* file_path);

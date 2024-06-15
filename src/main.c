@@ -656,14 +656,25 @@ int main(int argc, char** argv)
         if (!skip)
         {
             for (i32 i = 0; i < (i32)current_directory->directory.files.size;
-                 ++i, ++index)
+                 ++i)
             {
                 hit = directory_item(
-                    hit, index, text_starting_position, scale,
+                    hit, index + i, text_starting_position, scale,
                     font.pixel_height + padding_top, quad_height,
                     &current_directory->directory.files.data[i], &font,
                     mouse_move, 2.0f, &hit_index, font_render);
                 text_starting_position.y += quad_height;
+            }
+            if (mouse_button->mouse_button_event.key == FTIC_LEFT_BUTTON &&
+                mouse_button->mouse_button_event.double_clicked)
+            {
+                if (hit)
+                {
+                    const char* file_path =
+                        current_directory->directory.files.data[hit_index - index].path;
+
+                    platform_open_file(&platform, file_path);
+                }
             }
         }
 
@@ -762,8 +773,8 @@ int main(int argc, char** argv)
             platform_mutex_lock(&file_array.mutex);
             for (u32 i = 0; i < file_array.size; ++i)
             {
-                hit = directory_item(hit, i + index, search_result_position, scale,
-                                     font.pixel_height + padding_top,
+                hit = directory_item(hit, i + index, search_result_position,
+                                     scale, font.pixel_height + padding_top,
                                      quad_height, &file_array.data[i], &font,
                                      mouse_move, 2.0f, &hit_index, font_render);
                 search_result_position.y += quad_height;
