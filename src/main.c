@@ -196,7 +196,6 @@ void finding_callback(void* data)
             };
             copy.name = copy.path + path_length - name_length;
             safe_array_push(arguments->array, copy);
-            log_message(path, path_length);
         }
     }
     platform_reset_directory(&directory);
@@ -657,29 +656,20 @@ int main(int argc, char** argv)
         if (!skip)
         {
             for (i32 i = 0; i < (i32)current_directory->directory.files.size;
-                 ++i)
+                 ++i, ++index)
             {
                 hit = directory_item(
-                    hit, i + index, text_starting_position, scale,
+                    hit, index, text_starting_position, scale,
                     font.pixel_height + padding_top, quad_height,
                     &current_directory->directory.files.data[i], &font,
                     mouse_move, 2.0f, &hit_index, font_render);
                 text_starting_position.y += quad_height;
             }
         }
-        if (hit)
-        {
-            platform_change_cursor(platform, FTIC_HAND_CURSOR);
-        }
-        else
-        {
-            platform_change_cursor(platform, FTIC_NORMAL_CURSOR);
-            hit_index = -1;
-        }
 
         // Search bar
         V3 search_bar_position = v3f(dimensions.x, 20.0f, 0.0f);
-        search_bar_position.x -= 240.0f;
+        search_bar_position.x -= 300.0f;
         AABB search_bar_aabb = quad_with_border(
             &font_render->vertices, &font_render->index_count, border_color,
             search_bar_position, v2f(200.0f, 40.0f), 2.0f, 0.0f);
@@ -714,28 +704,42 @@ int main(int argc, char** argv)
                 }
                 else if (current_char == '\r') // ENTER
                 {
-                    const char* parent = current_directory->directory.parent;
-                    size_t parent_length = strlen(parent);
-                    char* dir2 = (char*)calloc(parent_length + 3, sizeof(char));
-                    memcpy(dir2, parent, parent_length);
-                    dir2[parent_length++] = '\\';
-                    dir2[parent_length++] = '*';
+                    platform_mutex_lock(&file_array.mutex);
+                    for (u32 j = 0; j < file_array.size; ++j)
+                    {
+                        free(file_array.data[j].path);
+                    }
+                    file_array.size = 0;
+                    platform_mutex_unlock(&file_array.mutex);
 
-                    const char* string_to_match = search_buffer.data;
+                    if (search_buffer.size)
+                    {
+                        const char* parent =
+                            current_directory->directory.parent;
+                        size_t parent_length = strlen(parent);
+                        char* dir2 =
+                            (char*)calloc(parent_length + 3, sizeof(char));
+                        memcpy(dir2, parent, parent_length);
+                        dir2[parent_length++] = '\\';
+                        dir2[parent_length++] = '*';
 
-                    FindingCallbackAttribute* arguments =
-                        (FindingCallbackAttribute*)calloc(
-                            1, sizeof(FindingCallbackAttribute));
-                    arguments->thread_queue = &thread_queue.task_queue;
-                    arguments->array = &file_array;
-                    arguments->start_directory = dir2;
-                    arguments->start_directory_length = (u32)parent_length;
-                    arguments->string_to_match = string_to_match;
-                    arguments->string_to_match_length = search_buffer.size;
-                    finding_callback(arguments);
+                        const char* string_to_match = search_buffer.data;
+
+                        FindingCallbackAttribute* arguments =
+                            (FindingCallbackAttribute*)calloc(
+                                1, sizeof(FindingCallbackAttribute));
+                        arguments->thread_queue = &thread_queue.task_queue;
+                        arguments->array = &file_array;
+                        arguments->start_directory = dir2;
+                        arguments->start_directory_length = (u32)parent_length;
+                        arguments->string_to_match = string_to_match;
+                        arguments->string_to_match_length = search_buffer.size;
+                        finding_callback(arguments);
+                    }
 
                     search_bar_hit = false;
                     search_blinking_time = 0.4f;
+                    break;
                 }
                 else if (closed_interval(0, (current_char - 32), 96))
                 {
@@ -750,6 +754,31 @@ int main(int argc, char** argv)
                      search_text_position, search_bar_position.y + 10.0f,
                      search_bar_hit, delta_time, &search_blinking_time,
                      font_render);
+
+        if (file_array.size)
+        {
+            V3 search_result_position = search_bar_position;
+            search_result_position.y += search_bar_aabb.size.y + 20.0f;
+            platform_mutex_lock(&file_array.mutex);
+            for (u32 i = 0; i < file_array.size; ++i)
+            {
+                hit = directory_item(hit, i + index, search_result_position, scale,
+                                     font.pixel_height + padding_top,
+                                     quad_height, &file_array.data[i], &font,
+                                     mouse_move, 2.0f, &hit_index, font_render);
+                search_result_position.y += quad_height;
+            }
+            platform_mutex_unlock(&file_array.mutex);
+        }
+        if (hit)
+        {
+            platform_change_cursor(platform, FTIC_HAND_CURSOR);
+        }
+        else
+        {
+            platform_change_cursor(platform, FTIC_NORMAL_CURSOR);
+            hit_index = -1;
+        }
 
         buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                             sizeof(Vertex) * font_render->vertices.size,
