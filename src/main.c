@@ -300,7 +300,7 @@ void rendering_properties_clear(RenderingProperties* rendering_properties)
 b8 directory_item(b8 hit, i32 index, V3 starting_position, const f32 scale,
                   const f32 padding_top, const f32 quad_height,
                   const DirectoryItem* item, const FontTTF* font,
-                  const Event* mouse_move, i32* hit_index,
+                  const Event* mouse_move, f32 icon_index, i32* hit_index,
                   RenderingProperties* render)
 {
     const V4 color = index == (*hit_index) ? v4ic(0.3f) : v4ic(0.1f);
@@ -316,43 +316,17 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position, const f32 scale,
         hit = true;
     }
 
-    const V3 text_position =
+    V3 text_position =
         v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
+
+    aabb = quad(&render->vertices, starting_position, v2f(20.0f, 20.0f),
+                v4i(1.0f), icon_index);
+
+    text_position.x += aabb.size.x + 10.0f;
+
     render->index_count +=
         text_generation(font->chars, item->name, 1.0f, text_position, scale,
                         font->pixel_height, NULL, NULL, &render->vertices);
-    return hit;
-}
-
-b8 directory_item_list(V3 starting_position, const f32 scale,
-                       const f32 padding_top, const f32 padding_bottom,
-                       const f32 quad_height, const DirectoryItemArray* items,
-                       const FontTTF* font, const Event* mouse_move,
-                       i32* hit_index, RenderingProperties* render)
-{
-    b8 hit = false;
-    for (i32 i = 0; i < (i32)items->size; ++i)
-    {
-        const V4 color = i == (*hit_index) ? v4ic(0.3f) : v4ic(0.1f);
-        AABB aabb = quad(&render->vertices, starting_position,
-                         v2f(200.0f, quad_height), color, 0.0f);
-        render->index_count += 1;
-
-        V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
-                                mouse_move->mouse_move_event.position_y);
-        if (!hit && collision_point_in_aabb(mouse_position, &aabb))
-        {
-            *hit_index = i;
-            hit = true;
-        }
-
-        const V3 text_position =
-            v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
-        render->index_count += text_generation(
-            font->chars, items->data[i].name, 1.0f, text_position, scale,
-            font->pixel_height, NULL, NULL, &render->vertices);
-        starting_position.y += quad_height;
-    }
     return hit;
 }
 
@@ -379,6 +353,20 @@ f32 clampf32_low(f32 value, f32 low)
 f32 clampf32_high(f32 value, f32 high)
 {
     return value > high ? high : value;
+}
+
+void extract_only_aplha_channel(TextureProperties* texture_properties)
+{
+    const u32 size = texture_properties->height * texture_properties->width;
+    const u32 size_in_bytes = size * 4;
+    u8* bytes = (u8*)calloc(size, sizeof(u8));
+    for (u32 i = 3, j = 0; i < size_in_bytes; i += 4, j++)
+    {
+        ftic_assert(j < size);
+        bytes[j] = texture_properties->bytes[i];
+    }
+    free(texture_properties->bytes);
+    texture_properties->bytes = bytes;
 }
 
 int main(int argc, char** argv)
@@ -415,6 +403,18 @@ int main(int argc, char** argv)
     texture_properties.bytes = &pixel;
     u32 default_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
 
+    texture_load("res/icons/file_icon.png", &texture_properties);
+    extract_only_aplha_channel(&texture_properties);
+    u32 file_icon_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RED);
+    free(texture_properties.bytes);
+
+    texture_load("res/icons/folder_icon.png", &texture_properties);
+    extract_only_aplha_channel(&texture_properties);
+    u32 folder_icon_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RED);
+    free(texture_properties.bytes);
+
     u32 font_shader = shader_create("./res/shaders/vertex.glsl",
                                     "./res/shaders/font_fragment.glsl");
     u32 shader2 = shader_create("./res/shaders/vertex.glsl",
@@ -444,9 +444,10 @@ int main(int argc, char** argv)
                rendering_properties_init(font_shader, &default_texture, 1,
                                          index_buffer_id, &vertex_buffer_layout,
                                          10000 * 4));
-    u32 textures[2] = { default_texture, font_texture };
+    u32 textures[4] = { default_texture, font_texture, file_icon_texture,
+                        folder_icon_texture };
     array_push(&rendering_properties,
-               rendering_properties_init(font_shader, textures, 2,
+               rendering_properties_init(font_shader, textures, 4,
                                          index_buffer_id, &vertex_buffer_layout,
                                          10000 * 4));
 
@@ -554,7 +555,7 @@ int main(int argc, char** argv)
                 hit, index, text_starting_position, scale,
                 font.pixel_height + padding_top, quad_height,
                 &current_directory->directory.sub_directories.data[index],
-                &font, mouse_move, &hit_index, font_render);
+                &font, mouse_move, 3.0f, &hit_index, font_render);
             text_starting_position.y += quad_height;
         }
         b8 skip = false;
@@ -587,7 +588,7 @@ int main(int argc, char** argv)
                     hit, i + index, text_starting_position, scale,
                     font.pixel_height + padding_top, quad_height,
                     &current_directory->directory.files.data[i], &font,
-                    mouse_move, &hit_index, font_render);
+                    mouse_move, 2.0f, &hit_index, font_render);
                 text_starting_position.y += quad_height;
             }
         }
@@ -618,8 +619,9 @@ int main(int argc, char** argv)
                 clampf32_high(current_directory->offset, 0.0f);
         }
         current_directory->scroll_offset +=
-            (f32)((current_directory->offset - current_directory->scroll_offset) *
-            (delta_time * 15.0f));
+            (f32)((current_directory->offset -
+                   current_directory->scroll_offset) *
+                  (delta_time * 15.0f));
         current_directory->text_y = current_directory->scroll_offset;
 
         for (u32 i = 0; i < rendering_properties.size; ++i)

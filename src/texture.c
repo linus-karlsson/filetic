@@ -4,7 +4,7 @@
 
 void texture_load(const char* file_path, TextureProperties* texture_properties)
 {
-    stbi_set_flip_vertically_on_load(1);
+    //stbi_set_flip_vertically_on_load(1);
     texture_properties->bytes = (u8*)stbi_load(
         file_path, &texture_properties->width, &texture_properties->height,
         &texture_properties->channels, 4);
