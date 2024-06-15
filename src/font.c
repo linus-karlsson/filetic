@@ -9,8 +9,8 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
     FileAttrib file = read_file(font_file_path);
     stbtt_bakedchar* data =
         (stbtt_bakedchar*)calloc(glyph_count, sizeof(stbtt_bakedchar));
-    stbtt_BakeFontBitmap(file.buffer, 0, pixel_height, bitmap, 512, 512,
-                         glyph_offset, glyph_count, data);
+    stbtt_BakeFontBitmap(file.buffer, 0, pixel_height, bitmap, width_atlas,
+                         height_atlas, glyph_offset, glyph_count, data);
 
     FontTTF font = { 0 };
     font.line_height = pixel_height;
@@ -72,4 +72,20 @@ u32 text_generation(const CharacterTTF* c_ttf, const char* text,
         *x_advance = pos.x - start_x;
     }
     return count;
+}
+
+f32 text_x_advance(const CharacterTTF* c_ttf, const char* text, u32 text_len,
+                   f32 scale)
+{
+    f32 result = 0;
+    for (u32 i = 0; i < text_len; ++i)
+    {
+        char current_char = text[i];
+        if (closed_interval(0, (current_char - 32), 96))
+        {
+            const CharacterTTF* c = c_ttf + (current_char - 32);
+            result += c->x_advance * scale;
+        }
+    }
+    return result;
 }

@@ -24,6 +24,8 @@
 
 global b8 running = true;
 
+global V4 border_color = { .r = 0.3f, .g = 0.3f, .b = 0.3f, .a = 1.0f };
+
 typedef struct SafeFileArray
 {
     u32 size;
@@ -297,15 +299,40 @@ void rendering_properties_clear(RenderingProperties* rendering_properties)
     rendering_properties->vertices.size = 0;
 }
 
-b8 directory_item(b8 hit, i32 index, V3 starting_position, const f32 scale,
-                  const f32 padding_top, const f32 quad_height,
+void format_file_size(u64 size_in_bytes, char* output, size_t output_size)
+{
+    const u64 KB = 1024;
+    const u64 MB = 1024 * KB;
+    const u64 GB = 1024 * MB;
+
+    if (size_in_bytes >= GB)
+    {
+        sprintf_s(output, output_size, "%.2f GB", (double)size_in_bytes / GB);
+    }
+    else if (size_in_bytes >= MB)
+    {
+        sprintf_s(output, output_size, "%.2f MB", (double)size_in_bytes / MB);
+    }
+    else if (size_in_bytes >= KB)
+    {
+        sprintf_s(output, output_size, "%.2f KB", (double)size_in_bytes / KB);
+    }
+    else
+    {
+        sprintf_s(output, output_size, "%llu B", size_in_bytes);
+    }
+}
+
+b8 directory_item(b8 hit, i32 index, const V3 starting_position,
+                  const f32 scale, const f32 padding_top, const f32 quad_height,
                   const DirectoryItem* item, const FontTTF* font,
                   const Event* mouse_move, f32 icon_index, i32* hit_index,
                   RenderingProperties* render)
 {
     const V4 color = index == (*hit_index) ? v4ic(0.3f) : v4ic(0.1f);
+    const f32 background_width = 400.0f;
     AABB aabb = quad(&render->vertices, starting_position,
-                     v2f(200.0f, quad_height), color, 0.0f);
+                     v2f(background_width, quad_height), color, 0.0f);
     render->index_count += 1;
 
     V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
@@ -316,9 +343,11 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position, const f32 scale,
         hit = true;
     }
 
-    aabb = quad(&render->vertices,
-                v3f(starting_position.x + 5.0f, starting_position.y + 3.0f, 0.0f),
-                v2f(20.0f, 20.0f), v4i(1.0f), icon_index);
+    aabb =
+        quad(&render->vertices,
+             v3f(starting_position.x + 5.0f, starting_position.y + 3.0f, 0.0f),
+             v2f(20.0f, 20.0f), v4i(1.0f), icon_index);
+    render->index_count += 1;
 
     V3 text_position =
         v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
@@ -328,6 +357,19 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position, const f32 scale,
     render->index_count +=
         text_generation(font->chars, item->name, 1.0f, text_position, scale,
                         font->pixel_height, NULL, NULL, &render->vertices);
+
+    if (item->size)
+    {
+        char buffer[100] = { 0 };
+        format_file_size(item->size, buffer, 100);
+        f32 x_advance =
+            text_x_advance(font->chars, buffer, (u32)strlen(buffer), scale);
+        text_position.x = starting_position.x + background_width - x_advance;
+        render->index_count +=
+            text_generation(font->chars, buffer, 1.0f, text_position, scale,
+                            font->pixel_height, NULL, NULL, &render->vertices);
+    }
+
     return hit;
 }
 
@@ -423,7 +465,7 @@ int main(int argc, char** argv)
     ftic_assert(font_shader);
 
     IndexArray index_array = { 0 };
-    array_create(&index_array, 100);
+    array_create(&index_array, 10000 * 6);
     generate_indicies(&index_array, 0, 10000);
     u32 index_buffer_id = index_buffer_create(
         index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
@@ -440,15 +482,15 @@ int main(int argc, char** argv)
                                     offsetof(Vertex, texture_index));
 
     RenderingPropertiesArray rendering_properties = { 0 };
-    array_create(&rendering_properties, 2);
+    array_create(&rendering_properties, 3);
     array_push(&rendering_properties,
                rendering_properties_init(font_shader, &default_texture, 1,
                                          index_buffer_id, &vertex_buffer_layout,
-                                         10000 * 4));
-    u32 textures[4] = { default_texture, font_texture, file_icon_texture,
-                        folder_icon_texture };
+                                         10 * 4));
+    u32 textures_main[4] = { default_texture, font_texture, file_icon_texture,
+                             folder_icon_texture };
     array_push(&rendering_properties,
-               rendering_properties_init(font_shader, textures, 4,
+               rendering_properties_init(font_shader, textures_main, 4,
                                          index_buffer_id, &vertex_buffer_layout,
                                          10000 * 4));
 
@@ -485,9 +527,8 @@ int main(int argc, char** argv)
 
     V3 starting_position = v3f(10.0f, 10.0f, 0.0f);
     AABB rect = quad_with_border(
-        &default_render->vertices, &default_render->index_count,
-        v4f(0.3f, 0.3f, 0.3f, 1.0f), starting_position,
-        v2f(100.0f, dimensions.height - 50.0f), 2.0f, 0.0f);
+        &default_render->vertices, &default_render->index_count, border_color,
+        starting_position, v2f(100.0f, dimensions.height - 50.0f), 2.0f, 0.0f);
     buffer_set_sub_data(default_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                         sizeof(Vertex) * default_render->vertices.size,
                         default_render->vertices.data);
@@ -601,6 +642,13 @@ int main(int argc, char** argv)
             platform_change_cursor(platform, FTIC_NORMAL_CURSOR);
             hit_index = -1;
         }
+
+        // Search bar
+        V3 search_bar_position = v3f(dimensions.x, 0.0f, 0.0f);
+        search_bar_position.x -= 240.0f;
+        quad_with_border(&font_render->vertices, &font_render->index_count,
+                         border_color, search_bar_position, v2f(200.0f, 50.0f), 2.0f, 0.0f);
+
         buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                             sizeof(Vertex) * font_render->vertices.size,
                             font_render->vertices.data);
