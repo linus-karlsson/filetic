@@ -30,5 +30,11 @@ typedef struct FileAttrib
     u64 size;
 } FileAttrib;
 
+typedef struct CharArray
+{
+    u32 size;
+    u32 capacity;
+    char* data;
+} CharArray;
 
 FileAttrib read_file(const char* file_path);

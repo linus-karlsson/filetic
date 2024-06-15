@@ -1,4 +1,5 @@
 #include "event.h"
+#include <string.h>
 
 typedef struct EventArray
 {
@@ -10,6 +11,8 @@ typedef struct EventArray
 typedef struct EventContextInternal
 {
     EventArray events;
+
+    CharArray char_buffer;
 } EventContextInternal;
 
 EventContextInternal event_context = { 0 };
@@ -79,27 +82,41 @@ internal void on_mouse_wheel_event(i16 z_delta)
     }
 }
 
+internal void on_key_stroke_event(char key)
+{
+    array_push(&event_context.char_buffer, key);
+}
+
 void event_init(Platform* platform)
 {
+    array_create(&event_context.events, 20);
+    array_create(&event_context.char_buffer, 20);
+
     platform_event_set_on_key_pressed(platform, on_key_pressed_event);
     platform_event_set_on_key_released(platform, on_key_released_event);
     platform_event_set_on_mouse_move(platform, on_mouse_move_event);
-    platform_event_set_on_button_pressed(platform, on_mouse_button_pressed_event);
+    platform_event_set_on_button_pressed(platform,
+                                         on_mouse_button_pressed_event);
     platform_event_set_on_mouse_wheel(platform, on_mouse_wheel_event);
-
-    array_create(&event_context.events, 20);
+    platform_event_set_on_key_stroke(platform, on_key_stroke_event);
 }
 
-void poll_event(Platform* platform)
+void event_poll(Platform* platform)
 {
     for (u32 i = 0; i < event_context.events.size; ++i)
     {
         Event* event = event_context.events.data + i;
         event->activated = false;
-        if(event->type == MOUSE_BUTTON)
+        if (event->type == MOUSE_BUTTON)
         {
             event->mouse_button_event.double_clicked = false;
         }
+    }
+    if (event_context.char_buffer.size)
+    {
+        memset(event_context.char_buffer.data, 0,
+               event_context.char_buffer.size);
+        event_context.char_buffer.size = 0;
     }
     platform_event_fire(platform);
 }
@@ -114,5 +131,10 @@ Event* event_subscribe(EventType type)
 
 void event_unsubscribe(Event* event)
 {
+}
+
+const CharArray* event_get_char_buffer()
+{
+    return &event_context.char_buffer;
 }
 

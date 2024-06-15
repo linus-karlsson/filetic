@@ -316,13 +316,14 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position, const f32 scale,
         hit = true;
     }
 
+    aabb = quad(&render->vertices,
+                v3f(starting_position.x + 5.0f, starting_position.y + 3.0f, 0.0f),
+                v2f(20.0f, 20.0f), v4i(1.0f), icon_index);
+
     V3 text_position =
         v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
 
-    aabb = quad(&render->vertices, starting_position, v2f(20.0f, 20.0f),
-                v4i(1.0f), icon_index);
-
-    text_position.x += aabb.size.x + 10.0f;
+    text_position.x += aabb.size.x;
 
     render->index_count +=
         text_generation(font->chars, item->name, 1.0f, text_position, scale,
@@ -403,13 +404,13 @@ int main(int argc, char** argv)
     texture_properties.bytes = &pixel;
     u32 default_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
 
-    texture_load("res/icons/file_icon.png", &texture_properties);
+    texture_load("res/icons/files.png", &texture_properties);
     extract_only_aplha_channel(&texture_properties);
     u32 file_icon_texture =
         texture_create(&texture_properties, GL_RGBA8, GL_RED);
     free(texture_properties.bytes);
 
-    texture_load("res/icons/folder_icon.png", &texture_properties);
+    texture_load("res/icons/folder.png", &texture_properties);
     extract_only_aplha_channel(&texture_properties);
     u32 folder_icon_texture =
         texture_create(&texture_properties, GL_RGBA8, GL_RED);
@@ -537,7 +538,6 @@ int main(int argc, char** argv)
                 current_directory = array_back(&directory_history);
             }
         }
-
         rendering_properties_clear(font_render);
         V3 text_starting_position =
             v3f(rect.min.x, 30.0f + current_directory->text_y, 0.0f);
@@ -629,7 +629,7 @@ int main(int argc, char** argv)
             rendering_properties_draw(&rendering_properties.data[i], &mvp);
         }
         platform_opengl_swap_buffers(platform);
-        poll_event(platform);
+        event_poll(platform);
 
         f64 now = platform_get_time();
         delta_time = now - last_time;

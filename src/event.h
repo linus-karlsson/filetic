@@ -2,6 +2,7 @@
 
 #include "define.h"
 #include "platform/platform.h"
+#include "util.h"
 
 #define FTIC_KEY_SPACE 32
 #define FTIC_KEY_COMMA 44
@@ -123,5 +124,8 @@ typedef struct Event
 } Event;
 
 void event_init(Platform* platform);
-void poll_event(Platform* platform);
+void event_poll(Platform* platform);
 Event* event_subscribe(EventType type);
+
+const CharArray* event_get_char_buffer();
+
