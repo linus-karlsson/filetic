@@ -12,7 +12,7 @@ typedef struct EventContextInternal
 {
     EventArray events;
 
-    CharArray char_buffer;
+    CharArray key_buffer;
 } EventContextInternal;
 
 EventContextInternal event_context = { 0 };
@@ -84,13 +84,13 @@ internal void on_mouse_wheel_event(i16 z_delta)
 
 internal void on_key_stroke_event(char key)
 {
-    array_push(&event_context.char_buffer, key);
+    array_push(&event_context.key_buffer, key);
 }
 
 void event_init(Platform* platform)
 {
     array_create(&event_context.events, 20);
-    array_create(&event_context.char_buffer, 20);
+    array_create(&event_context.key_buffer, 20);
 
     platform_event_set_on_key_pressed(platform, on_key_pressed_event);
     platform_event_set_on_key_released(platform, on_key_released_event);
@@ -112,11 +112,11 @@ void event_poll(Platform* platform)
             event->mouse_button_event.double_clicked = false;
         }
     }
-    if (event_context.char_buffer.size)
+    if (event_context.key_buffer.size)
     {
-        memset(event_context.char_buffer.data, 0,
-               event_context.char_buffer.size);
-        event_context.char_buffer.size = 0;
+        memset(event_context.key_buffer.data, 0,
+               event_context.key_buffer.size);
+        event_context.key_buffer.size = 0;
     }
     platform_event_fire(platform);
 }
@@ -133,8 +133,8 @@ void event_unsubscribe(Event* event)
 {
 }
 
-const CharArray* event_get_char_buffer()
+const CharArray* event_get_key_buffer()
 {
-    return &event_context.char_buffer;
+    return &event_context.key_buffer;
 }
 

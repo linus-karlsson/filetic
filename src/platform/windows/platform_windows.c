@@ -505,7 +505,10 @@ Directory platform_get_directory(const char* directory_path,
             }
 
         } while (FindNextFile(file_handle, &ffd));
+        FindClose(file_handle);
     }
+    directory.parent = (char*)calloc(directory_len + 1, sizeof(char));
+    memcpy(directory.parent, directory_path, directory_len - 2);
     return directory;
 }
 
@@ -521,6 +524,7 @@ void platform_reset_directory(Directory* directory)
     }
     free(directory->files.data);
     free(directory->sub_directories.data);
+    free(directory->parent);
     directory->files = (DirectoryItemArray){ 0 };
     directory->sub_directories = (DirectoryItemArray){ 0 };
 }

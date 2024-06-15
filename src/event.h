@@ -127,5 +127,5 @@ void event_init(Platform* platform);
 void event_poll(Platform* platform);
 Event* event_subscribe(EventType type);
 
-const CharArray* event_get_char_buffer();
+const CharArray* event_get_key_buffer();
 

@@ -141,6 +141,15 @@ internal b8 string_contains(const char* string, const u32 string_length,
     return false;
 }
 
+internal char* copy_string(const char* string, const u32 string_length,
+                           const u32 extra_length)
+{
+    char* result =
+        (char*)calloc(string_length + extra_length + 1, sizeof(char));
+    memcpy(result, string, string_length);
+    return result;
+}
+
 void finding_callback(void* data)
 {
     FindingCallbackAttribute* arguments = (FindingCallbackAttribute*)data;
@@ -150,17 +159,19 @@ void finding_callback(void* data)
 
     for (u32 i = 0; i < directory.sub_directories.size && running; ++i)
     {
-        char* path = directory.sub_directories.data[i].path;
-        size_t directory_name_length = strlen(path);
-        path[directory_name_length++] = '\\';
-        path[directory_name_length++] = '*';
-
         FindingCallbackAttribute* next_arguments =
             (FindingCallbackAttribute*)calloc(1,
                                               sizeof(FindingCallbackAttribute));
+
+        char* path = directory.sub_directories.data[i].path;
+        size_t directory_name_length = strlen(path);
+
+        next_arguments->start_directory =
+            copy_string(path, (u32)directory_name_length, 2);
+        next_arguments->start_directory[directory_name_length++] = '\\';
+        next_arguments->start_directory[directory_name_length++] = '*';
         next_arguments->array = arguments->array;
         next_arguments->thread_queue = arguments->thread_queue;
-        next_arguments->start_directory = path;
         next_arguments->start_directory_length = (u32)directory_name_length;
         next_arguments->string_to_match = arguments->string_to_match;
         next_arguments->string_to_match_length =
@@ -172,18 +183,23 @@ void finding_callback(void* data)
     for (u32 i = 0; i < directory.files.size && running; ++i)
     {
         const char* name = directory.files.data[i].name;
+        const u32 name_length = (u32)strlen(name);
         char* path = directory.files.data[i].path;
-        if (string_contains(name, (u32)strlen(name), arguments->string_to_match,
+        if (string_contains(name, name_length, arguments->string_to_match,
                             arguments->string_to_match_length))
         {
-            safe_array_push(arguments->array, directory.files.data[i]);
-            log_message(path, strlen(path));
-        }
-        else
-        {
-            free(path);
+            DirectoryItem* current = directory.files.data + i;
+            const u32 path_length = (u32)strlen(path);
+            DirectoryItem copy = {
+                .size = current->size,
+                .path = copy_string(path, path_length, 2),
+            };
+            copy.name = copy.path + path_length - name_length;
+            safe_array_push(arguments->array, copy);
+            log_message(path, path_length);
         }
     }
+    platform_reset_directory(&directory);
     free(arguments->start_directory);
     free(data);
 }
@@ -412,6 +428,35 @@ void extract_only_aplha_channel(TextureProperties* texture_properties)
     texture_properties->bytes = bytes;
 }
 
+void render_input(const FontTTF* font, const char* text, u32 text_length,
+                  f32 scale, V3 text_position, f32 cursor_y, b8 active,
+                  f64 delta_time, f64* time, RenderingProperties* render)
+{
+    // Blinking cursor
+    if (active)
+    {
+        *time += delta_time;
+        if (*time >= 0.4f)
+        {
+            const f32 x_advance =
+                text_x_advance(font->chars, text, text_length, scale);
+
+            quad(&render->vertices,
+                 v3f(text_position.x + x_advance + 1.0f, cursor_y + 2.0f, 0.0f),
+                 v2f(2.0f, 16.0f), v4i(1.0f), 0.0f);
+            render->index_count++;
+
+            *time = *time >= 0.8f ? 0 : *time;
+        }
+    }
+    if (text_length)
+    {
+        render->index_count +=
+            text_generation(font->chars, text, 1.0f, text_position, scale,
+                            font->line_height, NULL, NULL, &render->vertices);
+    }
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -503,23 +548,6 @@ int main(int argc, char** argv)
     SafeFileArray file_array = { 0 };
     safe_array_create(&file_array, 10);
 
-    /*
-    const char* dir = "C:\\Users\\linus\\*";
-    char* dir2 = (char*)calloc(strlen(dir) + 1, sizeof(char));
-    memcpy(dir2, dir, strlen(dir));
-    const char* string_to_match = "init.vim";
-
-    FindingCallbackAttribute* arguments =
-        (FindingCallbackAttribute*)calloc(1, sizeof(FindingCallbackAttribute));
-    arguments->thread_queue = &thread_queue.task_queue;
-    arguments->array = &file_array;
-    arguments->start_directory = dir2;
-    arguments->start_directory_length = (u32)strlen(dir2);
-    arguments->string_to_match = string_to_match;
-    arguments->string_to_match_length = (u32)strlen(string_to_match);
-    finding_callback(arguments);
-    */
-
     ClientRect client_rect = platform_get_client_rect(platform);
     GLint viewport_width = client_rect.right - client_rect.left;
     GLint viewport_height = client_rect.bottom - client_rect.top;
@@ -542,9 +570,15 @@ int main(int argc, char** argv)
     array_push(&directory_history, page);
     DirectoryPage* current_directory = array_back(&directory_history);
 
+    Event* key_event = event_subscribe(KEY);
     Event* mouse_move = event_subscribe(MOUSE_MOVE);
     Event* mouse_button = event_subscribe(MOUSE_BUTTON);
     Event* mouse_wheel = event_subscribe(MOUSE_WHEEL);
+
+    CharArray search_buffer = { 0 };
+    array_create(&search_buffer, 30);
+    b8 search_bar_hit = false;
+    f64 search_blinking_time = 0.4f;
 
     i32 hit_index = -1;
     f32 scroll_speed = 0.2f;
@@ -609,7 +643,7 @@ int main(int argc, char** argv)
                     current_directory->directory.sub_directories.data[hit_index]
                         .path;
                 u32 length = (u32)strlen(path);
-                path[length++] = '/';
+                path[length++] = '\\';
                 path[length++] = '*';
                 DirectoryPage new_page = { 0 };
                 new_page.directory = platform_get_directory(path, length);
@@ -644,10 +678,78 @@ int main(int argc, char** argv)
         }
 
         // Search bar
-        V3 search_bar_position = v3f(dimensions.x, 0.0f, 0.0f);
+        V3 search_bar_position = v3f(dimensions.x, 20.0f, 0.0f);
         search_bar_position.x -= 240.0f;
-        quad_with_border(&font_render->vertices, &font_render->index_count,
-                         border_color, search_bar_position, v2f(200.0f, 50.0f), 2.0f, 0.0f);
+        AABB search_bar_aabb = quad_with_border(
+            &font_render->vertices, &font_render->index_count, border_color,
+            search_bar_position, v2f(200.0f, 40.0f), 2.0f, 0.0f);
+
+        V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
+                                mouse_move->mouse_move_event.position_y);
+        if (mouse_button->activated)
+        {
+            if (collision_point_in_aabb(mouse_position, &search_bar_aabb))
+            {
+                search_bar_hit = true;
+            }
+            else
+            {
+                search_bar_hit = false;
+                search_blinking_time = 0.4f;
+            }
+        }
+        if (search_bar_hit)
+        {
+            const CharArray* key_buffer = event_get_key_buffer();
+            for (u32 i = 0; i < key_buffer->size; ++i)
+            {
+                char current_char = key_buffer->data[i];
+                if (current_char == '\b') // BACKSPACE
+                {
+                    if (search_buffer.size)
+                    {
+                        *array_back(&search_buffer) = 0;
+                        --search_buffer.size;
+                    }
+                }
+                else if (current_char == '\r') // ENTER
+                {
+                    const char* parent = current_directory->directory.parent;
+                    size_t parent_length = strlen(parent);
+                    char* dir2 = (char*)calloc(parent_length + 3, sizeof(char));
+                    memcpy(dir2, parent, parent_length);
+                    dir2[parent_length++] = '\\';
+                    dir2[parent_length++] = '*';
+
+                    const char* string_to_match = search_buffer.data;
+
+                    FindingCallbackAttribute* arguments =
+                        (FindingCallbackAttribute*)calloc(
+                            1, sizeof(FindingCallbackAttribute));
+                    arguments->thread_queue = &thread_queue.task_queue;
+                    arguments->array = &file_array;
+                    arguments->start_directory = dir2;
+                    arguments->start_directory_length = (u32)parent_length;
+                    arguments->string_to_match = string_to_match;
+                    arguments->string_to_match_length = search_buffer.size;
+                    finding_callback(arguments);
+
+                    search_bar_hit = false;
+                    search_blinking_time = 0.4f;
+                }
+                else if (closed_interval(0, (current_char - 32), 96))
+                {
+                    array_push(&search_buffer, current_char);
+                }
+            }
+        }
+        V3 search_text_position = search_bar_position;
+        search_text_position.x += 10.0f;
+        search_text_position.y += scale * font.pixel_height + 10.0f;
+        render_input(&font, search_buffer.data, search_buffer.size, scale,
+                     search_text_position, search_bar_position.y + 10.0f,
+                     search_bar_hit, delta_time, &search_blinking_time,
+                     font_render);
 
         buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                             sizeof(Vertex) * font_render->vertices.size,

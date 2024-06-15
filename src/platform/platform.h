@@ -48,6 +48,7 @@ typedef struct DirectoryItemArray
 
 typedef struct Directory
 {
+    char* parent;
     DirectoryItemArray files;
     DirectoryItemArray sub_directories;
 } Directory;
