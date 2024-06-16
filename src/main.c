@@ -336,15 +336,14 @@ void format_file_size(u64 size_in_bytes, char* output, size_t output_size)
 }
 
 b8 directory_item(b8 hit, i32 index, const V3 starting_position,
-                  const f32 scale, const f32 padding_top, const f32 quad_height,
-                  const DirectoryItem* item, const FontTTF* font,
-                  const Event* mouse_move, f32 icon_index, i32* hit_index,
-                  RenderingProperties* render)
+                  const f32 scale, const f32 padding_top, const f32 height,
+                  const f32 width, const DirectoryItem* item,
+                  const FontTTF* font, const Event* mouse_move, f32 icon_index,
+                  i32* hit_index, RenderingProperties* render)
 {
     const V4 color = index == (*hit_index) ? v4ic(0.3f) : v4ic(0.1f);
-    const f32 background_width = 400.0f;
-    AABB aabb = quad(&render->vertices, starting_position,
-                     v2f(background_width, quad_height), color, 0.0f);
+    AABB aabb = quad(&render->vertices, starting_position, v2f(width, height),
+                     color, 0.0f);
     render->index_count += 1;
 
     V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
@@ -367,15 +366,14 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
     text_position.x += aabb.size.x;
 
     f32 x_advance = 0.0f;
-    if (item->size)
+    if (item->size) // NOTE(Linus): Add the size text to the right side
     {
         char buffer[100] = { 0 };
         format_file_size(item->size, buffer, 100);
         x_advance =
             text_x_advance(font->chars, buffer, (u32)strlen(buffer), scale);
         V3 size_text_position = text_position;
-        size_text_position.x =
-            starting_position.x + background_width - x_advance;
+        size_text_position.x = starting_position.x + width - x_advance;
         render->index_count += text_generation(
             font->chars, buffer, 1.0f, size_text_position, scale,
             font->pixel_height, NULL, NULL, &render->vertices);
@@ -384,12 +382,12 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
     const u32 text_len = (u32)strlen(item->name);
     i32 i = text_check_length_within_boundary(
         font->chars, item->name, text_len, scale,
-        (background_width - aabb.size.x - padding_top - x_advance));
+        (width - aabb.size.x - padding_top - x_advance));
     b8 too_long = i >= 3;
     char saved_name[4];
     if (too_long)
     {
-        i32 j = i - 3; 
+        i32 j = i - 3;
         saved_name[0] = item->name[j];
         item->name[j++] = '.';
         saved_name[1] = item->name[j];
@@ -683,19 +681,23 @@ int main(int argc, char** argv)
 
         rendering_properties_clear(font_render);
 
+        V3 search_bar_position = v3f(dimensions.x * 0.6f, 20.0f, 0.0f);
+
         V3 text_starting_position =
             v3f(rect.min.x, 30.0f + current_directory->scroll_offset, 0.0f);
         text_starting_position.x += rect.size.width + 20.0f;
 
+        const f32 scale = 1.0f;
+        const f32 padding_top = 2.0f;
+        const f32 quad_height = scale * font.pixel_height + padding_top * 5.0f;
+        const f32 width =
+            (search_bar_position.x - 10.0f) - text_starting_position.x;
+
         AABB directory_aabb = {
             .min = v2f(text_starting_position.x, 0.0f),
-            .size = v2f(dimensions.x - text_starting_position.x, dimensions.y),
+            .size = v2f(width, dimensions.y),
         };
 
-        const float scale = 1.0f;
-        const float padding_top = 2.0f;
-        const float quad_height =
-            scale * font.pixel_height + padding_top * 5.0f;
         b8 folder_hit = false;
         i32 index = 0;
         for (; index < (i32)current_directory->directory.sub_directories.size;
@@ -703,7 +705,7 @@ int main(int argc, char** argv)
         {
             folder_hit = directory_item(
                 folder_hit, index, text_starting_position, scale,
-                font.pixel_height + padding_top, quad_height,
+                font.pixel_height + padding_top, quad_height, width,
                 &current_directory->directory.sub_directories.data[index],
                 &font, mouse_move, 3.0f, &hit_index, font_render);
             text_starting_position.y += quad_height;
@@ -737,7 +739,7 @@ int main(int argc, char** argv)
             {
                 file_hit = directory_item(
                     file_hit, index + i, text_starting_position, scale,
-                    font.pixel_height + padding_top, quad_height,
+                    font.pixel_height + padding_top, quad_height, width,
                     &current_directory->directory.files.data[i], &font,
                     mouse_move, 2.0f, &hit_index, font_render);
                 text_starting_position.y += quad_height;
@@ -749,8 +751,6 @@ int main(int argc, char** argv)
         }
 
         // Search bar
-        V3 search_bar_position = v3f(dimensions.x, 20.0f, 0.0f);
-        search_bar_position.x -= 300.0f;
         AABB search_bar_aabb = quad_with_border(
             &font_render->vertices, &font_render->index_count, border_color,
             search_bar_position, v2f(200.0f, 40.0f), 2.0f, 0.0f);
@@ -844,15 +844,17 @@ int main(int argc, char** argv)
         b8 search_hit = false;
         if (file_array.size)
         {
-
             search_result_aabb.min = v2f(search_result_position.x, 0.0f);
+
+            const f32 search_result_width =
+                (dimensions.x - search_result_position.x) - 10.0f;
 
             platform_mutex_lock(&file_array.mutex);
             for (u32 i = 0; i < file_array.size; ++i)
             {
                 search_hit = directory_item(
                     search_hit, i + index, search_result_position, scale,
-                    font.pixel_height + padding_top, quad_height,
+                    font.pixel_height + padding_top, quad_height, search_result_width,
                     &file_array.data[i], &font, mouse_move, 2.0f, &hit_index,
                     font_render);
                 search_result_position.y += quad_height;
