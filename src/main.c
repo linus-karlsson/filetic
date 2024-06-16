@@ -366,28 +366,70 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
 
     text_position.x += aabb.size.x;
 
-    render->index_count +=
-        text_generation(font->chars, item->name, 1.0f, text_position, scale,
-                        font->pixel_height, NULL, NULL, &render->vertices);
-
+    f32 x_advance = 0.0f;
     if (item->size)
     {
         char buffer[100] = { 0 };
         format_file_size(item->size, buffer, 100);
-        f32 x_advance =
+        x_advance =
             text_x_advance(font->chars, buffer, (u32)strlen(buffer), scale);
-        text_position.x = starting_position.x + background_width - x_advance;
+        V3 size_text_position = text_position;
+        size_text_position.x =
+            starting_position.x + background_width - x_advance;
         render->index_count +=
-            text_generation(font->chars, buffer, 1.0f, text_position, scale,
+            text_generation(font->chars, buffer, 1.0f, size_text_position, scale,
                             font->pixel_height, NULL, NULL, &render->vertices);
     }
 
+    b8 too_long = false;
+    const size_t text_len = strlen(item->name);
+    i32 i = 0;
+    for (f32 result = 0; i < (i32)text_len; ++i)
+    {
+        char current_char = item->name[i];
+        if (closed_interval(0, (current_char - 32), 96))
+        {
+            const CharacterTTF* c = font->chars + (current_char - 32);
+            result += c->x_advance * scale;
+            if (result >=
+                (background_width - aabb.size.x - padding_top - x_advance))
+            {
+                too_long = true;
+                i = i - 3;
+                break;
+            }
+        }
+    }
+    char saved_name[4];
+    if (too_long)
+    {
+        i32 j = i;
+        saved_name[0] = item->name[j];
+        item->name[j++] = '.';
+        saved_name[1] = item->name[j];
+        item->name[j++] = '.';
+        saved_name[2] = item->name[j];
+        item->name[j++] = '.';
+        saved_name[3] = item->name[j];
+        item->name[j] = '\0';
+    }
+    render->index_count +=
+        text_generation(font->chars, item->name, 1.0f, text_position, scale,
+                        font->pixel_height, NULL, NULL, &render->vertices);
+
+    if (too_long)
+    {
+        i32 j = i;
+        item->name[j++] = saved_name[0];
+        item->name[j++] = saved_name[1];
+        item->name[j++] = saved_name[2];
+        item->name[j] = saved_name[3];
+    }
     return hit;
 }
 
 typedef struct DirectoryPage
 {
-    f32 text_y;
     f32 offset;
     f32 scroll_offset;
     Directory directory;
@@ -469,6 +511,25 @@ void check_and_open_file(Event* mouse_button_event, const b8 hit,
     }
 }
 
+void set_scroll_offset(const f32 current_y, const f32 offset_y,
+                       const f32 dimension_y, const Event* mouse_wheel_event,
+                       f32* offset)
+{
+    f32 total_height = current_y - offset_y;
+    f32 z_delta = (f32)mouse_wheel_event->mouse_wheel_event.z_delta;
+    if ((z_delta > 0) || ((total_height + (*offset)) > dimension_y))
+    {
+        *offset += z_delta;
+    }
+    *offset = clampf32_high(*offset, 0.0f);
+}
+
+f32 smooth_scroll(const f64 delta_time, const f32 offset, f32 scroll_offset)
+{
+    scroll_offset += (f32)((offset - scroll_offset) * (delta_time * 15.0f));
+    return scroll_offset;
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -538,18 +599,21 @@ int main(int argc, char** argv)
     vertex_buffer_layout_push_float(&vertex_buffer_layout, 1,
                                     offsetof(Vertex, texture_index));
 
+    // TODO: make the vertex array growing in OpengGL
+
     RenderingPropertiesArray rendering_properties = { 0 };
     array_create(&rendering_properties, 3);
     array_push(&rendering_properties,
                rendering_properties_init(font_shader, &default_texture, 1,
                                          index_buffer_id, &vertex_buffer_layout,
                                          10 * 4));
+
     u32 textures_main[4] = { default_texture, font_texture, file_icon_texture,
                              folder_icon_texture };
     array_push(&rendering_properties,
                rendering_properties_init(font_shader, textures_main, 4,
                                          index_buffer_id, &vertex_buffer_layout,
-                                         10000 * 4));
+                                         100000 * 4));
 
     RenderingProperties* default_render = rendering_properties.data;
     RenderingProperties* font_render = rendering_properties.data + 1;
@@ -592,6 +656,9 @@ int main(int argc, char** argv)
     b8 search_bar_hit = false;
     f64 search_blinking_time = 0.4f;
 
+    f32 offset = 0.0f;
+    f32 scroll_offset = 0.0f;
+
     i32 hit_index = -1;
     f32 scroll_speed = 0.2f;
     f64 last_time = platform_get_time();
@@ -631,7 +698,7 @@ int main(int argc, char** argv)
         rendering_properties_clear(font_render);
 
         V3 text_starting_position =
-            v3f(rect.min.x, 30.0f + current_directory->text_y, 0.0f);
+            v3f(rect.min.x, 30.0f + current_directory->scroll_offset, 0.0f);
         text_starting_position.x += rect.size.width + 20.0f;
 
         AABB directory_aabb = {
@@ -784,11 +851,13 @@ int main(int argc, char** argv)
 
         AABB search_result_aabb = { 0 };
 
+        V3 search_result_position = search_bar_position;
+        search_result_position.y +=
+            search_bar_aabb.size.y + 20.0f + scroll_offset;
+
         b8 search_hit = false;
         if (file_array.size)
         {
-            V3 search_result_position = search_bar_position;
-            search_result_position.y += search_bar_aabb.size.y + 20.0f;
 
             search_result_aabb.min = v2f(search_result_position.x, 0.0f);
 
@@ -806,10 +875,10 @@ int main(int argc, char** argv)
                                 hit_index - index, &platform);
 
             search_result_aabb.size =
-                v2f(dimensions.x - search_result_position.x, file_array.size * quad_height);
+                v2f(dimensions.x - search_result_position.x,
+                    file_array.size * quad_height);
 
             platform_mutex_unlock(&file_array.mutex);
-
         }
         if (folder_hit || file_hit || search_hit)
         {
@@ -827,25 +896,22 @@ int main(int argc, char** argv)
 
         if (mouse_wheel->activated)
         {
-            if (collision_point_in_aabb(mouse_position, &directory_aabb))
+            if (collision_point_in_aabb(mouse_position, &search_result_aabb))
             {
-                f32 total_height =
-                    text_starting_position.y - current_directory->text_y;
-                f32 z_delta = (f32)mouse_wheel->mouse_wheel_event.z_delta;
-                if ((z_delta > 0) ||
-                    ((total_height + current_directory->offset) > dimensions.y))
-                {
-                    current_directory->offset += z_delta;
-                }
-                current_directory->offset =
-                    clampf32_high(current_directory->offset, 0.0f);
+                set_scroll_offset(search_result_position.y, scroll_offset,
+                                  dimensions.y, mouse_wheel, &offset);
+            }
+            else if (collision_point_in_aabb(mouse_position, &directory_aabb))
+            {
+                set_scroll_offset(
+                    text_starting_position.y, current_directory->scroll_offset,
+                    dimensions.y, mouse_wheel, &current_directory->offset);
             }
         }
-        current_directory->scroll_offset +=
-            (f32)((current_directory->offset -
-                   current_directory->scroll_offset) *
-                  (delta_time * 15.0f));
-        current_directory->text_y = current_directory->scroll_offset;
+        current_directory->scroll_offset =
+            smooth_scroll(delta_time, current_directory->offset,
+                          current_directory->scroll_offset);
+        scroll_offset = smooth_scroll(delta_time, offset, scroll_offset);
 
         for (u32 i = 0; i < rendering_properties.size; ++i)
         {

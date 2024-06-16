@@ -1,5 +1,6 @@
 #include "metacgen/metacgen.h"
 #include <time.h>
+#include <stdio.h>
 
 static double get_time_sec(void)
 {
@@ -10,7 +11,7 @@ static double get_time_sec(void)
 
 int main(int argc, char** argv)
 {
-    // TODO: generate this file path through code
+    // TODO: generate this file path through code (Platform specific)
     Mcgen_Context* ctx =
         mcgen_context_create("C:\\Users\\linus\\dev\\filetic\\");
 

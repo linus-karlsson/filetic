@@ -35,7 +35,7 @@ typedef struct ClientRect
 typedef struct DirectoryItem
 {
     u64 size;
-    const char* name;
+    char* name;
     char* path;
 } DirectoryItem;
 

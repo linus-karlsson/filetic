@@ -1,7 +1,11 @@
 #pragma once
 #include <stdint.h>
 
-// NOTE: This is my own library.
+/*
+ * NOTE: This is my own library.
+ * It is very porly written considering no thought was put into it 
+ * and I wrote it in a weekend. But it gets the job done.
+ */
 
 typedef void Mcgen_Context;
 
