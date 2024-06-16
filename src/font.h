@@ -25,3 +25,4 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height, u32 gly
 
 u32 text_generation(const CharacterTTF* c_ttf, const char* text, float texture_index, V3 pos, f32 scale, f32 line_height, u32* new_lines_count, f32* x_advance, VertexArray* array);
 f32 text_x_advance(const CharacterTTF* c_ttf, const char* text, u32 text_len, f32 scale);
+i32 text_check_length_within_boundary(const CharacterTTF* c_ttf, const char* text, u32 text_len, f32 scale, float boundary);

@@ -89,3 +89,24 @@ f32 text_x_advance(const CharacterTTF* c_ttf, const char* text, u32 text_len,
     }
     return result;
 }
+
+i32 text_check_length_within_boundary(const CharacterTTF* c_ttf,
+                                      const char* text, u32 text_len, f32 scale,
+                                      float boundary)
+{
+    f32 x_advance = 0;
+    for (i32 i = 0; i < (i32)text_len; ++i)
+    {
+        char current_char = text[i];
+        if (closed_interval(0, (current_char - 32), 96))
+        {
+            const CharacterTTF* c = c_ttf + (current_char - 32);
+            x_advance += c->x_advance * scale;
+            if (x_advance > boundary)
+            {
+                return i;
+            }
+        }
+    }
+    return -1;
+}

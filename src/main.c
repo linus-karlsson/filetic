@@ -376,34 +376,20 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
         V3 size_text_position = text_position;
         size_text_position.x =
             starting_position.x + background_width - x_advance;
-        render->index_count +=
-            text_generation(font->chars, buffer, 1.0f, size_text_position, scale,
-                            font->pixel_height, NULL, NULL, &render->vertices);
+        render->index_count += text_generation(
+            font->chars, buffer, 1.0f, size_text_position, scale,
+            font->pixel_height, NULL, NULL, &render->vertices);
     }
 
-    b8 too_long = false;
-    const size_t text_len = strlen(item->name);
-    i32 i = 0;
-    for (f32 result = 0; i < (i32)text_len; ++i)
-    {
-        char current_char = item->name[i];
-        if (closed_interval(0, (current_char - 32), 96))
-        {
-            const CharacterTTF* c = font->chars + (current_char - 32);
-            result += c->x_advance * scale;
-            if (result >=
-                (background_width - aabb.size.x - padding_top - x_advance))
-            {
-                too_long = true;
-                i = i - 3;
-                break;
-            }
-        }
-    }
+    const u32 text_len = (u32)strlen(item->name);
+    i32 i = text_check_length_within_boundary(
+        font->chars, item->name, text_len, scale,
+        (background_width - aabb.size.x - padding_top - x_advance));
+    b8 too_long = i >= 3;
     char saved_name[4];
     if (too_long)
     {
-        i32 j = i;
+        i32 j = i - 3; 
         saved_name[0] = item->name[j];
         item->name[j++] = '.';
         saved_name[1] = item->name[j];
@@ -419,7 +405,7 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
 
     if (too_long)
     {
-        i32 j = i;
+        i32 j = i - 3;
         item->name[j++] = saved_name[0];
         item->name[j++] = saved_name[1];
         item->name[j++] = saved_name[2];
