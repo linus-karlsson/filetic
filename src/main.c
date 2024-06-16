@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define WIN32_LEAN_AND_MEAN
-#define WIN_32_EXTRA_LEAN
-#include <Windows.h>
 #include <glad/glad.h>
 #include <stb/stb_truetype.h>
 #include <math.h>
@@ -611,6 +608,8 @@ int main(int argc, char** argv)
         viewport_width = client_rect.right - client_rect.left;
         viewport_height = client_rect.bottom - client_rect.top;
         dimensions = v2f((f32)viewport_width, (f32)viewport_height);
+        V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
+                                mouse_move->mouse_move_event.position_y);
         mvp.projection = ortho(0.0f, (float)viewport_width,
                                (float)viewport_height, 0.0f, -1.0f, 1.0f);
         glViewport(0, 0, viewport_width, viewport_height);
@@ -628,10 +627,18 @@ int main(int argc, char** argv)
                 current_directory = array_back(&directory_history);
             }
         }
+
         rendering_properties_clear(font_render);
+
         V3 text_starting_position =
             v3f(rect.min.x, 30.0f + current_directory->text_y, 0.0f);
         text_starting_position.x += rect.size.width + 20.0f;
+
+        AABB directory_aabb = {
+            .min = v2f(text_starting_position.x, 0.0f),
+            .size = v2f(dimensions.x - text_starting_position.x, dimensions.y),
+        };
+
         const float scale = 1.0f;
         const float padding_top = 2.0f;
         const float quad_height =
@@ -695,8 +702,6 @@ int main(int argc, char** argv)
             &font_render->vertices, &font_render->index_count, border_color,
             search_bar_position, v2f(200.0f, 40.0f), 2.0f, 0.0f);
 
-        V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
-                                mouse_move->mouse_move_event.position_y);
         if (mouse_button->activated)
         {
             if (collision_point_in_aabb(mouse_position, &search_bar_aabb))
@@ -771,16 +776,22 @@ int main(int argc, char** argv)
         V3 search_text_position = search_bar_position;
         search_text_position.x += 10.0f;
         search_text_position.y += scale * font.pixel_height + 10.0f;
+
         render_input(&font, search_buffer.data, search_buffer.size, scale,
                      search_text_position, search_bar_position.y + 10.0f,
                      search_bar_hit, delta_time, &search_blinking_time,
                      font_render);
+
+        AABB search_result_aabb = { 0 };
 
         b8 search_hit = false;
         if (file_array.size)
         {
             V3 search_result_position = search_bar_position;
             search_result_position.y += search_bar_aabb.size.y + 20.0f;
+
+            search_result_aabb.min = v2f(search_result_position.x, 0.0f);
+
             platform_mutex_lock(&file_array.mutex);
             for (u32 i = 0; i < file_array.size; ++i)
             {
@@ -793,9 +804,14 @@ int main(int argc, char** argv)
             }
             check_and_open_file(mouse_button, search_hit, file_array.data,
                                 hit_index - index, &platform);
+
+            search_result_aabb.size =
+                v2f(dimensions.x - search_result_position.x, file_array.size * quad_height);
+
             platform_mutex_unlock(&file_array.mutex);
+
         }
-        if (folder_hit | file_hit | search_hit)
+        if (folder_hit || file_hit || search_hit)
         {
             platform_change_cursor(platform, FTIC_HAND_CURSOR);
         }
@@ -811,16 +827,19 @@ int main(int argc, char** argv)
 
         if (mouse_wheel->activated)
         {
-            f32 total_height =
-                text_starting_position.y - current_directory->text_y;
-            f32 z_delta = (f32)mouse_wheel->mouse_wheel_event.z_delta;
-            if ((z_delta > 0) ||
-                ((total_height + current_directory->offset) > dimensions.y))
+            if (collision_point_in_aabb(mouse_position, &directory_aabb))
             {
-                current_directory->offset += z_delta;
+                f32 total_height =
+                    text_starting_position.y - current_directory->text_y;
+                f32 z_delta = (f32)mouse_wheel->mouse_wheel_event.z_delta;
+                if ((z_delta > 0) ||
+                    ((total_height + current_directory->offset) > dimensions.y))
+                {
+                    current_directory->offset += z_delta;
+                }
+                current_directory->offset =
+                    clampf32_high(current_directory->offset, 0.0f);
             }
-            current_directory->offset =
-                clampf32_high(current_directory->offset, 0.0f);
         }
         current_directory->scroll_offset +=
             (f32)((current_directory->offset -

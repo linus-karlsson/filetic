@@ -6,7 +6,6 @@ typedef struct AABB
 {
     V2 min;
     V2 size;
-    u32 id;
 } AABB;
 
 b8 collision_point_in_point(V2 point_pos, V2 target, V2 target_size);
