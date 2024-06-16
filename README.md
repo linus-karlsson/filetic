@@ -9,7 +9,7 @@ A lightweight file management application designed to provide basic file operati
 
 - **Windows**: Works only on Windows (might expand later).
 
-## Features
+## Features (to be implemented)
 
 - **File Browsing**: Navigate through directories and view file contents.
 - **File Operations**: Perform basic file operations such as create, read, update, delete, and rename.
