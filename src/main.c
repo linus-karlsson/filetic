@@ -545,7 +545,7 @@ void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
         if (hit)
         {
             char* path = current_folders[index].path;
-            if(strcmp(path, (*current_directory)->directory.parent) == 0)
+            if (strcmp(path, (*current_directory)->directory.parent) == 0)
             {
                 return;
             }
@@ -574,13 +574,12 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
 {
     b8 folder_hit = false;
     i32 hit_index = -1;
-    i32 index = 0;
-    for (; index < (i32)sub_directories->size; ++index)
+    for (i32 i = 0; i < (i32)sub_directories->size; ++i)
     {
         folder_hit =
-            directory_item(folder_hit, index, *starting_position, scale,
+            directory_item(folder_hit, i, *starting_position, scale,
                            font->pixel_height + padding_top, item_height,
-                           item_width, &sub_directories->data[index], font,
+                           item_width, &sub_directories->data[i], font,
                            mouse_move_event, 3.0f, &hit_index, font_render);
         starting_position->y += item_height;
     }
@@ -589,18 +588,16 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
                           current_directory);
     b8 file_hit = false;
     hit_index = -1;
-    i32 i = 0;
-    for (; i < (i32)files->size; ++i)
+    for (i32 i = 0; i < (i32)files->size; ++i)
     {
         file_hit =
-            directory_item(file_hit, index + i, *starting_position, scale,
+            directory_item(file_hit, i, *starting_position, scale,
                            font->pixel_height + padding_top, item_height,
                            item_width, &files->data[i], font, mouse_move_event,
                            2.0f, &hit_index, font_render);
         starting_position->y += item_height;
     }
     check_and_open_file(mouse_button_event, file_hit, files->data, hit_index);
-    index += i;
 
     return folder_hit || file_hit;
 }
