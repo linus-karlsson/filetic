@@ -1,6 +1,11 @@
 #pragma once
 #include "define.h"
 #include "util.h"
+// @save
+
+// This is a generated file
+ 
+// @end
 
 typedef struct ArrayChar
 { 
