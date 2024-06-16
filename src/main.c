@@ -23,9 +23,7 @@ global V4 border_color = { .r = 0.3f, .g = 0.3f, .b = 0.3f, .a = 1.0f };
 
 typedef struct SafeFileArray
 {
-    u32 size;
-    u32 capacity;
-    DirectoryItem* data;
+    DirectoryItemArray array;
     FTicMutex mutex;
 } SafeFileArray;
 
@@ -37,7 +35,8 @@ typedef struct FindingCallbackAttribute
     u32 start_directory_length;
     u32 string_to_match_length;
     u32 running_id;
-    SafeFileArray* array;
+    SafeFileArray* file_array;
+    SafeFileArray* folder_array;
 } FindingCallbackAttribute;
 
 typedef enum DebugLogLevel
@@ -146,6 +145,26 @@ internal char* copy_string(const char* string, const u32 string_length,
     return result;
 }
 
+internal void safe_add_directory_item(const DirectoryItem* item,
+                                      FindingCallbackAttribute* arguments,
+                                      SafeFileArray* safe_array)
+{
+    const char* name = item->name;
+    const u32 name_length = (u32)strlen(name);
+    char* path = item->path;
+    if (string_contains(name, name_length, arguments->string_to_match,
+                        arguments->string_to_match_length))
+    {
+        const u32 path_length = (u32)strlen(path);
+        DirectoryItem copy = {
+            .size = item->size,
+            .path = copy_string(path, path_length, 2),
+        };
+        copy.name = copy.path + path_length - name_length;
+        safe_array_push(safe_array, copy);
+    }
+}
+
 b8 running_callbacks[100] = { 0 };
 
 void finding_callback(void* data)
@@ -164,6 +183,10 @@ void finding_callback(void* data)
 
     for (u32 i = 0; i < directory.sub_directories.size && running; ++i)
     {
+
+        safe_add_directory_item(&directory.sub_directories.data[i], arguments,
+                                arguments->folder_array);
+
         FindingCallbackAttribute* next_arguments =
             (FindingCallbackAttribute*)calloc(1,
                                               sizeof(FindingCallbackAttribute));
@@ -175,7 +198,8 @@ void finding_callback(void* data)
             copy_string(path, (u32)directory_name_length, 2);
         next_arguments->start_directory[directory_name_length++] = '\\';
         next_arguments->start_directory[directory_name_length++] = '*';
-        next_arguments->array = arguments->array;
+        next_arguments->file_array = arguments->file_array;
+        next_arguments->folder_array = arguments->folder_array;
         next_arguments->thread_queue = arguments->thread_queue;
         next_arguments->start_directory_length = (u32)directory_name_length;
         next_arguments->string_to_match = arguments->string_to_match;
@@ -189,21 +213,8 @@ void finding_callback(void* data)
 
     for (u32 i = 0; i < directory.files.size && running; ++i)
     {
-        const char* name = directory.files.data[i].name;
-        const u32 name_length = (u32)strlen(name);
-        char* path = directory.files.data[i].path;
-        if (string_contains(name, name_length, arguments->string_to_match,
-                            arguments->string_to_match_length))
-        {
-            DirectoryItem* current = directory.files.data + i;
-            const u32 path_length = (u32)strlen(path);
-            DirectoryItem copy = {
-                .size = current->size,
-                .path = copy_string(path, path_length, 2),
-            };
-            copy.name = copy.path + path_length - name_length;
-            safe_array_push(arguments->array, copy);
-        }
+        safe_add_directory_item(&directory.files.data[i], arguments,
+                                arguments->file_array);
     }
     if (should_free_directory)
     {
@@ -241,15 +252,15 @@ void find_matching_string(const char* start_directory, const u32 length,
     }
 }
 
-void clear_search_result(SafeFileArray* array)
+void clear_search_result(SafeFileArray* files)
 {
-    platform_mutex_lock(&array->mutex);
-    for (u32 j = 0; j < array->size; ++j)
+    platform_mutex_lock(&files->mutex);
+    for (u32 j = 0; j < files->array.size; ++j)
     {
-        free(array->data[j].path);
+        free(files->array.data[j].path);
     }
-    array->size = 0;
-    platform_mutex_unlock(&array->mutex);
+    files->array.size = 0;
+    platform_mutex_unlock(&files->mutex);
 }
 
 void buffer_set_sub_data(u32 vertex_buffer, u32 target, intptr_t offset,
@@ -366,18 +377,20 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
                   const FontTTF* font, const Event* mouse_move, f32 icon_index,
                   i32* hit_index, RenderingProperties* render)
 {
-    const V4 color = index == (*hit_index) ? v4ic(0.3f) : v4ic(0.1f);
-    AABB aabb = quad(&render->vertices, starting_position, v2f(width, height),
-                     color, 0.0f);
-    render->index_count += 1;
+    AABB aabb = { .min = v2_v3(starting_position), .size = v2f(width, height) };
 
+    b8 this_hit = false;
     V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
                             mouse_move->mouse_move_event.position_y);
     if (!hit && collision_point_in_aabb(mouse_position, &aabb))
     {
         *hit_index = index;
+        this_hit = true;
         hit = true;
     }
+    const V4 color = this_hit ? v4ic(0.3f) : v4ic(0.1f);
+    quad(&render->vertices, starting_position, aabb.size, color, 0.0f);
+    render->index_count += 1;
 
     aabb =
         quad(&render->vertices,
@@ -504,20 +517,92 @@ void render_input(const FontTTF* font, const char* text, u32 text_length,
     }
 }
 
-void check_and_open_file(Event* mouse_button_event, const b8 hit,
+void check_and_open_file(const Event* mouse_button_event, const b8 hit,
                          const DirectoryItem* current_files,
-                         const u32 file_index, const Platform* platform)
+                         const i32 file_index)
 {
-    if (hit)
+    if (mouse_button_event->mouse_button_event.double_clicked &&
+        mouse_button_event->mouse_button_event.key == FTIC_LEFT_BUTTON)
     {
-        if (mouse_button_event->mouse_button_event.key == FTIC_LEFT_BUTTON &&
-            mouse_button_event->mouse_button_event.double_clicked)
+        if (hit)
         {
             const char* file_path = current_files[file_index].path;
 
-            platform_open_file(&platform, file_path);
+            platform_open_file(file_path);
         }
     }
+}
+
+void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
+                           const i32 index,
+                           const DirectoryItem* current_folders,
+                           DirectoryArray* directory_history,
+                           DirectoryPage** current_directory)
+{
+    if (mouse_button_event->mouse_button_event.double_clicked &&
+        mouse_button_event->mouse_button_event.key == FTIC_LEFT_BUTTON)
+    {
+        if (hit)
+        {
+            char* path = current_folders[index].path;
+            if(strcmp(path, (*current_directory)->directory.parent) == 0)
+            {
+                return;
+            }
+            u32 length = (u32)strlen(path);
+            path[length++] = '\\';
+            path[length++] = '*';
+            DirectoryPage new_page = { 0 };
+            new_page.directory = platform_get_directory(path, length);
+            array_push(directory_history, new_page);
+            path[length - 2] = '\0';
+
+            *current_directory = array_back(directory_history);
+        }
+    }
+}
+
+b8 directory_item_list(const DirectoryItemArray* sub_directories,
+                       const DirectoryItemArray* files, const f32 scale,
+                       const FontTTF* font, const f32 padding_top,
+                       const f32 item_height, const f32 item_width,
+                       const Event* mouse_move_event,
+                       const Event* mouse_button_event, V3* starting_position,
+                       RenderingProperties* font_render,
+                       DirectoryArray* directory_history,
+                       DirectoryPage** current_directory)
+{
+    b8 folder_hit = false;
+    i32 hit_index = -1;
+    i32 index = 0;
+    for (; index < (i32)sub_directories->size; ++index)
+    {
+        folder_hit =
+            directory_item(folder_hit, index, *starting_position, scale,
+                           font->pixel_height + padding_top, item_height,
+                           item_width, &sub_directories->data[index], font,
+                           mouse_move_event, 3.0f, &hit_index, font_render);
+        starting_position->y += item_height;
+    }
+    check_and_open_folder(mouse_button_event, folder_hit, hit_index,
+                          sub_directories->data, directory_history,
+                          current_directory);
+    b8 file_hit = false;
+    hit_index = -1;
+    i32 i = 0;
+    for (; i < (i32)files->size; ++i)
+    {
+        file_hit =
+            directory_item(file_hit, index + i, *starting_position, scale,
+                           font->pixel_height + padding_top, item_height,
+                           item_width, &files->data[i], font, mouse_move_event,
+                           2.0f, &hit_index, font_render);
+        starting_position->y += item_height;
+    }
+    check_and_open_file(mouse_button_event, file_hit, files->data, hit_index);
+    index += i;
+
+    return folder_hit || file_hit;
 }
 
 void set_scroll_offset(const f32 current_y, const f32 offset_y,
@@ -585,6 +670,12 @@ int main(int argc, char** argv)
         texture_create(&texture_properties, GL_RGBA8, GL_RED);
     free(texture_properties.bytes);
 
+    texture_load("res/icons/close.png", &texture_properties);
+    extract_only_aplha_channel(&texture_properties);
+    u32 close_icon_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RED);
+    free(texture_properties.bytes);
+
     u32 font_shader = shader_create("./res/shaders/vertex.glsl",
                                     "./res/shaders/font_fragment.glsl");
     u32 shader2 = shader_create("./res/shaders/vertex.glsl",
@@ -612,12 +703,12 @@ int main(int argc, char** argv)
 
     RenderingPropertiesArray rendering_properties = { 0 };
     array_create(&rendering_properties, 1);
-    u32 textures_main[4] = { default_texture, font_texture, file_icon_texture,
-                             folder_icon_texture };
+    u32 textures[] = { default_texture, font_texture, file_icon_texture,
+                       folder_icon_texture, close_icon_texture };
     array_push(&rendering_properties,
-               rendering_properties_init(font_shader, textures_main, 4,
-                                         index_buffer_id, &vertex_buffer_layout,
-                                         100000 * 4));
+               rendering_properties_init(
+                   font_shader, textures, static_array_size(textures),
+                   index_buffer_id, &vertex_buffer_layout, 100000 * 4));
 
     RenderingProperties* font_render = rendering_properties.data;
 
@@ -626,6 +717,8 @@ int main(int argc, char** argv)
 
     SafeFileArray file_array = { 0 };
     safe_array_create(&file_array, 10);
+    SafeFileArray folder_array = { 0 };
+    safe_array_create(&folder_array, 10);
 
     DirectoryArray directory_history = { 0 };
     array_create(&directory_history, 10);
@@ -714,62 +807,19 @@ int main(int argc, char** argv)
             .size = v2f(width, dimensions.y),
         };
 
-        b8 folder_hit = false;
-        i32 index = 0;
-        for (; index < (i32)current_directory->directory.sub_directories.size;
-             ++index)
-        {
-            folder_hit = directory_item(
-                folder_hit, index, text_starting_position, scale,
-                font.pixel_height + padding_top, quad_height, width,
-                &current_directory->directory.sub_directories.data[index],
-                &font, mouse_move, 3.0f, &hit_index, font_render);
-            text_starting_position.y += quad_height;
-        }
-        b8 skip = false;
-        if (mouse_button->mouse_button_event.key == FTIC_LEFT_BUTTON &&
-            mouse_button->mouse_button_event.double_clicked)
-        {
-            if (folder_hit)
-            {
-                char* path =
-                    current_directory->directory.sub_directories.data[hit_index]
-                        .path;
-                u32 length = (u32)strlen(path);
-                path[length++] = '\\';
-                path[length++] = '*';
-                DirectoryPage new_page = { 0 };
-                new_page.directory = platform_get_directory(path, length);
-                array_push(&directory_history, new_page);
-                path[length - 2] = '\0';
-
-                current_directory = array_back(&directory_history);
-                skip = true;
-            }
-        }
-        b8 file_hit = false;
-        if (!skip)
-        {
-            i32 i = 0;
-            for (; i < (i32)current_directory->directory.files.size; ++i)
-            {
-                file_hit = directory_item(
-                    file_hit, index + i, text_starting_position, scale,
-                    font.pixel_height + padding_top, quad_height, width,
-                    &current_directory->directory.files.data[i], &font,
-                    mouse_move, 2.0f, &hit_index, font_render);
-                text_starting_position.y += quad_height;
-            }
-            check_and_open_file(mouse_button, file_hit,
-                                current_directory->directory.files.data,
-                                hit_index - index, &platform);
-            index += i;
-        }
+        b8 hit = directory_item_list(
+            &current_directory->directory.sub_directories,
+            &current_directory->directory.files, scale, &font, padding_top,
+            quad_height, width, mouse_move, mouse_button,
+            &text_starting_position, font_render, &directory_history,
+            &current_directory);
 
         // Search bar
+        const f32 search_bar_width = 250.0f;
+        const f32 search_bar_input_text_padding = 10.0f;
         AABB search_bar_aabb = quad_with_border(
             &font_render->vertices, &font_render->index_count, border_color,
-            search_bar_position, v2f(200.0f, 40.0f), 2.0f, 0.0f);
+            search_bar_position, v2f(search_bar_width, 40.0f), 2.0f, 0.0f);
 
         if (mouse_button->activated)
         {
@@ -801,16 +851,12 @@ int main(int argc, char** argv)
                 else if (current_char == '\r') // ENTER
                 {
                     clear_search_result(&file_array);
+                    clear_search_result(&folder_array);
+
+                    running_callbacks[last_running_id] = false;
 
                     if (search_buffer.size)
                     {
-                        u64 task_count =
-                            thread_get_task_count(&thread_queue.task_queue, 0);
-
-                        if(task_count)
-                        {
-                            running_callbacks[last_running_id] = false;
-                        }
                         last_running_id = running_id;
                         running_callbacks[running_id++] = true;
                         running_id %= 100;
@@ -830,7 +876,8 @@ int main(int argc, char** argv)
                             (FindingCallbackAttribute*)calloc(
                                 1, sizeof(FindingCallbackAttribute));
                         arguments->thread_queue = &thread_queue.task_queue;
-                        arguments->array = &file_array;
+                        arguments->file_array = &file_array;
+                        arguments->folder_array = &folder_array;
                         arguments->start_directory = dir2;
                         arguments->start_directory_length = (u32)parent_length;
                         arguments->string_to_match = string_to_match;
@@ -838,11 +885,6 @@ int main(int argc, char** argv)
                         arguments->running_id = last_running_id;
                         finding_callback(arguments);
                     }
-                    else
-                    {
-                        running_callbacks[last_running_id] = false;
-                    }
-
                     search_bar_hit = false;
                     search_blinking_time = 0.4f;
                     break;
@@ -850,12 +892,21 @@ int main(int argc, char** argv)
                 else if (closed_interval(0, (current_char - 32), 96))
                 {
                     array_push(&search_buffer, current_char);
+                    f32 x_advance =
+                        text_x_advance(font.chars, search_buffer.data,
+                                       search_buffer.size, scale);
+                    if (x_advance >=
+                        search_bar_width - (search_bar_input_text_padding * 2))
+                    {
+                        *array_back(&search_buffer) = 0;
+                        --search_buffer.size;
+                    }
                 }
             }
         }
 
         V3 search_text_position = search_bar_position;
-        search_text_position.x += 10.0f;
+        search_text_position.x += search_bar_input_text_padding;
         search_text_position.y += scale * font.pixel_height + 10.0f;
 
         render_input(&font, search_buffer.data, search_buffer.size, scale,
@@ -870,7 +921,7 @@ int main(int argc, char** argv)
             search_bar_aabb.size.y + 20.0f + scroll_offset;
 
         b8 search_hit = false;
-        if (file_array.size)
+        if (file_array.array.size || folder_array.array.size)
         {
             search_result_aabb.min = v2f(search_result_position.x, 0.0f);
 
@@ -878,25 +929,23 @@ int main(int argc, char** argv)
                 (dimensions.x - search_result_position.x) - 10.0f;
 
             platform_mutex_lock(&file_array.mutex);
-            for (u32 i = 0; i < file_array.size; ++i)
-            {
-                search_hit = directory_item(
-                    search_hit, i + index, search_result_position, scale,
-                    font.pixel_height + padding_top, quad_height,
-                    search_result_width, &file_array.data[i], &font, mouse_move,
-                    2.0f, &hit_index, font_render);
-                search_result_position.y += quad_height;
-            }
-            check_and_open_file(mouse_button, search_hit, file_array.data,
-                                hit_index - index, &platform);
+            platform_mutex_lock(&folder_array.mutex);
+
+            search_hit = directory_item_list(
+                &folder_array.array, &file_array.array, scale, &font,
+                padding_top, quad_height, search_result_width, mouse_move,
+                mouse_button, &search_result_position, font_render,
+                &directory_history, &current_directory);
 
             search_result_aabb.size =
                 v2f(dimensions.x - search_result_position.x,
-                    file_array.size * quad_height);
+                    (file_array.array.size + folder_array.array.size) *
+                        quad_height);
 
+            platform_mutex_unlock(&folder_array.mutex);
             platform_mutex_unlock(&file_array.mutex);
         }
-        if (folder_hit || file_hit || search_hit)
+        if (hit || search_hit)
         {
             platform_change_cursor(platform, FTIC_HAND_CURSOR);
         }

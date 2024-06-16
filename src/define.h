@@ -24,20 +24,22 @@
 
 #define array_back(array) ((array)->data + ((array)->size - 1))
 
-#define safe_array_push(array, value)                                          \
+#define safe_array_push(arr, value)                                            \
     do                                                                         \
     {                                                                          \
-        platform_mutex_lock(&(array)->mutex);                                  \
-        array_push(array, value);                                              \
-        platform_mutex_unlock(&(array)->mutex);                                \
+        platform_mutex_lock(&(arr)->mutex);                                    \
+        array_push(&(arr)->array, value);                                      \
+        platform_mutex_unlock(&(arr)->mutex);                                  \
     } while (0)
 
-#define safe_array_create(array, array_capacity)                               \
+#define safe_array_create(arr, array_capacity)                                 \
     do                                                                         \
     {                                                                          \
-        array_create(array, array_capacity);                                   \
-        (array)->mutex = platform_mutex_create();                              \
+        array_create(&(arr)->array, array_capacity);                           \
+        (arr)->mutex = platform_mutex_create();                                \
     } while (0)
+
+#define static_array_size(array) (sizeof(array) / sizeof(array[0]))
 
 #define thread_return_value unsigned long
 #define FTicThreadHandle void*

@@ -626,12 +626,9 @@ void platform_sleep(u64 milli)
     Sleep((DWORD)milli);
 }
 
-void platform_open_file(const Platform* platform, const char* file_path)
+void platform_open_file(const char* file_path)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
-
-    HINSTANCE result = ShellExecute(platform_internal->window, "open",
+    HINSTANCE result = ShellExecute(NULL, "open",
                                     file_path, NULL, NULL, SW_SHOWNORMAL);
 
     if ((int)result <= 32)
@@ -639,7 +636,6 @@ void platform_open_file(const Platform* platform, const char* file_path)
         SHELLEXECUTEINFO sei = {
             .cbSize = sizeof(SHELLEXECUTEINFO),
             .fMask = SEE_MASK_INVOKEIDLIST,
-            .hwnd = platform_internal->window,
             .lpVerb = "openas",
             .lpFile = file_path,
             .lpParameters = NULL,
