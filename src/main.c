@@ -19,8 +19,6 @@
 #include "shader.h"
 #include "event.h"
 
-global b8 running = true;
-
 global V4 border_color = { .r = 0.3f, .g = 0.3f, .b = 0.3f, .a = 1.0f };
 
 typedef struct SafeFileArray
@@ -35,9 +33,10 @@ typedef struct FindingCallbackAttribute
 {
     ThreadTaskQueue* thread_queue;
     char* start_directory;
-    u32 start_directory_length;
     const char* string_to_match;
+    u32 start_directory_length;
     u32 string_to_match_length;
+    u32 running_id;
     SafeFileArray* array;
 } FindingCallbackAttribute;
 
@@ -147,12 +146,21 @@ internal char* copy_string(const char* string, const u32 string_length,
     return result;
 }
 
+b8 running_callbacks[100] = { 0 };
+
 void finding_callback(void* data)
 {
     FindingCallbackAttribute* arguments = (FindingCallbackAttribute*)data;
 
-    Directory directory = platform_get_directory(
-        arguments->start_directory, arguments->start_directory_length);
+    b8 should_free_directory = false;
+    b8 running = running_callbacks[arguments->running_id];
+    Directory directory = { 0 };
+    if (running)
+    {
+        directory = platform_get_directory(arguments->start_directory,
+                                           arguments->start_directory_length);
+        should_free_directory = true;
+    }
 
     for (u32 i = 0; i < directory.sub_directories.size && running; ++i)
     {
@@ -173,6 +181,8 @@ void finding_callback(void* data)
         next_arguments->string_to_match = arguments->string_to_match;
         next_arguments->string_to_match_length =
             arguments->string_to_match_length;
+        next_arguments->running_id = arguments->running_id;
+
         ThreadTask task = thread_task(finding_callback, next_arguments);
         thread_tasks_push(next_arguments->thread_queue, &task, 1, NULL);
     }
@@ -195,7 +205,10 @@ void finding_callback(void* data)
             safe_array_push(arguments->array, copy);
         }
     }
-    platform_reset_directory(&directory);
+    if (should_free_directory)
+    {
+        platform_reset_directory(&directory);
+    }
     free(arguments->start_directory);
     free(data);
 }
@@ -227,6 +240,18 @@ void find_matching_string(const char* start_directory, const u32 length,
         free(path);
     }
 }
+
+void clear_search_result(SafeFileArray* array)
+{
+    platform_mutex_lock(&array->mutex);
+    for (u32 j = 0; j < array->size; ++j)
+    {
+        free(array->data[j].path);
+    }
+    array->size = 0;
+    platform_mutex_unlock(&array->mutex);
+}
+
 void buffer_set_sub_data(u32 vertex_buffer, u32 target, intptr_t offset,
                          signed long long int size, const void* data)
 {
@@ -586,12 +611,7 @@ int main(int argc, char** argv)
     // TODO: make the vertex array growing in OpengGL
 
     RenderingPropertiesArray rendering_properties = { 0 };
-    array_create(&rendering_properties, 3);
-    array_push(&rendering_properties,
-               rendering_properties_init(font_shader, &default_texture, 1,
-                                         index_buffer_id, &vertex_buffer_layout,
-                                         10 * 4));
-
+    array_create(&rendering_properties, 1);
     u32 textures_main[4] = { default_texture, font_texture, file_icon_texture,
                              folder_icon_texture };
     array_push(&rendering_properties,
@@ -599,28 +619,13 @@ int main(int argc, char** argv)
                                          index_buffer_id, &vertex_buffer_layout,
                                          100000 * 4));
 
-    RenderingProperties* default_render = rendering_properties.data;
-    RenderingProperties* font_render = rendering_properties.data + 1;
+    RenderingProperties* font_render = rendering_properties.data;
 
     ThreadQueue thread_queue = { 0 };
     thread_init(100000, 8, &thread_queue);
 
     SafeFileArray file_array = { 0 };
     safe_array_create(&file_array, 10);
-
-    ClientRect client_rect = platform_get_client_rect(platform);
-    GLint viewport_width = client_rect.right - client_rect.left;
-    GLint viewport_height = client_rect.bottom - client_rect.top;
-    V2 dimensions = v2f((f32)viewport_width, (f32)viewport_height);
-
-    V3 starting_position = v3f(10.0f, 10.0f, 0.0f);
-    AABB rect = quad_with_border(
-        &default_render->vertices, &default_render->index_count, border_color,
-        starting_position, v2f(100.0f, dimensions.height - 50.0f), 2.0f, 0.0f);
-    buffer_set_sub_data(default_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
-                        sizeof(Vertex) * default_render->vertices.size,
-                        default_render->vertices.data);
-    default_render->vertices.size = 0;
 
     DirectoryArray directory_history = { 0 };
     array_create(&directory_history, 10);
@@ -644,7 +649,12 @@ int main(int argc, char** argv)
     f32 scroll_offset = 0.0f;
 
     i32 hit_index = -1;
-    f32 scroll_speed = 0.2f;
+
+    b8 enter_pressed = false;
+
+    u32 running_id = 0;
+    u32 last_running_id = 0;
+
     f64 last_time = platform_get_time();
     f64 delta_time = 0.0f;
     MVP mvp = { 0 };
@@ -655,10 +665,10 @@ int main(int argc, char** argv)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (platform_is_running(platform))
     {
-        client_rect = platform_get_client_rect(platform);
-        viewport_width = client_rect.right - client_rect.left;
-        viewport_height = client_rect.bottom - client_rect.top;
-        dimensions = v2f((f32)viewport_width, (f32)viewport_height);
+        ClientRect client_rect = platform_get_client_rect(platform);
+        GLint viewport_width = client_rect.right - client_rect.left;
+        GLint viewport_height = client_rect.bottom - client_rect.top;
+        V2 dimensions = v2f((f32)viewport_width, (f32)viewport_height);
         V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
                                 mouse_move->mouse_move_event.position_y);
         mvp.projection = ortho(0.0f, (float)viewport_width,
@@ -680,6 +690,12 @@ int main(int argc, char** argv)
         }
 
         rendering_properties_clear(font_render);
+
+        V3 starting_position = v3f(10.0f, 10.0f, 0.0f);
+        AABB rect = quad_with_border(
+            &font_render->vertices, &font_render->index_count, border_color,
+            starting_position, v2f(100.0f, dimensions.height - 50.0f), 2.0f,
+            0.0f);
 
         V3 search_bar_position = v3f(dimensions.x * 0.6f, 20.0f, 0.0f);
 
@@ -767,6 +783,7 @@ int main(int argc, char** argv)
                 search_blinking_time = 0.4f;
             }
         }
+
         if (search_bar_hit)
         {
             const CharArray* key_buffer = event_get_key_buffer();
@@ -783,16 +800,21 @@ int main(int argc, char** argv)
                 }
                 else if (current_char == '\r') // ENTER
                 {
-                    platform_mutex_lock(&file_array.mutex);
-                    for (u32 j = 0; j < file_array.size; ++j)
-                    {
-                        free(file_array.data[j].path);
-                    }
-                    file_array.size = 0;
-                    platform_mutex_unlock(&file_array.mutex);
+                    clear_search_result(&file_array);
 
                     if (search_buffer.size)
                     {
+                        u64 task_count =
+                            thread_get_task_count(&thread_queue.task_queue, 0);
+
+                        if(task_count)
+                        {
+                            running_callbacks[last_running_id] = false;
+                        }
+                        last_running_id = running_id;
+                        running_callbacks[running_id++] = true;
+                        running_id %= 100;
+
                         const char* parent =
                             current_directory->directory.parent;
                         size_t parent_length = strlen(parent);
@@ -813,7 +835,12 @@ int main(int argc, char** argv)
                         arguments->start_directory_length = (u32)parent_length;
                         arguments->string_to_match = string_to_match;
                         arguments->string_to_match_length = search_buffer.size;
+                        arguments->running_id = last_running_id;
                         finding_callback(arguments);
+                    }
+                    else
+                    {
+                        running_callbacks[last_running_id] = false;
                     }
 
                     search_bar_hit = false;
@@ -826,6 +853,7 @@ int main(int argc, char** argv)
                 }
             }
         }
+
         V3 search_text_position = search_bar_position;
         search_text_position.x += 10.0f;
         search_text_position.y += scale * font.pixel_height + 10.0f;
@@ -854,9 +882,9 @@ int main(int argc, char** argv)
             {
                 search_hit = directory_item(
                     search_hit, i + index, search_result_position, scale,
-                    font.pixel_height + padding_top, quad_height, search_result_width,
-                    &file_array.data[i], &font, mouse_move, 2.0f, &hit_index,
-                    font_render);
+                    font.pixel_height + padding_top, quad_height,
+                    search_result_width, &file_array.data[i], &font, mouse_move,
+                    2.0f, &hit_index, font_render);
                 search_result_position.y += quad_height;
             }
             check_and_open_file(mouse_button, search_hit, file_array.data,
@@ -922,7 +950,7 @@ int main(int argc, char** argv)
         }
         last_time = now;
     }
-    running = false;
+    memset(running_callbacks, 0, sizeof(running_callbacks));
     for (u32 i = 0; i < rendering_properties.size; ++i)
     {
         RenderingProperties* rp = rendering_properties.data + i;

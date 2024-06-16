@@ -202,15 +202,19 @@ void platform_init(const char* title, u16 width, u16 height,
     ATOM res = RegisterClass(&window_class);
     if (res)
     {
-        platform_internal->window =
-            CreateWindowEx(0, window_class.lpszClassName, "FileTic",
-                           WS_OVERLAPPEDWINDOW | WS_VISIBLE, 10, 10, width,
-                           height, 0, 0, window_class.hInstance, 0);
+        platform_internal->window = CreateWindowEx(
+            0, window_class.lpszClassName, "FileTic",
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
+            CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, window_class.hInstance, 0);
 
         if (platform_internal->window)
         {
-            platform_internal->width = width;
-            platform_internal->height = height;
+            RECT window_rect = { 0 };
+            GetWindowRect(platform_internal->window, &window_rect);
+            platform_internal->width =
+                (u16)(window_rect.right - window_rect.left);
+            platform_internal->height =
+                (u16)(window_rect.bottom - window_rect.top);
             platform_internal->running = true;
         }
         else
@@ -554,9 +558,9 @@ FTicSemaphore platform_semaphore_create(i32 initial_count, i32 max_count)
     return CreateSemaphore(NULL, initial_count, max_count, NULL);
 }
 
-void platform_semaphore_increment(FTicSemaphore* sem)
+void platform_semaphore_increment(FTicSemaphore* sem, long* previous_count)
 {
-    ReleaseSemaphore(*sem, 1, 0);
+    ReleaseSemaphore(*sem, 1, previous_count);
 }
 
 void platform_semaphore_wait_and_decrement(FTicSemaphore* sem)
@@ -627,8 +631,8 @@ void platform_open_file(const Platform* platform, const char* file_path)
     WindowsPlatformInternal* platform_internal =
         (WindowsPlatformInternal*)platform;
 
-    HINSTANCE result = ShellExecute(platform_internal->window, "open", file_path,
-                                    NULL, NULL, SW_SHOWNORMAL);
+    HINSTANCE result = ShellExecute(platform_internal->window, "open",
+                                    file_path, NULL, NULL, SW_SHOWNORMAL);
 
     if ((int)result <= 32)
     {

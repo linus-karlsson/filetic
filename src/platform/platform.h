@@ -91,7 +91,7 @@ void platform_mutex_unlock(FTicMutex* mutex);
 void platform_mutex_destroy(FTicMutex* mutex);
 
 FTicSemaphore platform_semaphore_create(i32 initial_count, i32 max_count);
-void platform_semaphore_increment(FTicSemaphore* sem);
+void platform_semaphore_increment(FTicSemaphore* sem, long* previous_count);
 void platform_semaphore_wait_and_decrement(FTicSemaphore* sem);
 void platform_semaphore_destroy(FTicSemaphore* sem);
 

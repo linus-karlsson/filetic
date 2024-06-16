@@ -44,9 +44,21 @@ void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task,
     task_queue->tail++;
     task_queue->size++;
 
-    platform_semaphore_increment(&task_queue->mutex);
+    u64* count = hash_table_getUu64(&task_queue->id_to_count, &task.id);
+    if(count)
+    {
+        ++(*count);
+    }
+    else
+    {
+        u64* id = (u64*)calloc(1, sizeof(u64));
+        *id = task.id;
+        hash_table_insertUu64(&task_queue->id_to_count, id, 1);
+    }
 
-    platform_semaphore_increment(&task_queue->start_semaphore);
+    platform_semaphore_increment(&task_queue->mutex, NULL);
+
+    platform_semaphore_increment(&task_queue->start_semaphore, NULL);
 }
 
 void thread_tasks_push(ThreadTaskQueue* task_queue, ThreadTask* tasks,
@@ -74,16 +86,22 @@ void thread_tasks_push(ThreadTaskQueue* task_queue, ThreadTask* tasks,
 internal ThreadTaskInternal thread_task_pop(ThreadTaskQueue* task_queue)
 {
     platform_semaphore_wait_and_decrement(&task_queue->mutex);
+    ThreadTaskInternal task = { 0 };
 
     ftic_assert(task_queue->size > 0);
 
     task_queue->head %= task_queue->capacity;
-    ThreadTaskInternal task = task_queue->tasks[task_queue->head];
+    task = task_queue->tasks[task_queue->head];
 
     task_queue->head++;
     task_queue->size--;
+    u64* count = hash_table_getUu64(&task_queue->id_to_count, &task.task.id);
+    if (count)
+    {
+        --(*count);
+    }
 
-    platform_semaphore_increment(&task_queue->mutex);
+    platform_semaphore_increment(&task_queue->mutex, NULL);
     return task;
 }
 
@@ -106,14 +124,33 @@ thread_return_value thread_loop(void* data)
         }
 
         ThreadTaskInternal task = thread_task_pop(attrib->queue);
-        task.task.task_callback(task.task.data);
+        if (task.task.task_callback)
+        {
+            task.task.task_callback(task.task.data);
+        }
 
         if (task.semaphore)
         {
-            platform_semaphore_increment(task.semaphore);
+            platform_semaphore_increment(task.semaphore, NULL);
         }
     }
     return 0;
+}
+
+u64 thread_get_task_count(ThreadTaskQueue* task_queue, u64 id)
+{
+    platform_semaphore_wait_and_decrement(&task_queue->mutex);
+
+    u64* count = hash_table_getUu64(&task_queue->id_to_count, &id);
+
+    platform_semaphore_increment(&task_queue->mutex, NULL);
+
+    return count ? *count : 0;
+}
+
+internal u64 hash_function_u64(const void* key, u32 len, u64 seed)
+{
+    return *((u64*)key);
 }
 
 void thread_init(u32 capacity, u32 thread_count, ThreadQueue* queue)
@@ -136,6 +173,8 @@ void thread_init(u32 capacity, u32 thread_count, ThreadQueue* queue)
     queue->task_queue.capacity = capacity;
     queue->task_queue.tasks = (ThreadTaskInternal*)calloc(
         queue->task_queue.capacity, sizeof(ThreadTaskInternal));
+    queue->task_queue.id_to_count =
+        hash_table_createUu64(100, hash_function_u64);
 
     for (u32 i = 0; i < thread_count; i++)
     {
@@ -157,7 +196,7 @@ void threads_destroy(ThreadQueue* queue)
     }
     for (u32 i = 0; i < thread_count; i++)
     {
-        platform_semaphore_increment(&queue->task_queue.start_semaphore);
+        platform_semaphore_increment(&queue->task_queue.start_semaphore, NULL);
     }
     for (u32 i = 0; i < thread_count; i++)
     {
