@@ -411,7 +411,7 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
         x_advance =
             text_x_advance(font->chars, buffer, (u32)strlen(buffer), scale);
         V3 size_text_position = text_position;
-        size_text_position.x = starting_position.x + width - x_advance;
+        size_text_position.x = starting_position.x + width - x_advance - 5.0f;
         render->index_count += text_generation(
             font->chars, buffer, 1.0f, size_text_position, scale,
             font->pixel_height, NULL, NULL, &render->vertices);
@@ -781,23 +781,22 @@ int main(int argc, char** argv)
 
         rendering_properties_clear(font_render);
 
-        V3 starting_position = v3f(10.0f, 10.0f, 0.0f);
-        AABB rect = quad_with_border(
-            &font_render->vertices, &font_render->index_count, border_color,
-            starting_position, v2f(100.0f, dimensions.height - 50.0f), 2.0f,
-            0.0f);
+        V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
+        AABB rect = quad(&font_render->vertices, starting_position,
+                         v2f(2.0f, dimensions.y), border_color, 0.0f);
+        ++font_render->index_count;
 
         V3 search_bar_position = v3f(dimensions.x * 0.6f, 20.0f, 0.0f);
 
         V3 text_starting_position =
             v3f(rect.min.x, 30.0f + current_directory->scroll_offset, 0.0f);
-        text_starting_position.x += rect.size.width + 20.0f;
+        text_starting_position.x += 20.0f;
 
         const f32 scale = 1.0f;
         const f32 padding_top = 2.0f;
         const f32 quad_height = scale * font.pixel_height + padding_top * 5.0f;
         const f32 width =
-            (search_bar_position.x - 10.0f) - text_starting_position.x;
+            (search_bar_position.x - 20.0f) - text_starting_position.x;
 
         AABB directory_aabb = {
             .min = v2f(text_starting_position.x, 0.0f),
@@ -810,6 +809,11 @@ int main(int argc, char** argv)
             quad_height, width, mouse_move, mouse_button,
             &text_starting_position, font_render, &directory_history,
             &current_directory);
+
+        quad(&font_render->vertices,
+             v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
+             v2f(2.0f, dimensions.y), border_color, 0.0f);
+        ++font_render->index_count;
 
         // Search bar
         const f32 search_bar_width = 250.0f;
