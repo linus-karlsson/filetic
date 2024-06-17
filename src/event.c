@@ -1,5 +1,7 @@
 #include "event.h"
 #include <string.h>
+#include <stdio.h>
+#include "logging.h"
 
 typedef struct EventArray
 {

@@ -660,14 +660,14 @@ void platform_open_file(const char* file_path)
     }
 }
 
-void platform_copy_to_clipboard(const char** file_paths, const u32 file_count)
+void platform_copy_to_clipboard(const CharPtrArray* paths)
 {
-    u32* file_paths_length = (u32*)calloc(file_count, sizeof(u32));
+    u32* file_paths_length = (u32*)calloc(paths->size, sizeof(u32));
     // NOTE(Linus): +1 for the double null terminator
     size_t total_size = sizeof(DROPFILES) + 1;
-    for (u32 i = 0; i < file_count; ++i)
+    for (u32 i = 0; i < paths->size; ++i)
     {
-        const u32 length = (u32)strlen(file_paths[i]);
+        const u32 length = (u32)strlen(paths->data[i]);
         file_paths_length[i] = length;
         total_size += (length + 1);
     }
@@ -686,11 +686,11 @@ void platform_copy_to_clipboard(const char** file_paths, const u32 file_count)
 
     char* ptr = (char*)drop_files + sizeof(DROPFILES);
     u32 j = 0;
-    for (u32 i = 0; i < file_count; ++i)
+    for (u32 i = 0; i < paths->size; ++i)
     {
         const size_t size_left = total_size - sizeof(DROPFILES) - j;
         ftic_assert(size_left >= (file_paths_length[i] + 1));
-        strcpy_s(ptr + j, size_left, file_paths[i]);
+        strcpy_s(ptr + j, size_left, paths->data[i]);
         j += (file_paths_length[i] + 1);
     }
     ptr[j] = '\0'; // Double null terminator
@@ -794,11 +794,27 @@ void platform_paste_to_directory(const CharPtrArray* paths,
             .wFunc = FO_COPY,
             .pFrom = source_path,
             .pTo = destination_path,
-            .fFlags = FOF_NOCONFIRMMKDIR,
+            .fFlags = FOF_NOCONFIRMMKDIR, // TODO(Linus): FOF_ALLOWUNDO
         };
 
         int result = SHFileOperation(&file_op);
 
         free(destination_path);
+    }
+}
+
+void platform_delete_files(const CharPtrArray* paths)
+{
+    for (u32 i = 0; i < paths->size; ++i)
+    {
+        const char* path = paths->data[i];
+
+        SHFILEOPSTRUCT file_op = {
+            .wFunc = FO_DELETE,
+            .pFrom = path,
+            .fFlags = FOF_ALLOWUNDO,
+        };
+
+        int result = SHFileOperation(&file_op);
     }
 }

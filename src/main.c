@@ -35,6 +35,7 @@ typedef struct B8PtrArray
     b8** data;
 } B8PtrArray;
 
+// TODO(Linus): find a better way to do this
 typedef struct SelectedItemValues
 {
     CharPtrArray paths;
@@ -613,6 +614,7 @@ void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
             new_page.directory = platform_get_directory(path, length);
             array_push(directory_history, new_page);
             path[length - 2] = '\0';
+            path[length - 1] = '\0';
 
             *current_directory = array_back(directory_history);
         }
@@ -697,6 +699,16 @@ internal u64 u64_hash_function(const void* data, u32 len, u64 seed)
     return *(u64*)data;
 }
 
+void reset_selected_items(SelectedItemValues* selected_item_values)
+{
+    for (u32 i = 0; i < selected_item_values->selected_pointers.size; ++i)
+    {
+        *selected_item_values->selected_pointers.data[i] = false;
+    }
+    selected_item_values->selected_pointers.size = 0;
+    selected_item_values->paths.size = 0;
+}
+
 void reload_directory(DirectoryPage* directory_page)
 {
     char* path = directory_page->directory.parent;
@@ -705,6 +717,7 @@ void reload_directory(DirectoryPage* directory_page)
     path[length++] = '*';
     Directory reloaded_directory = platform_get_directory(path, length);
     path[length - 2] = '\0';
+    path[length - 1] = '\0';
     platform_reset_directory(&directory_page->directory);
     directory_page->directory = reloaded_directory;
 }
@@ -877,6 +890,8 @@ int main(int argc, char** argv)
                     &array_back(&directory_history)->directory);
                 directory_history.size -= 1;
                 current_directory = array_back(&directory_history);
+                reset_selected_items(&selected_item_values);
+                reload_directory(current_directory);
             }
         }
 
@@ -893,17 +908,7 @@ int main(int argc, char** argv)
             else if (key_event->activated && key_event->key_event.action == 1 &&
                      key_event->key_event.key == FTIC_KEY_C)
             {
-
-                platform_copy_to_clipboard(selected_item_values.paths.data,
-                                           selected_item_values.paths.size);
-
-                for (u32 i = 0; i < selected_item_values.selected_pointers.size;
-                     ++i)
-                {
-                    *selected_item_values.selected_pointers.data[i] = false;
-                }
-                selected_item_values.selected_pointers.size = 0;
-                selected_item_values.paths.size = 0;
+                platform_copy_to_clipboard(&selected_item_values.paths);
             }
             else if (key_event->activated && key_event->key_event.action == 1 &&
                      key_event->key_event.key == FTIC_KEY_P)
@@ -916,18 +921,19 @@ int main(int argc, char** argv)
                     free(pasted_paths.data[i]);
                 }
                 pasted_paths.size = 0;
+                reset_selected_items(&selected_item_values);
+                reload_directory(current_directory);
+            }
+            else if (key_event->activated && key_event->key_event.action == 1 &&
+                     key_event->key_event.key == FTIC_KEY_ESCAPE)
+            {
+                platform_delete_files(&selected_item_values.paths);
                 reload_directory(current_directory);
             }
             else if (mouse_button->activated && event->action == 0 &&
                      event->key == FTIC_LEFT_BUTTON)
             {
-                for (u32 i = 0; i < selected_item_values.selected_pointers.size;
-                     ++i)
-                {
-                    *selected_item_values.selected_pointers.data[i] = false;
-                }
-                selected_item_values.selected_pointers.size = 0;
-                selected_item_values.paths.size = 0;
+                reset_selected_items(&selected_item_values);
             }
         }
 

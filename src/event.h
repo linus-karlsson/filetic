@@ -17,6 +17,7 @@
 #define FTIC_KEY_SPACE 32
 #define FTIC_KEY_APOSTROPHE 191
 
+#define FTIC_KEY_ESCAPE 46
 #define FTIC_KEY_SLASH 47
 #define FTIC_KEY_0 48
 #define FTIC_KEY_1 49
