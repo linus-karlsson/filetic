@@ -263,16 +263,10 @@ void clear_search_result(SafeFileArray* files)
     platform_mutex_unlock(&files->mutex);
 }
 
-void buffer_set_sub_data(u32 vertex_buffer, u32 target, intptr_t offset,
-                         signed long long int size, const void* data)
-{
-    vertex_buffer_bind(vertex_buffer);
-    glBufferSubData(target, offset, size, data);
-}
-
 typedef struct RenderingProperties
 {
     u32 vertex_buffer_id;
+    u32 vertex_buffer_capacity;
     u32 vertex_array_id;
     u32 index_buffer_id;
     u32 index_count;
@@ -303,6 +297,8 @@ RenderingProperties rendering_properties_init(
     rendering_properties.vertex_buffer_id =
         vertex_buffer_create(NULL, rendering_properties.vertices.capacity,
                              sizeof(Vertex), GL_STREAM_DRAW);
+    rendering_properties.vertex_buffer_capacity =
+        rendering_properties.vertices.capacity;
     vertex_array_add_buffer(rendering_properties.vertex_array_id,
                             rendering_properties.vertex_buffer_id,
                             vertex_buffer_layout);
@@ -562,11 +558,17 @@ void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
     }
 }
 
+b8 item_in_view(const f32 position_y, const f32 height, const f32 window_height)
+{
+    const f32 value = position_y + height;
+    return closed_interval(-height, value, window_height + height);
+}
+
 b8 directory_item_list(const DirectoryItemArray* sub_directories,
                        const DirectoryItemArray* files, const f32 scale,
                        const FontTTF* font, const f32 padding_top,
                        const f32 item_height, const f32 item_width,
-                       const Event* mouse_move_event,
+                       const f32 dimension_y, const Event* mouse_move_event,
                        const Event* mouse_button_event, V3* starting_position,
                        RenderingProperties* font_render,
                        DirectoryArray* directory_history,
@@ -576,11 +578,14 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
     i32 hit_index = -1;
     for (i32 i = 0; i < (i32)sub_directories->size; ++i)
     {
-        folder_hit =
-            directory_item(folder_hit, i, *starting_position, scale,
-                           font->pixel_height + padding_top, item_height,
-                           item_width, &sub_directories->data[i], font,
-                           mouse_move_event, 3.0f, &hit_index, font_render);
+        if (item_in_view(starting_position->y, item_height, dimension_y))
+        {
+            folder_hit =
+                directory_item(folder_hit, i, *starting_position, scale,
+                               font->pixel_height + padding_top, item_height,
+                               item_width, &sub_directories->data[i], font,
+                               mouse_move_event, 3.0f, &hit_index, font_render);
+        }
         starting_position->y += item_height;
     }
     check_and_open_folder(mouse_button_event, folder_hit, hit_index,
@@ -590,11 +595,14 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
     hit_index = -1;
     for (i32 i = 0; i < (i32)files->size; ++i)
     {
-        file_hit =
-            directory_item(file_hit, i, *starting_position, scale,
-                           font->pixel_height + padding_top, item_height,
-                           item_width, &files->data[i], font, mouse_move_event,
-                           2.0f, &hit_index, font_render);
+        if (item_in_view(starting_position->y, item_height, dimension_y))
+        {
+            file_hit =
+                directory_item(file_hit, i, *starting_position, scale,
+                               font->pixel_height + padding_top, item_height,
+                               item_width, &files->data[i], font,
+                               mouse_move_event, 2.0f, &hit_index, font_render);
+        }
         starting_position->y += item_height;
     }
     check_and_open_file(mouse_button_event, file_hit, files->data, hit_index);
@@ -705,7 +713,7 @@ int main(int argc, char** argv)
     array_push(&rendering_properties,
                rendering_properties_init(
                    font_shader, textures, static_array_size(textures),
-                   index_buffer_id, &vertex_buffer_layout, 100000 * 4));
+                   index_buffer_id, &vertex_buffer_layout, 100 * 4));
 
     RenderingProperties* font_render = rendering_properties.data;
 
@@ -806,7 +814,7 @@ int main(int argc, char** argv)
         b8 hit = directory_item_list(
             &current_directory->directory.sub_directories,
             &current_directory->directory.files, scale, &font, padding_top,
-            quad_height, width, mouse_move, mouse_button,
+            quad_height, width, dimensions.y, mouse_move, mouse_button,
             &text_starting_position, font_render, &directory_history,
             &current_directory);
 
@@ -934,8 +942,8 @@ int main(int argc, char** argv)
 
             search_hit = directory_item_list(
                 &folder_array.array, &file_array.array, scale, &font,
-                padding_top, quad_height, search_result_width, mouse_move,
-                mouse_button, &search_result_position, font_render,
+                padding_top, quad_height, search_result_width, dimensions.y,
+                mouse_move, mouse_button, &search_result_position, font_render,
                 &directory_history, &current_directory);
 
             search_result_aabb.size =
@@ -954,6 +962,16 @@ int main(int argc, char** argv)
         {
             platform_change_cursor(platform, FTIC_NORMAL_CURSOR);
             hit_index = -1;
+        }
+
+        if (font_render->vertices.size > font_render->vertex_buffer_capacity)
+        {
+            vertex_buffer_orphan(font_render->vertex_buffer_id,
+                                 font_render->vertices.capacity *
+                                     sizeof(Vertex),
+                                 GL_STREAM_DRAW, NULL);
+            font_render->vertex_buffer_capacity =
+                font_render->vertices.capacity;
         }
 
         buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,

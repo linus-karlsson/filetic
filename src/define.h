@@ -6,7 +6,7 @@
     do                                                                         \
     {                                                                          \
         (array)->size = 0;                                                     \
-        (array)->capacity = (array_capacity);                                  \
+        (array)->capacity = ((array_capacity) == 1 ? 2 : (array_capacity));        \
         (array)->data = calloc(array_capacity, sizeof((*(array)->data)));      \
     } while (0)
 
@@ -15,7 +15,7 @@
     {                                                                          \
         if ((array)->size >= (array)->capacity)                                \
         {                                                                      \
-            (array)->capacity *= 2;                                            \
+            (array)->capacity = (u32)(1.5f * (array)->capacity);               \
             (array)->data = realloc(                                           \
                 (array)->data, (array)->capacity * sizeof((*(array)->data)));  \
         }                                                                      \
