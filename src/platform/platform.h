@@ -55,6 +55,13 @@ typedef struct Directory
     DirectoryItemArray sub_directories;
 } Directory;
 
+typedef struct CharPtrArray
+{
+    u32 size;
+    u32 capacity;
+    char** data;
+} CharPtrArray;
+
 void platform_init(const char* title, u16 width, u16 height, Platform** platform);
 void platform_shut_down(Platform* platform);
 b8 platform_is_running(Platform* platform);
@@ -114,3 +121,5 @@ void platform_sleep(u64 milliseconds);
 
 void platform_open_file(const char* file_path);
 void platform_copy_to_clipboard(const char** file_paths, const u32 file_count);
+void platform_paste_from_clipboard(CharPtrArray* paths);
+

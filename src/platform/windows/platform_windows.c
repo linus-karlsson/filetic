@@ -710,3 +710,58 @@ void platform_copy_to_clipboard(const char** file_paths, const u32 file_count)
         GlobalFree(hglobal);
     }
 }
+
+void platform_paste_from_clipboard(CharPtrArray* paths)
+{
+    if (OpenClipboard(NULL))
+    {
+        HGLOBAL hGlobal = GetClipboardData(CF_HDROP);
+        if (hGlobal)
+        {
+            DROPFILES* df = (DROPFILES*)GlobalLock(hGlobal);
+            if (df)
+            {
+                if (df->fWide)
+                {
+                    // TODO(Linus): handle Unicode
+                    char* ptr = (char*)df + df->pFiles;
+                    u32 current = 0;
+
+                    while (ptr[current])
+                    {
+                        const u32 start_index = current;
+                        u32 size = 0;
+                        while (ptr[current] || ptr[current + 1])
+                        {
+                            size++;
+                            current += 2;
+                        }
+                        current += 2;
+
+                        char* buffer = (char*)calloc(size + 1, sizeof(char));
+                        for (u32 i = 0, j = start_index; i < size; ++i, j += 2)
+                        {
+                            buffer[i] = ptr[j];
+                        }
+                        array_push(paths, buffer);
+                    }
+                }
+                else
+                {
+                    char* ptr = (char*)df + df->pFiles;
+                    while (*ptr)
+                    {
+                        const size_t length = strlen(ptr);
+                        char* buffer = (char*)calloc(length + 1, sizeof(char));
+                        memcpy(buffer, ptr, length);
+                        array_push(paths, buffer);
+                        ptr += length + 1;
+                    }
+                }
+                GlobalUnlock(hGlobal);
+            }
+        }
+        CloseClipboard();
+    }
+}
+

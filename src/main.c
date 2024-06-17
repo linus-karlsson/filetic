@@ -28,13 +28,6 @@ typedef struct SafeFileArray
     FTicMutex mutex;
 } SafeFileArray;
 
-typedef struct CharPtrArray
-{
-    u32 size;
-    u32 capacity;
-    const char** data;
-} CharPtrArray;
-
 typedef struct B8PtrArray
 {
     u32 size;
@@ -826,6 +819,9 @@ int main(int argc, char** argv)
     b8 search_bar_hit = false;
     f64 search_blinking_time = 0.4f;
 
+    CharPtrArray pasted_paths = {0};
+    array_create(&pasted_paths, 10);
+
     f32 offset = 0.0f;
     f32 scroll_offset = 0.0f;
 
@@ -859,7 +855,7 @@ int main(int argc, char** argv)
                      clear_color.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (mouse_button->activated &&
+        if (mouse_button->activated && mouse_button->mouse_button_event.action == 1 &&
             mouse_button->mouse_button_event.key == FTIC_RIGHT_BUTTON)
         {
             if (directory_history.size > 1)
@@ -895,6 +891,11 @@ int main(int argc, char** argv)
                 }
                 selected_item_values.selected_pointers.size = 0;
                 selected_item_values.paths.size = 0;
+            }
+            else if (key_event->activated && key_event->key_event.action == 1 &&
+                     key_event->key_event.key == FTIC_KEY_P)
+            {
+                platform_paste_from_clipboard(&pasted_paths);
             }
             else if (mouse_button->activated && event->action == 0 &&
                      event->key == FTIC_LEFT_BUTTON)
