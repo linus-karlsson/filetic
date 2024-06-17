@@ -91,6 +91,8 @@ typedef enum EventType
 typedef struct KeyEvent
 {
     u16 key;
+    b8 ctrl_pressed;
+    b8 alt_pressed;
     u8 action;
 } KeyEvent;
 

@@ -19,7 +19,7 @@ typedef struct EventContextInternal
 
 EventContextInternal event_context = { 0 };
 
-internal void on_key_event(u16 key, u8 action)
+internal void on_key_event(u16 key, b8 ctrl_pressed, b8 alt_pressed, u8 action)
 {
     for (u32 i = 0; i < event_context.events.size; ++i)
     {
@@ -27,20 +27,22 @@ internal void on_key_event(u16 key, u8 action)
         if (event->type == KEY)
         {
             event->key_event.key = key;
+            event->key_event.ctrl_pressed = ctrl_pressed;
+            event->key_event.alt_pressed = alt_pressed;
             event->key_event.action = action;
             event->activated = true;
         }
     }
 }
 
-internal void on_key_pressed_event(u16 key)
+internal void on_key_pressed_event(u16 key, b8 ctrl_pressed, b8 alt_pressed)
 {
-    on_key_event(key, 1);
+    on_key_event(key, ctrl_pressed, alt_pressed, 1);
 }
 
-internal void on_key_released_event(u16 key)
+internal void on_key_released_event(u16 key, b8 ctrl_pressed, b8 alt_pressed)
 {
-    on_key_event(key, 0);
+    on_key_event(key, ctrl_pressed, alt_pressed, 0);
 }
 
 internal void on_mouse_move_event(i16 x, i16 y)
@@ -82,7 +84,7 @@ internal void on_mouse_button_released_event(u8 key)
             event->mouse_button_event.key = key;
             event->mouse_button_event.action = 0;
             // TODO: Look into this
-            //event->mouse_button_event.double_clicked = false;
+            // event->mouse_button_event.double_clicked = false;
             event->activated = true;
         }
     }
@@ -117,7 +119,7 @@ void event_init(Platform* platform)
     platform_event_set_on_button_pressed(platform,
                                          on_mouse_button_pressed_event);
     platform_event_set_on_button_released(platform,
-                                         on_mouse_button_released_event);
+                                          on_mouse_button_released_event);
     platform_event_set_on_mouse_wheel(platform, on_mouse_wheel_event);
     platform_event_set_on_key_stroke(platform, on_key_stroke_event);
 }
@@ -135,8 +137,7 @@ void event_poll(Platform* platform)
     }
     if (event_context.key_buffer.size)
     {
-        memset(event_context.key_buffer.data, 0,
-               event_context.key_buffer.size);
+        memset(event_context.key_buffer.data, 0, event_context.key_buffer.size);
         event_context.key_buffer.size = 0;
     }
     platform_event_fire(platform);

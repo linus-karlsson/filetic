@@ -454,7 +454,8 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
         }
         const MouseButtonEvent* event = &mouse_button_event->mouse_button_event;
         if (!check_if_selected && mouse_button_event->activated &&
-            event->action == 0 && event->key == FTIC_LEFT_BUTTON)
+            event->action == 0 &&
+            (event->key == FTIC_LEFT_BUTTON || event->key == FTIC_RIGHT_BUTTON))
         {
             if (!check_if_selected)
             {
@@ -467,7 +468,6 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
                 array_push(&selected_item_values->paths, item->path);
                 selected = true;
             }
-            item->selected = true;
         }
     }
     const V4 color = (this_hit || selected) ? v4ic(0.3f) : v4ic(0.1f);
@@ -734,6 +734,12 @@ void reload_directory(DirectoryPage* directory_page)
     directory_page->directory = reloaded_directory;
 }
 
+b8 is_ctrl_and_key_pressed(const Event* event, u32 key)
+{
+    return event->activated && event->key_event.action == 1 &&
+           event->key_event.ctrl_pressed && event->key_event.key == key;
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -917,19 +923,28 @@ int main(int argc, char** argv)
         {
             const MouseButtonEvent* event = &mouse_button->mouse_button_event;
 
-            if (key_event->key_event.action == 1 &&
-                key_event->key_event.key == FTIC_KEY_CTRL)
-            {
-            }
-            else if (key_event->activated && key_event->key_event.action == 1 &&
-                     key_event->key_event.key == FTIC_KEY_C)
+            if (is_ctrl_and_key_pressed(key_event, FTIC_KEY_C))
             {
                 platform_copy_to_clipboard(&selected_item_values.paths);
             }
             else if (key_event->activated && key_event->key_event.action == 1 &&
-                     key_event->key_event.key == FTIC_KEY_P)
+                     key_event->key_event.key == FTIC_KEY_ESCAPE)
             {
-                platform_paste_from_clipboard(&pasted_paths);
+                platform_delete_files(&selected_item_values.paths);
+                reload_directory(current_directory);
+            }
+            else if (!key_event->key_event.ctrl_pressed &&
+                     mouse_button->activated && event->action == 0 &&
+                     event->key == FTIC_LEFT_BUTTON)
+            {
+                reset_selected_items(&selected_item_values);
+            }
+        }
+        if (is_ctrl_and_key_pressed(key_event, FTIC_KEY_V))
+        {
+            platform_paste_from_clipboard(&pasted_paths);
+            if (pasted_paths.size)
+            {
                 platform_paste_to_directory(
                     &pasted_paths, current_directory->directory.parent);
                 for (u32 i = 0; i < pasted_paths.size; ++i)
@@ -940,17 +955,6 @@ int main(int argc, char** argv)
                 reset_selected_items(&selected_item_values);
                 reload_directory(current_directory);
             }
-            else if (key_event->activated && key_event->key_event.action == 1 &&
-                     key_event->key_event.key == FTIC_KEY_ESCAPE)
-            {
-                platform_delete_files(&selected_item_values.paths);
-                reload_directory(current_directory);
-            }
-            else if (mouse_button->activated && event->action == 0 &&
-                     event->key == FTIC_LEFT_BUTTON)
-            {
-                reset_selected_items(&selected_item_values);
-            }
         }
 
         V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
@@ -960,8 +964,7 @@ int main(int argc, char** argv)
 
         V3 search_bar_position = v3f(dimensions.x * 0.6f, 20.0f, 0.0f);
 
-        V3 parent_directory_path_position =
-            v3f(rect.min.x + 2.0f, 30.0f, 0.0f);
+        V3 parent_directory_path_position = v3f(rect.min.x + 2.0f, 30.0f, 0.0f);
         V3 text_starting_position = parent_directory_path_position;
         text_starting_position.x += 10.0f;
         text_starting_position.y +=

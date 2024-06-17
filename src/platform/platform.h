@@ -13,8 +13,8 @@
 
 
 typedef void Platform;
-typedef void (*OnKeyPressedCallback)(u16 key);
-typedef void (*OnKeyReleasedCallback)(u16 key);
+typedef void (*OnKeyPressedCallback)(u16 key, b8 ctrl_pressed, b8 alt_pressed);
+typedef void (*OnKeyReleasedCallback)(u16 key, b8 ctrl_pressed, b8 alt_pressed);
 typedef void (*OnButtonPressedCallback)(u8 key, b8 double_clicked);
 typedef void (*OnButtonReleasedCallback)(u8 key);
 typedef void (*OnMouseMovedCallback)(i16 x, i16 y);
@@ -34,11 +34,9 @@ typedef struct ClientRect
 
 typedef struct DirectoryItem
 {
-    //u64 id;
     u64 size;
     char* name;
     char* path;
-    b8 selected; // Padding 7 bytes
 } DirectoryItem;
 
 typedef struct DirectoryItemArray
