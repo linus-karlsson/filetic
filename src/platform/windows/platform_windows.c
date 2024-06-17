@@ -101,12 +101,18 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
             break;
         }
         case WM_LBUTTONUP:
+        {
+            if (platform && platform->callbacks.on_button_released)
+            {
+                platform->callbacks.on_button_released(1);
+            }
+            break;
+        }
         case WM_RBUTTONUP:
         {
             if (platform && platform->callbacks.on_button_released)
             {
-                u8 button = (u8)w_param;
-                platform->callbacks.on_button_released(button);
+                platform->callbacks.on_button_released(2);
             }
             break;
         }
@@ -468,6 +474,8 @@ internal char* copy_string(const char* string, const u32 string_length)
     return result;
 }
 
+global volatile LONG64 id = 0;
+
 Directory platform_get_directory(const char* directory_path,
                                  const u32 directory_len)
 {
@@ -491,7 +499,9 @@ Directory platform_get_directory(const char* directory_path,
                     free(path);
                     continue;
                 }
+                // TODO: Wasting 8 bytes
                 DirectoryItem directory_item = {
+                    //.id = (u64)InterlockedAdd64(&id, 1),
                     .path = path,
                     .name = path + directory_len - 1,
                 };
@@ -500,6 +510,7 @@ Directory platform_get_directory(const char* directory_path,
             else
             {
                 DirectoryItem directory_item = {
+                    //.id = (u64)InterlockedAdd64(&id, 1),
                     .size =
                         (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
                     .path = path,

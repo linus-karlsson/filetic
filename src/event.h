@@ -102,6 +102,7 @@ typedef struct MouseMoveEvent
 typedef struct MouseButtonEvent
 {
     u8 key;
+    u8 action;
     b8 double_clicked;
 } MouseButtonEvent;
 

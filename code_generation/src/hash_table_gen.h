@@ -38,7 +38,7 @@ void hash_table_insert(HashTable<Key, Value>* table, Key key, Value value)
 {
     u32 capacity_mask = table->capacity - 1;
     u64 hashed_index =
-        table->hash_function(key, (u32)Len(key), HASH_SEED) & capacity_mask;
+        table->hash_function(&key, (u32)Len(key), HASH_SEED) & capacity_mask;
 
     Cell<Key, Value>* cell = table->cells + hashed_index;
     if (cell->active)
@@ -92,7 +92,7 @@ Value* hash_table_get(HashTable<Key, Value>* table, const Key key)
 {
     u32 capacity_mask = table->capacity - 1;
     u64 hashed_index =
-        table->hash_function(key, (u32)Len(key), HASH_SEED) & capacity_mask;
+        table->hash_function(&key, (u32)Len(key), HASH_SEED) & capacity_mask;
 
     Cell<Key, Value>* cell = table->cells + hashed_index;
     if (cell->active)
@@ -123,7 +123,7 @@ Cell<Key, Value>* hash_table_remove(HashTable<Key, Value>* table, const Key key)
 {
     u32 capacity_mask = table->capacity - 1;
     u64 hashed_index =
-        table->hash_function(key, (u32)Len(key), HASH_SEED) & capacity_mask;
+        table->hash_function(&key, (u32)Len(key), HASH_SEED) & capacity_mask;
 
     Cell<Key, Value>* cell = table->cells + hashed_index;
     if (cell->active)

@@ -34,9 +34,11 @@ typedef struct ClientRect
 
 typedef struct DirectoryItem
 {
+    //u64 id;
     u64 size;
     char* name;
     char* path;
+    b8 selected; // Padding 7 bytes
 } DirectoryItem;
 
 typedef struct DirectoryItemArray

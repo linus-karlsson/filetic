@@ -27,6 +27,19 @@ typedef struct SafeFileArray
     FTicMutex mutex;
 } SafeFileArray;
 
+typedef struct SelectedItem
+{
+    char* path;
+    b8* seleted_pointer;
+} SelectedItem;
+
+typedef struct SelectedItemArray
+{
+    u32 size;
+    u32 capacity;
+    SelectedItem* data;
+} SelectedItemArray;
+
 typedef struct FindingCallbackAttribute
 {
     ThreadTaskQueue* thread_queue;
@@ -259,6 +272,8 @@ void clear_search_result(SafeFileArray* files)
     {
         free(files->array.data[j].path);
     }
+    memset(files->array.data, 0,
+           files->array.size * sizeof(files->array.data[0]));
     files->array.size = 0;
     platform_mutex_unlock(&files->mutex);
 }
@@ -396,22 +411,42 @@ void format_file_size(u64 size_in_bytes, char* output, size_t output_size)
 
 b8 directory_item(b8 hit, i32 index, const V3 starting_position,
                   const f32 scale, const f32 padding_top, const f32 height,
-                  const f32 width, const DirectoryItem* item,
-                  const FontTTF* font, const Event* mouse_move, f32 icon_index,
+                  const f32 width, const FontTTF* font,
+                  const Event* mouse_button_event,
+                  const Event* mouse_move_event, f32 icon_index,
+                  DirectoryItem* item, SelectedItemArray* selected_item_array,
                   i32* hit_index, RenderingProperties* render)
 {
     AABB aabb = { .min = v2_v3(starting_position), .size = v2f(width, height) };
 
     b8 this_hit = false;
-    V2 mouse_position = v2f(mouse_move->mouse_move_event.position_x,
-                            mouse_move->mouse_move_event.position_y);
-    if (!hit && collision_point_in_aabb(mouse_position, &aabb))
+    V2 mouse_position = v2f(mouse_move_event->mouse_move_event.position_x,
+                            mouse_move_event->mouse_move_event.position_y);
+    if (collision_point_in_aabb(mouse_position, &aabb))
     {
-        *hit_index = index;
-        this_hit = true;
-        hit = true;
+        if (!hit)
+        {
+            *hit_index = index;
+            this_hit = true;
+            hit = true;
+        }
+        const MouseButtonEvent* event = &mouse_button_event->mouse_button_event;
+        if (mouse_button_event->activated && event->action == 0)
+        {
+            int i = 0;
+        }
+        if (!item->selected && mouse_button_event->activated &&
+            event->action == 0 && event->key == FTIC_LEFT_BUTTON)
+        {
+            item->selected = true;
+            SelectedItem selected_item = {
+                .path = item->path,
+                &item->selected,
+            };
+            array_push(selected_item_array, selected_item);
+        }
     }
-    const V4 color = this_hit ? v4ic(0.3f) : v4ic(0.1f);
+    const V4 color = (this_hit || item->selected) ? v4ic(0.3f) : v4ic(0.1f);
     quad(&render->vertices, starting_position, aabb.size, color, 0.0f);
     render->index_count += 1;
 
@@ -597,6 +632,7 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
                        const f32 item_height, const f32 item_width,
                        const f32 dimension_y, const Event* mouse_move_event,
                        const Event* mouse_button_event, V3* starting_position,
+                       SelectedItemArray* selected_item_array,
                        RenderingProperties* font_render,
                        DirectoryArray* directory_history,
                        DirectoryPage** current_directory)
@@ -607,11 +643,12 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
     {
         if (item_in_view(starting_position->y, item_height, dimension_y))
         {
-            folder_hit =
-                directory_item(folder_hit, i, *starting_position, scale,
-                               font->pixel_height + padding_top, item_height,
-                               item_width, &sub_directories->data[i], font,
-                               mouse_move_event, 3.0f, &hit_index, font_render);
+            folder_hit = directory_item(
+                folder_hit, i, *starting_position, scale,
+                font->pixel_height + padding_top, item_height, item_width, font,
+                mouse_button_event, mouse_move_event, 3.0f,
+                &sub_directories->data[i], selected_item_array, &hit_index,
+                font_render);
         }
         starting_position->y += item_height;
     }
@@ -624,11 +661,11 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
     {
         if (item_in_view(starting_position->y, item_height, dimension_y))
         {
-            file_hit =
-                directory_item(file_hit, i, *starting_position, scale,
-                               font->pixel_height + padding_top, item_height,
-                               item_width, &files->data[i], font,
-                               mouse_move_event, 2.0f, &hit_index, font_render);
+            file_hit = directory_item(
+                file_hit, i, *starting_position, scale,
+                font->pixel_height + padding_top, item_height, item_width, font,
+                mouse_button_event, mouse_move_event, 2.0f, &files->data[i],
+                selected_item_array, &hit_index, font_render);
         }
         starting_position->y += item_height;
     }
@@ -654,6 +691,11 @@ f32 smooth_scroll(const f64 delta_time, const f32 offset, f32 scroll_offset)
 {
     scroll_offset += (f32)((offset - scroll_offset) * (delta_time * 15.0f));
     return scroll_offset;
+}
+
+internal u64 u64_hash_function(const void* data, u32 len, u64 seed)
+{
+    return *(u64*)data;
 }
 
 int main(int argc, char** argv)
@@ -766,6 +808,12 @@ int main(int argc, char** argv)
     Event* mouse_button = event_subscribe(MOUSE_BUTTON);
     Event* mouse_wheel = event_subscribe(MOUSE_WHEEL);
 
+    // HashTableU64Char items_selected = hash_table_create_u64_char(100,
+    // u64_hash_function);
+
+    SelectedItemArray selected_item_array = { 0 };
+    array_create(&selected_item_array, 10);
+
     CharArray search_buffer = { 0 };
     array_create(&search_buffer, 30);
     b8 search_bar_hit = false;
@@ -817,6 +865,25 @@ int main(int argc, char** argv)
 
         rendering_properties_clear(font_render);
 
+        if (selected_item_array.size)
+        {
+            const MouseButtonEvent* event = &mouse_button->mouse_button_event;
+
+            if (key_event->key_event.action == 1 &&
+                key_event->key_event.key == FTIC_KEY_CTRL)
+            {
+            }
+            else if (mouse_button->activated && event->action == 0 &&
+                event->key == FTIC_LEFT_BUTTON)
+            {
+                for (u32 i = 0; i < selected_item_array.size; ++i)
+                {
+                    *selected_item_array.data[i].seleted_pointer = false;
+                }
+                selected_item_array.size = 0;
+            }
+        }
+
         V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
         AABB rect = quad(&font_render->vertices, starting_position,
                          v2f(2.0f, dimensions.y), border_color, 0.0f);
@@ -843,8 +910,8 @@ int main(int argc, char** argv)
             &current_directory->directory.sub_directories,
             &current_directory->directory.files, scale, &font, padding_top,
             quad_height, width, dimensions.y, mouse_move, mouse_button,
-            &text_starting_position, font_render, &directory_history,
-            &current_directory);
+            &text_starting_position, &selected_item_array, font_render,
+            &directory_history, &current_directory);
 
         quad(&font_render->vertices,
              v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
@@ -971,8 +1038,9 @@ int main(int argc, char** argv)
             search_hit = directory_item_list(
                 &folder_array.array, &file_array.array, scale, &font,
                 padding_top, quad_height, search_result_width, dimensions.y,
-                mouse_move, mouse_button, &search_result_position, font_render,
-                &directory_history, &current_directory);
+                mouse_move, mouse_button, &search_result_position,
+                &selected_item_array, font_render, &directory_history,
+                &current_directory);
 
             search_result_aabb.size =
                 v2f(dimensions.x - search_result_position.x,

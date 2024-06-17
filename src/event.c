@@ -63,7 +63,24 @@ internal void on_mouse_button_pressed_event(u8 key, b8 double_clicked)
         if (event->type == MOUSE_BUTTON)
         {
             event->mouse_button_event.key = key;
+            event->mouse_button_event.action = 1;
             event->mouse_button_event.double_clicked |= double_clicked;
+            event->activated = true;
+        }
+    }
+}
+
+internal void on_mouse_button_released_event(u8 key)
+{
+    for (u32 i = 0; i < event_context.events.size; ++i)
+    {
+        Event* event = event_context.events.data + i;
+        if (event->type == MOUSE_BUTTON)
+        {
+            event->mouse_button_event.key = key;
+            event->mouse_button_event.action = 0;
+            // TODO: Look into this
+            //event->mouse_button_event.double_clicked = false;
             event->activated = true;
         }
     }
@@ -97,6 +114,8 @@ void event_init(Platform* platform)
     platform_event_set_on_mouse_move(platform, on_mouse_move_event);
     platform_event_set_on_button_pressed(platform,
                                          on_mouse_button_pressed_event);
+    platform_event_set_on_button_released(platform,
+                                         on_mouse_button_released_event);
     platform_event_set_on_mouse_wheel(platform, on_mouse_wheel_event);
     platform_event_set_on_key_stroke(platform, on_key_stroke_event);
 }

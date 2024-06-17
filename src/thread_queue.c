@@ -44,16 +44,14 @@ void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task,
     task_queue->tail++;
     task_queue->size++;
 
-    u64* count = hash_table_getUu64(&task_queue->id_to_count, &task.id);
+    u64* count = hash_table_get_uu64(&task_queue->id_to_count, task.id);
     if(count)
     {
         ++(*count);
     }
     else
     {
-        u64* id = (u64*)calloc(1, sizeof(u64));
-        *id = task.id;
-        hash_table_insertUu64(&task_queue->id_to_count, id, 1);
+        hash_table_insert_uu64(&task_queue->id_to_count, task.id, 1);
     }
 
     platform_semaphore_increment(&task_queue->mutex, NULL);
@@ -95,7 +93,7 @@ internal ThreadTaskInternal thread_task_pop(ThreadTaskQueue* task_queue)
 
     task_queue->head++;
     task_queue->size--;
-    u64* count = hash_table_getUu64(&task_queue->id_to_count, &task.task.id);
+    u64* count = hash_table_get_uu64(&task_queue->id_to_count, task.task.id);
     if (count)
     {
         --(*count);
@@ -141,7 +139,7 @@ u64 thread_get_task_count(ThreadTaskQueue* task_queue, u64 id)
 {
     platform_semaphore_wait_and_decrement(&task_queue->mutex);
 
-    u64* count = hash_table_getUu64(&task_queue->id_to_count, &id);
+    u64* count = hash_table_get_uu64(&task_queue->id_to_count, id);
 
     platform_semaphore_increment(&task_queue->mutex, NULL);
 
@@ -174,7 +172,7 @@ void thread_init(u32 capacity, u32 thread_count, ThreadQueue* queue)
     queue->task_queue.tasks = (ThreadTaskInternal*)calloc(
         queue->task_queue.capacity, sizeof(ThreadTaskInternal));
     queue->task_queue.id_to_count =
-        hash_table_createUu64(100, hash_function_u64);
+        hash_table_create_uu64(100, hash_function_u64);
 
     for (u32 i = 0; i < thread_count; i++)
     {

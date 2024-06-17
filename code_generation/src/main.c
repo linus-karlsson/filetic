@@ -33,21 +33,27 @@ int main(int argc, char** argv)
     //////////////// Hash Table ////////////////////
     {
         char* types[] = {
-            "u64*,u64",
+            "u64,u64",
+            "u64,char*",
         };
         const uint32_t type_count = sizeof(types) / sizeof(types[0]);
-        char* postfixs[] = { "UU64" };
+        char* postfixs[] = { "UU64", "U64Char" };
         const uint32_t postfix_count = sizeof(postfixs) / sizeof(postfixs[0]);
-        mcgen_link_names(ctx, "Cell", "HashTable", "hash_table_create");
+        mcgen_link_names(ctx, "Cell", "HashTable");
         mcgen_append_types_and_postfixs(ctx, "Cell", types, type_count,
                                         postfixs, postfix_count);
 
+        char* postfixs_functions[] = { "_uu64", "_u64_char" };
+        mcgen_append_types_and_postfixs(ctx, "hash_table_create", types, type_count,
+                                        postfixs_functions, postfix_count);
+
         char* types2[] = {
-            "u64*,u64,sizeof,value_cmp",
+            "u64,u64,sizeof,value_cmp",
+            "u64,char*,sizeof,value_cmp",
         };
         mcgen_link_names(ctx, "hash_table_insert", "hash_table_get", "hash_table_remove");
         mcgen_append_types_and_postfixs(ctx, "hash_table_insert", types2, type_count,
-                                        postfixs, postfix_count);
+                                        postfixs_functions, postfix_count);
     }
 
     mcgen_generate_code(ctx);
