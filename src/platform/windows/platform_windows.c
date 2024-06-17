@@ -738,7 +738,7 @@ void platform_paste_from_clipboard(CharPtrArray* paths)
                         }
                         current += 2;
 
-                        char* buffer = (char*)calloc(size + 1, sizeof(char));
+                        char* buffer = (char*)calloc(size + 2, sizeof(char));
                         for (u32 i = 0, j = start_index; i < size; ++i, j += 2)
                         {
                             buffer[i] = ptr[j];
@@ -752,7 +752,7 @@ void platform_paste_from_clipboard(CharPtrArray* paths)
                     while (*ptr)
                     {
                         const size_t length = strlen(ptr);
-                        char* buffer = (char*)calloc(length + 1, sizeof(char));
+                        char* buffer = (char*)calloc(length + 2, sizeof(char));
                         memcpy(buffer, ptr, length);
                         array_push(paths, buffer);
                         ptr += length + 1;
@@ -765,3 +765,40 @@ void platform_paste_from_clipboard(CharPtrArray* paths)
     }
 }
 
+void platform_paste_to_directory(const CharPtrArray* paths,
+                                 const char* directory_path)
+{
+
+    const size_t directory_path_length = strlen(directory_path);
+    for (u32 i = 0; i < paths->size; ++i)
+    {
+        const char* source_path = paths->data[i];
+        const size_t source_path_length = strlen(paths->data[i]);
+
+        u32 name_length = 0;
+        for (i32 j = (i32)source_path_length - 1; j >= 0; --j, ++name_length)
+        {
+            if (source_path[j] == '\\' || source_path[j] == '/') break;
+        }
+
+        const size_t destination_path_length =
+            directory_path_length + name_length + 1;
+        char* destination_path =
+            (char*)calloc(destination_path_length + 2, sizeof(char));
+        memcpy(destination_path, directory_path, directory_path_length);
+        destination_path[directory_path_length] = '\\';
+        memcpy(destination_path + directory_path_length + 1,
+               source_path + (source_path_length - name_length), name_length);
+
+        SHFILEOPSTRUCT file_op = {
+            .wFunc = FO_COPY,
+            .pFrom = source_path,
+            .pTo = destination_path,
+            .fFlags = FOF_NOCONFIRMMKDIR,
+        };
+
+        int result = SHFileOperation(&file_op);
+
+        free(destination_path);
+    }
+}

@@ -122,4 +122,4 @@ void platform_sleep(u64 milliseconds);
 void platform_open_file(const char* file_path);
 void platform_copy_to_clipboard(const char** file_paths, const u32 file_count);
 void platform_paste_from_clipboard(CharPtrArray* paths);
-
+void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path);

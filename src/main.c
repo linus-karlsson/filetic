@@ -697,6 +697,18 @@ internal u64 u64_hash_function(const void* data, u32 len, u64 seed)
     return *(u64*)data;
 }
 
+void reload_directory(DirectoryPage* directory_page)
+{
+    char* path = directory_page->directory.parent;
+    u32 length = (u32)strlen(path);
+    path[length++] = '\\';
+    path[length++] = '*';
+    Directory reloaded_directory = platform_get_directory(path, length);
+    path[length - 2] = '\0';
+    platform_reset_directory(&directory_page->directory);
+    directory_page->directory = reloaded_directory;
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -819,7 +831,7 @@ int main(int argc, char** argv)
     b8 search_bar_hit = false;
     f64 search_blinking_time = 0.4f;
 
-    CharPtrArray pasted_paths = {0};
+    CharPtrArray pasted_paths = { 0 };
     array_create(&pasted_paths, 10);
 
     f32 offset = 0.0f;
@@ -855,7 +867,8 @@ int main(int argc, char** argv)
                      clear_color.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (mouse_button->activated && mouse_button->mouse_button_event.action == 1 &&
+        if (mouse_button->activated &&
+            mouse_button->mouse_button_event.action == 1 &&
             mouse_button->mouse_button_event.key == FTIC_RIGHT_BUTTON)
         {
             if (directory_history.size > 1)
@@ -896,6 +909,14 @@ int main(int argc, char** argv)
                      key_event->key_event.key == FTIC_KEY_P)
             {
                 platform_paste_from_clipboard(&pasted_paths);
+                platform_paste_to_directory(
+                    &pasted_paths, current_directory->directory.parent);
+                for (u32 i = 0; i < pasted_paths.size; ++i)
+                {
+                    free(pasted_paths.data[i]);
+                }
+                pasted_paths.size = 0;
+                reload_directory(current_directory);
             }
             else if (mouse_button->activated && event->action == 0 &&
                      event->key == FTIC_LEFT_BUTTON)
