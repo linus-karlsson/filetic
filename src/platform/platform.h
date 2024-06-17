@@ -113,3 +113,4 @@ f64 platform_get_time(void);
 void platform_sleep(u64 milliseconds);
 
 void platform_open_file(const char* file_path);
+void platform_copy_to_clipboard(const char** file_paths, const u32 file_count);

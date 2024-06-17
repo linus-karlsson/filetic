@@ -19,6 +19,7 @@
 #include "shader.h"
 #include "event.h"
 
+global V4 clear_color = { .r = 0.1f, .g = 0.1f, .b = 0.1f, .a = 1.0f };
 global V4 border_color = { .r = 0.3f, .g = 0.3f, .b = 0.3f, .a = 1.0f };
 
 typedef struct SafeFileArray
@@ -27,18 +28,25 @@ typedef struct SafeFileArray
     FTicMutex mutex;
 } SafeFileArray;
 
-typedef struct SelectedItem
-{
-    char* path;
-    b8* seleted_pointer;
-} SelectedItem;
-
-typedef struct SelectedItemArray
+typedef struct CharPtrArray
 {
     u32 size;
     u32 capacity;
-    SelectedItem* data;
-} SelectedItemArray;
+    const char** data;
+} CharPtrArray;
+
+typedef struct B8PtrArray
+{
+    u32 size;
+    u32 capacity;
+    b8** data;
+} B8PtrArray;
+
+typedef struct SelectedItemValues
+{
+    CharPtrArray paths;
+    B8PtrArray selected_pointers;
+} SelectedItemValues;
 
 typedef struct FindingCallbackAttribute
 {
@@ -414,7 +422,7 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
                   const f32 width, const FontTTF* font,
                   const Event* mouse_button_event,
                   const Event* mouse_move_event, f32 icon_index,
-                  DirectoryItem* item, SelectedItemArray* selected_item_array,
+                  DirectoryItem* item, SelectedItemValues* selected_item_values,
                   i32* hit_index, RenderingProperties* render)
 {
     AABB aabb = { .min = v2_v3(starting_position), .size = v2f(width, height) };
@@ -439,11 +447,9 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
             event->action == 0 && event->key == FTIC_LEFT_BUTTON)
         {
             item->selected = true;
-            SelectedItem selected_item = {
-                .path = item->path,
-                &item->selected,
-            };
-            array_push(selected_item_array, selected_item);
+            array_push(&selected_item_values->paths, item->path);
+            array_push(&selected_item_values->selected_pointers,
+                       &item->selected);
         }
     }
     const V4 color = (this_hit || item->selected) ? v4ic(0.3f) : v4ic(0.1f);
@@ -632,7 +638,7 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
                        const f32 item_height, const f32 item_width,
                        const f32 dimension_y, const Event* mouse_move_event,
                        const Event* mouse_button_event, V3* starting_position,
-                       SelectedItemArray* selected_item_array,
+                       SelectedItemValues* selected_item_values,
                        RenderingProperties* font_render,
                        DirectoryArray* directory_history,
                        DirectoryPage** current_directory)
@@ -647,7 +653,7 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
                 folder_hit, i, *starting_position, scale,
                 font->pixel_height + padding_top, item_height, item_width, font,
                 mouse_button_event, mouse_move_event, 3.0f,
-                &sub_directories->data[i], selected_item_array, &hit_index,
+                &sub_directories->data[i], selected_item_values, &hit_index,
                 font_render);
         }
         starting_position->y += item_height;
@@ -665,7 +671,7 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
                 file_hit, i, *starting_position, scale,
                 font->pixel_height + padding_top, item_height, item_width, font,
                 mouse_button_event, mouse_move_event, 2.0f, &files->data[i],
-                selected_item_array, &hit_index, font_render);
+                selected_item_values, &hit_index, font_render);
         }
         starting_position->y += item_height;
     }
@@ -811,8 +817,9 @@ int main(int argc, char** argv)
     // HashTableU64Char items_selected = hash_table_create_u64_char(100,
     // u64_hash_function);
 
-    SelectedItemArray selected_item_array = { 0 };
-    array_create(&selected_item_array, 10);
+    SelectedItemValues selected_item_values = { 0 };
+    array_create(&selected_item_values.paths, 10);
+    array_create(&selected_item_values.selected_pointers, 10);
 
     CharArray search_buffer = { 0 };
     array_create(&search_buffer, 30);
@@ -848,7 +855,8 @@ int main(int argc, char** argv)
         mvp.projection = ortho(0.0f, (float)viewport_width,
                                (float)viewport_height, 0.0f, -1.0f, 1.0f);
         glViewport(0, 0, viewport_width, viewport_height);
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClearColor(clear_color.r, clear_color.g, clear_color.b,
+                     clear_color.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (mouse_button->activated &&
@@ -865,7 +873,7 @@ int main(int argc, char** argv)
 
         rendering_properties_clear(font_render);
 
-        if (selected_item_array.size)
+        if (selected_item_values.paths.size)
         {
             const MouseButtonEvent* event = &mouse_button->mouse_button_event;
 
@@ -873,14 +881,31 @@ int main(int argc, char** argv)
                 key_event->key_event.key == FTIC_KEY_CTRL)
             {
             }
-            else if (mouse_button->activated && event->action == 0 &&
-                event->key == FTIC_LEFT_BUTTON)
+            else if (key_event->activated && key_event->key_event.action == 1 &&
+                     key_event->key_event.key == FTIC_KEY_C)
             {
-                for (u32 i = 0; i < selected_item_array.size; ++i)
+
+                platform_copy_to_clipboard(selected_item_values.paths.data,
+                                           selected_item_values.paths.size);
+
+                for (u32 i = 0; i < selected_item_values.selected_pointers.size;
+                     ++i)
                 {
-                    *selected_item_array.data[i].seleted_pointer = false;
+                    *selected_item_values.selected_pointers.data[i] = false;
                 }
-                selected_item_array.size = 0;
+                selected_item_values.selected_pointers.size = 0;
+                selected_item_values.paths.size = 0;
+            }
+            else if (mouse_button->activated && event->action == 0 &&
+                     event->key == FTIC_LEFT_BUTTON)
+            {
+                for (u32 i = 0; i < selected_item_values.selected_pointers.size;
+                     ++i)
+                {
+                    *selected_item_values.selected_pointers.data[i] = false;
+                }
+                selected_item_values.selected_pointers.size = 0;
+                selected_item_values.paths.size = 0;
             }
         }
 
@@ -891,9 +916,11 @@ int main(int argc, char** argv)
 
         V3 search_bar_position = v3f(dimensions.x * 0.6f, 20.0f, 0.0f);
 
-        V3 text_starting_position =
-            v3f(rect.min.x, 30.0f + current_directory->scroll_offset, 0.0f);
-        text_starting_position.x += 20.0f;
+        const V3 parent_directory_path_position =
+            v3f(rect.min.x + 20.0f, 30.0f, 0.0f);
+        V3 text_starting_position = parent_directory_path_position;
+        text_starting_position.y +=
+            font.pixel_height + current_directory->scroll_offset;
 
         const f32 scale = 1.0f;
         const f32 padding_top = 2.0f;
@@ -910,8 +937,20 @@ int main(int argc, char** argv)
             &current_directory->directory.sub_directories,
             &current_directory->directory.files, scale, &font, padding_top,
             quad_height, width, dimensions.y, mouse_move, mouse_button,
-            &text_starting_position, &selected_item_array, font_render,
+            &text_starting_position, &selected_item_values, font_render,
             &directory_history, &current_directory);
+
+        const f32 back_drop_height =
+            parent_directory_path_position.y + font.pixel_height;
+        quad(&font_render->vertices,
+             v3f(parent_directory_path_position.x, 0.0f, 0.0f),
+             v2f(width, back_drop_height), clear_color, 0.0f);
+        font_render->index_count++;
+
+        font_render->index_count += text_generation(
+            font.chars, current_directory->directory.parent, 1.0f,
+            parent_directory_path_position, scale, font.pixel_height, NULL,
+            NULL, &font_render->vertices);
 
         quad(&font_render->vertices,
              v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
@@ -1039,7 +1078,7 @@ int main(int argc, char** argv)
                 &folder_array.array, &file_array.array, scale, &font,
                 padding_top, quad_height, search_result_width, dimensions.y,
                 mouse_move, mouse_button, &search_result_position,
-                &selected_item_array, font_render, &directory_history,
+                &selected_item_values, font_render, &directory_history,
                 &current_directory);
 
             search_result_aabb.size =

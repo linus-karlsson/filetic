@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <Windows.h>
+#include <ShlObj.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -639,8 +640,8 @@ void platform_sleep(u64 milli)
 
 void platform_open_file(const char* file_path)
 {
-    HINSTANCE result = ShellExecute(NULL, "open",
-                                    file_path, NULL, NULL, SW_SHOWNORMAL);
+    HINSTANCE result =
+        ShellExecute(NULL, "open", file_path, NULL, NULL, SW_SHOWNORMAL);
 
     if ((int)result <= 32)
     {
@@ -659,3 +660,53 @@ void platform_open_file(const char* file_path)
     }
 }
 
+void platform_copy_to_clipboard(const char** file_paths, const u32 file_count)
+{
+    u32* file_paths_length = (u32*)calloc(file_count, sizeof(u32));
+    // NOTE(Linus): +1 for the double null terminator
+    size_t total_size = sizeof(DROPFILES) + 1;
+    for (u32 i = 0; i < file_count; ++i)
+    {
+        const u32 length = (u32)strlen(file_paths[i]);
+        file_paths_length[i] = length;
+        total_size += (length + 1);
+    }
+
+    HGLOBAL hglobal = GlobalAlloc(GHND | GMEM_SHARE, total_size);
+    if (!hglobal) return;
+
+    GlobalLock(hglobal);
+
+    DROPFILES* drop_files = (DROPFILES*)GlobalLock(hglobal);
+    drop_files->pFiles = sizeof(DROPFILES);
+    drop_files->pt.x = 0;
+    drop_files->pt.y = 0;
+    drop_files->fNC = TRUE;
+    drop_files->fWide = FALSE; // TODO(Linus): ANSI or Unicode
+
+    char* ptr = (char*)drop_files + sizeof(DROPFILES);
+    u32 j = 0;
+    for (u32 i = 0; i < file_count; ++i)
+    {
+        const size_t size_left = total_size - sizeof(DROPFILES) - j;
+        ftic_assert(size_left >= (file_paths_length[i] + 1));
+        strcpy_s(ptr + j, size_left, file_paths[i]);
+        j += (file_paths_length[i] + 1);
+    }
+    ptr[j] = '\0'; // Double null terminator
+    free(file_paths_length);
+
+    GlobalUnlock(hglobal);
+
+    if (OpenClipboard(NULL))
+    {
+        EmptyClipboard();
+        SetClipboardData(CF_HDROP, hglobal);
+        CloseClipboard();
+    }
+    else
+    {
+        log_last_error();
+        GlobalFree(hglobal);
+    }
+}
