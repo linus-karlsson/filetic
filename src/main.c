@@ -18,6 +18,7 @@
 #include "opengl_util.h"
 #include "shader.h"
 #include "event.h"
+#include "hash.h"
 
 global V4 clear_color = { .r = 0.1f, .g = 0.1f, .b = 0.1f, .a = 1.0f };
 global V4 border_color = { .r = 0.3f, .g = 0.3f, .b = 0.3f, .a = 1.0f };
@@ -39,7 +40,8 @@ typedef struct B8PtrArray
 typedef struct SelectedItemValues
 {
     CharPtrArray paths;
-    B8PtrArray selected_pointers;
+    CharPtrArray names;
+    HashTableCharU32 selected_items;
 } SelectedItemValues;
 
 typedef struct FindingCallbackAttribute
@@ -53,6 +55,20 @@ typedef struct FindingCallbackAttribute
     SafeFileArray* file_array;
     SafeFileArray* folder_array;
 } FindingCallbackAttribute;
+
+typedef struct DirectoryPage
+{
+    f32 offset;
+    f32 scroll_offset;
+    Directory directory;
+} DirectoryPage;
+
+typedef struct DirectoryArray
+{
+    u32 size;
+    u32 capacity;
+    DirectoryPage* data;
+} DirectoryArray;
 
 typedef enum DebugLogLevel
 {
@@ -421,6 +437,10 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
 {
     AABB aabb = { .min = v2_v3(starting_position), .size = v2f(width, height) };
 
+    u32* check_if_selected = hash_table_get_char_u32(
+        &selected_item_values->selected_items, item->name);
+    b8 selected = check_if_selected ? true : false;
+
     b8 this_hit = false;
     V2 mouse_position = v2f(mouse_move_event->mouse_move_event.position_x,
                             mouse_move_event->mouse_move_event.position_y);
@@ -433,20 +453,24 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
             hit = true;
         }
         const MouseButtonEvent* event = &mouse_button_event->mouse_button_event;
-        if (mouse_button_event->activated && event->action == 0)
-        {
-            int i = 0;
-        }
-        if (!item->selected && mouse_button_event->activated &&
+        if (!check_if_selected && mouse_button_event->activated &&
             event->action == 0 && event->key == FTIC_LEFT_BUTTON)
         {
+            if (!check_if_selected)
+            {
+                const u32 name_length = (u32)strlen(item->name);
+                char* name = (char*)calloc(name_length + 3, sizeof(char));
+                memcpy(name, item->name, name_length);
+                hash_table_insert_char_u32(
+                    &selected_item_values->selected_items, name, 1);
+                array_push(&selected_item_values->names, name);
+                array_push(&selected_item_values->paths, item->path);
+                selected = true;
+            }
             item->selected = true;
-            array_push(&selected_item_values->paths, item->path);
-            array_push(&selected_item_values->selected_pointers,
-                       &item->selected);
         }
     }
-    const V4 color = (this_hit || item->selected) ? v4ic(0.3f) : v4ic(0.1f);
+    const V4 color = (this_hit || selected) ? v4ic(0.3f) : v4ic(0.1f);
     quad(&render->vertices, starting_position, aabb.size, color, 0.0f);
     render->index_count += 1;
 
@@ -508,19 +532,106 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
     return hit;
 }
 
-typedef struct DirectoryPage
+internal b8 item_in_view(const f32 position_y, const f32 height,
+                         const f32 window_height)
 {
-    f32 offset;
-    f32 scroll_offset;
-    Directory directory;
-} DirectoryPage;
+    const f32 value = position_y + height;
+    return closed_interval(-height, value, window_height + height);
+}
 
-typedef struct DirectoryArray
+void check_and_open_file(const Event* mouse_button_event, const b8 hit,
+                         const DirectoryItem* current_files,
+                         const i32 file_index)
 {
-    u32 size;
-    u32 capacity;
-    DirectoryPage* data;
-} DirectoryArray;
+    if (mouse_button_event->mouse_button_event.double_clicked &&
+        mouse_button_event->mouse_button_event.key == FTIC_LEFT_BUTTON)
+    {
+        if (hit)
+        {
+            const char* file_path = current_files[file_index].path;
+
+            platform_open_file(file_path);
+        }
+    }
+}
+
+void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
+                           const i32 index,
+                           const DirectoryItem* current_folders,
+                           DirectoryArray* directory_history,
+                           DirectoryPage** current_directory)
+{
+    if (mouse_button_event->mouse_button_event.double_clicked &&
+        mouse_button_event->mouse_button_event.key == FTIC_LEFT_BUTTON)
+    {
+        if (hit)
+        {
+            char* path = current_folders[index].path;
+            if (strcmp(path, (*current_directory)->directory.parent) == 0)
+            {
+                return;
+            }
+            u32 length = (u32)strlen(path);
+            path[length++] = '\\';
+            path[length++] = '*';
+            DirectoryPage new_page = { 0 };
+            new_page.directory = platform_get_directory(path, length);
+            array_push(directory_history, new_page);
+            path[length - 2] = '\0';
+            path[length - 1] = '\0';
+
+            *current_directory = array_back(directory_history);
+        }
+    }
+}
+
+b8 directory_item_list(const DirectoryItemArray* sub_directories,
+                       const DirectoryItemArray* files, const f32 scale,
+                       const FontTTF* font, const f32 padding_top,
+                       const f32 item_height, const f32 item_width,
+                       const f32 dimension_y, const Event* mouse_move_event,
+                       const Event* mouse_button_event, V3* starting_position,
+                       SelectedItemValues* selected_item_values,
+                       RenderingProperties* font_render,
+                       DirectoryArray* directory_history,
+                       DirectoryPage** current_directory)
+{
+    b8 folder_hit = false;
+    i32 hit_index = -1;
+    for (i32 i = 0; i < (i32)sub_directories->size; ++i)
+    {
+        if (item_in_view(starting_position->y, item_height, dimension_y))
+        {
+            folder_hit = directory_item(
+                folder_hit, i, *starting_position, scale,
+                font->pixel_height + padding_top, item_height, item_width, font,
+                mouse_button_event, mouse_move_event, 3.0f,
+                &sub_directories->data[i], selected_item_values, &hit_index,
+                font_render);
+        }
+        starting_position->y += item_height;
+    }
+    check_and_open_folder(mouse_button_event, folder_hit, hit_index,
+                          sub_directories->data, directory_history,
+                          current_directory);
+    b8 file_hit = false;
+    hit_index = -1;
+    for (i32 i = 0; i < (i32)files->size; ++i)
+    {
+        if (item_in_view(starting_position->y, item_height, dimension_y))
+        {
+            file_hit = directory_item(
+                file_hit, i, *starting_position, scale,
+                font->pixel_height + padding_top, item_height, item_width, font,
+                mouse_button_event, mouse_move_event, 2.0f, &files->data[i],
+                selected_item_values, &hit_index, font_render);
+        }
+        starting_position->y += item_height;
+    }
+    check_and_open_file(mouse_button_event, file_hit, files->data, hit_index);
+
+    return folder_hit || file_hit;
+}
 
 f32 clampf32_low(f32 value, f32 low)
 {
@@ -575,106 +686,6 @@ void render_input(const FontTTF* font, const char* text, u32 text_length,
     }
 }
 
-void check_and_open_file(const Event* mouse_button_event, const b8 hit,
-                         const DirectoryItem* current_files,
-                         const i32 file_index)
-{
-    if (mouse_button_event->mouse_button_event.double_clicked &&
-        mouse_button_event->mouse_button_event.key == FTIC_LEFT_BUTTON)
-    {
-        if (hit)
-        {
-            const char* file_path = current_files[file_index].path;
-
-            platform_open_file(file_path);
-        }
-    }
-}
-
-void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
-                           const i32 index,
-                           const DirectoryItem* current_folders,
-                           DirectoryArray* directory_history,
-                           DirectoryPage** current_directory)
-{
-    if (mouse_button_event->mouse_button_event.double_clicked &&
-        mouse_button_event->mouse_button_event.key == FTIC_LEFT_BUTTON)
-    {
-        if (hit)
-        {
-            char* path = current_folders[index].path;
-            if (strcmp(path, (*current_directory)->directory.parent) == 0)
-            {
-                return;
-            }
-            u32 length = (u32)strlen(path);
-            path[length++] = '\\';
-            path[length++] = '*';
-            DirectoryPage new_page = { 0 };
-            new_page.directory = platform_get_directory(path, length);
-            array_push(directory_history, new_page);
-            path[length - 2] = '\0';
-            path[length - 1] = '\0';
-
-            *current_directory = array_back(directory_history);
-        }
-    }
-}
-
-b8 item_in_view(const f32 position_y, const f32 height, const f32 window_height)
-{
-    const f32 value = position_y + height;
-    return closed_interval(-height, value, window_height + height);
-}
-
-b8 directory_item_list(const DirectoryItemArray* sub_directories,
-                       const DirectoryItemArray* files, const f32 scale,
-                       const FontTTF* font, const f32 padding_top,
-                       const f32 item_height, const f32 item_width,
-                       const f32 dimension_y, const Event* mouse_move_event,
-                       const Event* mouse_button_event, V3* starting_position,
-                       SelectedItemValues* selected_item_values,
-                       RenderingProperties* font_render,
-                       DirectoryArray* directory_history,
-                       DirectoryPage** current_directory)
-{
-    b8 folder_hit = false;
-    i32 hit_index = -1;
-    for (i32 i = 0; i < (i32)sub_directories->size; ++i)
-    {
-        if (item_in_view(starting_position->y, item_height, dimension_y))
-        {
-            folder_hit = directory_item(
-                folder_hit, i, *starting_position, scale,
-                font->pixel_height + padding_top, item_height, item_width, font,
-                mouse_button_event, mouse_move_event, 3.0f,
-                &sub_directories->data[i], selected_item_values, &hit_index,
-                font_render);
-        }
-        starting_position->y += item_height;
-    }
-    check_and_open_folder(mouse_button_event, folder_hit, hit_index,
-                          sub_directories->data, directory_history,
-                          current_directory);
-    b8 file_hit = false;
-    hit_index = -1;
-    for (i32 i = 0; i < (i32)files->size; ++i)
-    {
-        if (item_in_view(starting_position->y, item_height, dimension_y))
-        {
-            file_hit = directory_item(
-                file_hit, i, *starting_position, scale,
-                font->pixel_height + padding_top, item_height, item_width, font,
-                mouse_button_event, mouse_move_event, 2.0f, &files->data[i],
-                selected_item_values, &hit_index, font_render);
-        }
-        starting_position->y += item_height;
-    }
-    check_and_open_file(mouse_button_event, file_hit, files->data, hit_index);
-
-    return folder_hit || file_hit;
-}
-
 void set_scroll_offset(const f32 current_y, const f32 offset_y,
                        const f32 dimension_y, const Event* mouse_wheel_event,
                        f32* offset)
@@ -701,11 +712,12 @@ internal u64 u64_hash_function(const void* data, u32 len, u64 seed)
 
 void reset_selected_items(SelectedItemValues* selected_item_values)
 {
-    for (u32 i = 0; i < selected_item_values->selected_pointers.size; ++i)
+    for (u32 i = 0; i < selected_item_values->names.size; ++i)
     {
-        *selected_item_values->selected_pointers.data[i] = false;
+        free(selected_item_values->names.data[i]);
     }
-    selected_item_values->selected_pointers.size = 0;
+    hash_table_clear_char_u32(&selected_item_values->selected_items);
+    selected_item_values->names.size = 0;
     selected_item_values->paths.size = 0;
 }
 
@@ -834,10 +846,14 @@ int main(int argc, char** argv)
 
     // HashTableU64Char items_selected = hash_table_create_u64_char(100,
     // u64_hash_function);
+    //
+    // TODO(Linus): Make a set for this instead
 
     SelectedItemValues selected_item_values = { 0 };
     array_create(&selected_item_values.paths, 10);
-    array_create(&selected_item_values.selected_pointers, 10);
+    array_create(&selected_item_values.names, 10);
+    selected_item_values.selected_items =
+        hash_table_create_char_u32(100, hash_murmur);
 
     CharArray search_buffer = { 0 };
     array_create(&search_buffer, 30);
@@ -944,9 +960,10 @@ int main(int argc, char** argv)
 
         V3 search_bar_position = v3f(dimensions.x * 0.6f, 20.0f, 0.0f);
 
-        const V3 parent_directory_path_position =
-            v3f(rect.min.x + 20.0f, 30.0f, 0.0f);
+        V3 parent_directory_path_position =
+            v3f(rect.min.x + 2.0f, 30.0f, 0.0f);
         V3 text_starting_position = parent_directory_path_position;
+        text_starting_position.x += 10.0f;
         text_starting_position.y +=
             font.pixel_height + current_directory->scroll_offset;
 
@@ -954,7 +971,7 @@ int main(int argc, char** argv)
         const f32 padding_top = 2.0f;
         const f32 quad_height = scale * font.pixel_height + padding_top * 5.0f;
         const f32 width =
-            (search_bar_position.x - 20.0f) - text_starting_position.x;
+            (search_bar_position.x - 10.0f) - text_starting_position.x;
 
         AABB directory_aabb = {
             .min = v2f(text_starting_position.x, 0.0f),
@@ -972,8 +989,10 @@ int main(int argc, char** argv)
             parent_directory_path_position.y + font.pixel_height;
         quad(&font_render->vertices,
              v3f(parent_directory_path_position.x, 0.0f, 0.0f),
-             v2f(width, back_drop_height), clear_color, 0.0f);
+             v2f(width + 10.0f, back_drop_height), v4ic(0.15f), 0.0f);
         font_render->index_count++;
+
+        parent_directory_path_position.x += 10.0f;
 
         font_render->index_count += text_generation(
             font.chars, current_directory->directory.parent, 1.0f,

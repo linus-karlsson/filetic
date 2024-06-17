@@ -34,22 +34,24 @@ int main(int argc, char** argv)
     {
         char* types[] = {
             "u64,u64",
-            "u64,char*",
+            "char*,u32",
         };
         const uint32_t type_count = sizeof(types) / sizeof(types[0]);
-        char* postfixs[] = { "UU64", "U64Char" };
+        char* postfixs[] = { "UU64", "CharU32" };
         const uint32_t postfix_count = sizeof(postfixs) / sizeof(postfixs[0]);
         mcgen_link_names(ctx, "Cell", "HashTable");
         mcgen_append_types_and_postfixs(ctx, "Cell", types, type_count,
                                         postfixs, postfix_count);
 
-        char* postfixs_functions[] = { "_uu64", "_u64_char" };
+        char* postfixs_functions[] = { "_uu64", "_char_u32" };
         mcgen_append_types_and_postfixs(ctx, "hash_table_create", types, type_count,
+                                        postfixs_functions, postfix_count);
+        mcgen_append_types_and_postfixs(ctx, "hash_table_clear", types, type_count,
                                         postfixs_functions, postfix_count);
 
         char* types2[] = {
             "u64,u64,sizeof,value_cmp",
-            "u64,char*,sizeof,value_cmp",
+            "char*,u32,strlen,strcmp",
         };
         mcgen_link_names(ctx, "hash_table_insert", "hash_table_get", "hash_table_remove");
         mcgen_append_types_and_postfixs(ctx, "hash_table_insert", types2, type_count,

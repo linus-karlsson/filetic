@@ -16,13 +16,14 @@ typedef struct CellUU64
  
 } CellUU64;
 
-typedef struct CellU64Char
+typedef struct CellCharU32
 { 
-    u64 key; 
-    char* value; 
+    char* key; 
+    u32 value; 
     bool active; 
     bool deleted; 
-} CellU64Char;
+ 
+} CellCharU32;
 
 typedef struct HashTableUU64
 { 
@@ -33,28 +34,32 @@ typedef struct HashTableUU64
     u64 (*hash_function)(const void* key, u32 len, u64 seed); 
 } HashTableUU64;
 
-typedef struct HashTableU64Char
+typedef struct HashTableCharU32
 { 
-    CellU64Char* cells; 
+    CellCharU32* cells; 
     u32 size; 
     u32 capacity; 
  
     u64 (*hash_function)(const void* key, u32 len, u64 seed); 
-} HashTableU64Char;
+} HashTableCharU32;
 
 HashTableUU64 hash_table_create_uu64(u32 capacity, u64 (*hash_function)(const void* key, u32 len, u64 seed));
 
-HashTableU64Char hash_table_create_u64_char(u32 capacity, u64 (*hash_function)(const void* key, u32 len, u64 seed));
+HashTableCharU32 hash_table_create_char_u32(u32 capacity, u64 (*hash_function)(const void* key, u32 len, u64 seed));
+
+void hash_table_clear_uu64(HashTableUU64* hash_table);
+
+void hash_table_clear_char_u32(HashTableCharU32* hash_table);
 
 void hash_table_insert_uu64(HashTableUU64* table, u64 key, u64 value);
 
-void hash_table_insert_u64_char(HashTableU64Char* table, u64 key, char* value);
+void hash_table_insert_char_u32(HashTableCharU32* table, char* key, u32 value);
 
 u64* hash_table_get_uu64(HashTableUU64* table, const u64 key);
 
-char** hash_table_get_u64_char(HashTableU64Char* table, const u64 key);
+u32* hash_table_get_char_u32(HashTableCharU32* table, const char* key);
 
 CellUU64* hash_table_remove_uu64(HashTableUU64* table, const u64 key);
 
-CellU64Char* hash_table_remove_u64_char(HashTableU64Char* table, const u64 key);
+CellCharU32* hash_table_remove_char_u32(HashTableCharU32* table, const char* key);
 

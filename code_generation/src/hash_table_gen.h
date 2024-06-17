@@ -154,3 +154,9 @@ Cell<Key, Value>* hash_table_remove(HashTable<Key, Value>* table, const Key key)
     }
     return NULL;
 }
+
+template <Key, Value>
+void hash_table_clear(HashTable<Key, Value>* hash_table)
+{
+    memset(hash_table->cells, 0, hash_table->capacity * sizeof(hash_table->cells[0]));
+}
