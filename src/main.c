@@ -337,6 +337,33 @@ void rendering_properties_draw(const RenderingProperties* rendering_properties,
                    GL_UNSIGNED_INT, NULL);
 }
 
+void rendering_properties_check_and_grow_buffers(
+    RenderingProperties* rendering_properties, IndexArray* index_array)
+{
+    if (rendering_properties->vertices.size >
+        rendering_properties->vertex_buffer_capacity)
+    {
+        vertex_buffer_orphan(rendering_properties->vertex_buffer_id,
+                             rendering_properties->vertices.capacity *
+                                 sizeof(Vertex),
+                             GL_STREAM_DRAW, NULL);
+        rendering_properties->vertex_buffer_capacity =
+            rendering_properties->vertices.capacity;
+    }
+
+    if (rendering_properties->index_count * 6 > index_array->size)
+    {
+        index_array->size = 0;
+        index_array->capacity *= 2;
+        index_array->data = (u32*)calloc(index_array->capacity, sizeof(u32));
+        generate_indicies(index_array, 0, index_array->capacity * 6);
+        index_buffer_orphan(rendering_properties->index_buffer_id,
+                            index_array->capacity * sizeof(u32), GL_STATIC_DRAW,
+                            index_array->data);
+        free(index_array->data);
+    }
+}
+
 void rendering_properties_clear(RenderingProperties* rendering_properties)
 {
     rendering_properties->index_count = 0;
@@ -688,10 +715,11 @@ int main(int argc, char** argv)
     ftic_assert(font_shader);
 
     IndexArray index_array = { 0 };
-    array_create(&index_array, 10000 * 6);
-    generate_indicies(&index_array, 0, 10000);
+    array_create(&index_array, 100 * 6);
+    generate_indicies(&index_array, 0, index_array.capacity * 6);
     u32 index_buffer_id = index_buffer_create(
         index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
+    free(index_array.data);
 
     VertexBufferLayout vertex_buffer_layout = { 0 };
     vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
@@ -964,15 +992,7 @@ int main(int argc, char** argv)
             hit_index = -1;
         }
 
-        if (font_render->vertices.size > font_render->vertex_buffer_capacity)
-        {
-            vertex_buffer_orphan(font_render->vertex_buffer_id,
-                                 font_render->vertices.capacity *
-                                     sizeof(Vertex),
-                                 GL_STREAM_DRAW, NULL);
-            font_render->vertex_buffer_capacity =
-                font_render->vertices.capacity;
-        }
+        rendering_properties_check_and_grow_buffers(font_render, &index_array);
 
         buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                             sizeof(Vertex) * font_render->vertices.size,
