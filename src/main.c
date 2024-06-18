@@ -353,31 +353,35 @@ RenderingProperties rendering_properties_init(
 void rendering_properties_draw(const RenderingProperties* rendering_properties,
                                const MVP* mvp)
 {
-    shader_bind(rendering_properties->shader_properties.shader);
-    shader_set_mvp(&rendering_properties->shader_properties, mvp);
-
-    int textures[10] = { 0 };
-    for (u32 i = 0; i < rendering_properties->texture_count; ++i)
+    if (rendering_properties->index_count)
     {
-        textures[i] = (int)i;
+        shader_bind(rendering_properties->shader_properties.shader);
+        shader_set_mvp(&rendering_properties->shader_properties, mvp);
+
+        int textures[20] = { 0 };
+        for (u32 i = 0; i < rendering_properties->texture_count; ++i)
+        {
+            textures[i] = (int)i;
+        }
+        int location = glGetUniformLocation(
+            rendering_properties->shader_properties.shader, "textures");
+        ftic_assert(location != -1);
+        glUniform1iv(location, rendering_properties->texture_count, textures);
+
+        for (u32 i = 0; i < rendering_properties->texture_count; ++i)
+        {
+            texture_bind(rendering_properties->textures[i], (int)i);
+        }
+
+        const AABB* scissor = &rendering_properties->scissor;
+        glScissor((int)scissor->min.x, (int)scissor->min.y,
+                  (int)scissor->size.width, (int)scissor->size.height);
+
+        vertex_array_bind(rendering_properties->vertex_array_id);
+        index_buffer_bind(rendering_properties->index_buffer_id);
+        glDrawElements(GL_TRIANGLES, rendering_properties->index_count * 6,
+                       GL_UNSIGNED_INT, NULL);
     }
-    int location = glGetUniformLocation(
-        rendering_properties->shader_properties.shader, "textures");
-    glUniform1iv(location, rendering_properties->texture_count, textures);
-
-    for (u32 i = 0; i < rendering_properties->texture_count; ++i)
-    {
-        texture_bind(rendering_properties->textures[i], (int)i);
-    }
-
-    const AABB* scissor = &rendering_properties->scissor;
-    glScissor((int)scissor->min.x, (int)scissor->min.y,
-              (int)scissor->size.width, (int)scissor->size.height);
-
-    vertex_array_bind(rendering_properties->vertex_array_id);
-    index_buffer_bind(rendering_properties->index_buffer_id);
-    glDrawElements(GL_TRIANGLES, rendering_properties->index_count * 6,
-                   GL_UNSIGNED_INT, NULL);
 }
 
 void rendering_properties_check_and_grow_buffers(
@@ -598,6 +602,7 @@ void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
 typedef struct DirectoryItemListReturnValue
 {
     u32 count;
+    f32 total_height;
     b8 hit;
 } DirectoryItemListReturnValue;
 
@@ -610,6 +615,8 @@ DirectoryItemListReturnValue directory_item_list(
     RenderingProperties* font_render, DirectoryArray* directory_history,
     DirectoryPage** current_directory)
 {
+    const f32 starting_y = starting_position->y;
+
     b8 folder_hit = false;
     i32 hit_index = -1;
     for (i32 i = 0; i < (i32)sub_directories->size; ++i)
@@ -646,6 +653,7 @@ DirectoryItemListReturnValue directory_item_list(
 
     return (DirectoryItemListReturnValue){
         .count = sub_directories->size + files->size,
+        .total_height = starting_position->y - starting_y,
         .hit = (folder_hit || file_hit),
     };
 }
@@ -839,9 +847,12 @@ int main(int argc, char** argv)
     free(texture_properties.bytes);
     texture_properties.width = 1;
     texture_properties.height = 1;
-    u8 pixel = UINT8_MAX;
-    texture_properties.bytes = &pixel;
-    u32 default_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
+    u8 pixels[4] = { UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX };
+    texture_properties.bytes = pixels;
+    u32 default_texture_red =
+        texture_create(&texture_properties, GL_RGBA8, GL_RED);
+    u32 default_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
 
     u32 file_icon_texture = load_icon_as_only_red("res/icons/files.png");
     u32 folder_icon_texture = load_icon_as_only_red("res/icons/folder.png");
@@ -855,6 +866,8 @@ int main(int argc, char** argv)
                                        "./res/shaders/fragment.glsl");
     ftic_assert(main_shader);
     ftic_assert(preview_shader);
+
+    int location = glGetUniformLocation(preview_shader, "textures");
 
     IndexArray index_array = { 0 };
     array_create(&index_array, 100 * 6);
@@ -877,16 +890,25 @@ int main(int argc, char** argv)
     // TODO: make the vertex array growing in OpengGL
 
     RenderingPropertiesArray rendering_properties = { 0 };
-    array_create(&rendering_properties, 1);
-    u32 textures[] = { default_texture,    font_texture,
-                       file_icon_texture,  folder_icon_texture,
-                       close_icon_texture, arrow_icon_texture };
+    array_create(&rendering_properties, 2);
+    u32 main_textures[] = { default_texture_red, font_texture,
+                            file_icon_texture,   folder_icon_texture,
+                            close_icon_texture,  arrow_icon_texture };
     array_push(&rendering_properties,
                rendering_properties_init(
-                   main_shader, textures, static_array_size(textures),
+                   main_shader, main_textures, static_array_size(main_textures),
                    index_buffer_id, &vertex_buffer_layout, 100 * 4));
 
-    RenderingProperties* font_render = rendering_properties.data;
+    u32 preview_textures[10] = { default_texture };
+    array_push(&rendering_properties,
+               rendering_properties_init(preview_shader, preview_textures,
+                                         static_array_size(preview_textures),
+                                         index_buffer_id, &vertex_buffer_layout,
+                                         100 * 4));
+
+    RenderingProperties* main_render = rendering_properties.data;
+    RenderingProperties* preview_render = rendering_properties.data + 1;
+    preview_render->texture_count = 1;
 
     ThreadQueue thread_queue = { 0 };
     thread_init(100000, 8, &thread_queue);
@@ -898,7 +920,7 @@ int main(int argc, char** argv)
 
     DirectoryArray directory_history = { 0 };
     array_create(&directory_history, 10);
-    const char* dir = "C:\\*";
+    const char* dir = "C:\\Users\\linus\\dev\\*";
     DirectoryPage page = { 0 };
     page.directory = platform_get_directory(dir, (u32)strlen(dir));
     array_push(&directory_history, page);
@@ -958,9 +980,10 @@ int main(int argc, char** argv)
                      clear_color.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        rendering_properties_clear(font_render);
+        rendering_properties_clear(main_render);
+        rendering_properties_clear(preview_render);
 
-        font_render->scissor.size = dimensions;
+        main_render->scissor.size = dimensions;
 
         if (mouse_button->activated &&
             mouse_button->mouse_button_event.action == 0 &&
@@ -976,6 +999,19 @@ int main(int argc, char** argv)
             if (is_ctrl_and_key_pressed(key_event, FTIC_KEY_C))
             {
                 platform_copy_to_clipboard(&selected_item_values.paths);
+            }
+            else if (is_ctrl_and_key_pressed(key_event, FTIC_KEY_D))
+            {
+                texture_properties = (TextureProperties){ 0 };
+                texture_load(selected_item_values.paths.data[0],
+                             &texture_properties);
+                ftic_assert(texture_properties.bytes);
+                u32 texture =
+                    texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+                preview_render->textures[preview_render->texture_count++] =
+                    texture;
+                free(texture_properties.bytes);
+                reset_selected_items(&selected_item_values);
             }
             else if (key_event->activated && key_event->key_event.action == 1 &&
                      key_event->key_event.key == FTIC_KEY_ESCAPE)
@@ -1008,7 +1044,7 @@ int main(int argc, char** argv)
         }
 
         V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
-        AABB rect = ui_add_border(font_render, starting_position,
+        AABB rect = ui_add_border(main_render, starting_position,
                                   v2f(border_width, dimensions.y));
 
         V3 search_bar_position = v3f(dimensions.x * 0.6f, 10.0f, 0.0f);
@@ -1039,24 +1075,24 @@ int main(int argc, char** argv)
                 &current_directory->directory.files, scale, &font, padding_top,
                 quad_height, width - 5.0f, dimensions.y, mouse_move,
                 mouse_button, &text_starting_position, &selected_item_values,
-                font_render, &directory_history, &current_directory);
+                main_render, &directory_history, &current_directory);
 
         const f32 back_drop_height =
             parent_directory_path_position.y + font.pixel_height;
-        quad(&font_render->vertices,
+        quad(&main_render->vertices,
              v3f(parent_directory_path_position.x, 0.0f, 0.0f),
              v2f(width + 10.0f, back_drop_height), high_light_color, 0.0f);
-        font_render->index_count++;
+        main_render->index_count++;
 
         parent_directory_path_position.x += 10.0f;
 
-        font_render->index_count += text_generation(
+        main_render->index_count += text_generation(
             font.chars, current_directory->directory.parent, 1.0f,
             parent_directory_path_position, scale, font.pixel_height, NULL,
-            NULL, &font_render->vertices);
+            NULL, &main_render->vertices);
 
         AABB right_border_aabb = ui_add_border(
-            font_render,
+            main_render,
             v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
             v2f(border_width, dimensions.y));
 
@@ -1180,7 +1216,7 @@ int main(int argc, char** argv)
                 &folder_array.array, &file_array.array, scale, &font,
                 padding_top, quad_height, search_result_width, dimensions.y,
                 mouse_move, mouse_button, &search_result_position,
-                &selected_item_values, font_render, &directory_history,
+                &selected_item_values, main_render, &directory_history,
                 &current_directory);
 
             platform_mutex_unlock(&folder_array.mutex);
@@ -1193,22 +1229,22 @@ int main(int argc, char** argv)
             .size = v2f(dimensions.x - right_border_aabb.min.x, border_width),
         };
 
-        quad(&font_render->vertices,
+        quad(&main_render->vertices,
              v3f(side_under_border_aabb.min.x + border_width, 0.0f, 0.0f),
              v2f(side_under_border_aabb.size.x, side_under_border_aabb.min.y),
              clear_color, 0.0f);
-        font_render->index_count++;
+        main_render->index_count++;
 
         render_input(&font, search_buffer.data, search_buffer.size, scale,
                      search_input_position, search_bar_position.y + 10.0f,
                      search_bar_hit, delta_time, &search_blinking_time,
-                     font_render);
+                     main_render);
 
-        quad_with_border(&font_render->vertices, &font_render->index_count,
+        quad_with_border(&main_render->vertices, &main_render->index_count,
                          border_color, v3_v2(search_bar_aabb.min),
                          search_bar_aabb.size, border_width, 0.0f);
 
-        ui_add_border(font_render, v3_v2(side_under_border_aabb.min),
+        ui_add_border(main_render, v3_v2(side_under_border_aabb.min),
                       side_under_border_aabb.size);
 
         V3 back_button_position = v3f(10.0f, 10.0f, 0.0f);
@@ -1241,9 +1277,9 @@ int main(int argc, char** argv)
             }
             main_list_return_value.hit = true;
         }
-        quad(&font_render->vertices, back_button_position, button_aabb.size,
+        quad(&main_render->vertices, back_button_position, button_aabb.size,
              button_color, 0.0f);
-        font_render->index_count++;
+        main_render->index_count++;
 
         back_button_position.x += 9.0f;
         back_button_position.y += 10.0f;
@@ -1251,13 +1287,13 @@ int main(int argc, char** argv)
         const V4 back_icon_color =
             directory_history.size == 1 ? border_color : v4ic(1.0f);
 
-        quad(&font_render->vertices, back_button_position, v2i(20.0f),
+        quad(&main_render->vertices, back_button_position, v2i(20.0f),
              back_icon_color, 5.0f);
-        font_render->index_count++;
+        main_render->index_count++;
 
         V3 back_button_border_position =
             v3f(0.0f, side_under_border_aabb.min.y, 0.0f);
-        ui_add_border(font_render, back_button_border_position,
+        ui_add_border(main_render, back_button_border_position,
                       v2f(rect.min.x, border_width));
 
         V3 scroll_bar_position =
@@ -1266,14 +1302,14 @@ int main(int argc, char** argv)
         f32 total_height = main_list_return_value.count * quad_height;
         add_scroll_bar(scroll_bar_position, dimensions.y, area_y, total_height,
                        quad_height, current_directory->scroll_offset,
-                       font_render);
+                       main_render);
 
         scroll_bar_position =
             v3f(dimensions.width, search_result_aabb.min.y - 8.0f, 0.0f);
         area_y = search_result_aabb.size.y + 8.0f;
         total_height = search_list_return_value.count * quad_height;
         add_scroll_bar(scroll_bar_position, dimensions.y, area_y, total_height,
-                       quad_height, scroll_offset, font_render);
+                       quad_height, scroll_offset, main_render);
 
         if (main_list_return_value.hit || search_list_return_value.hit)
         {
@@ -1284,11 +1320,80 @@ int main(int argc, char** argv)
             platform_change_cursor(platform, FTIC_NORMAL_CURSOR);
         }
 
-        rendering_properties_check_and_grow_buffers(font_render, &index_array);
+        if (preview_render->texture_count > 1)
+        {
+            V2 image_dimensions = v2f((f32)texture_properties.width,
+                                      (f32)texture_properties.height);
 
-        buffer_set_sub_data(font_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
-                            sizeof(Vertex) * font_render->vertices.size,
-                            font_render->vertices.data);
+            const f32 total_preview_width = dimensions.width - 20.0f;
+            const f32 total_preview_height = dimensions.height - 20.0f;
+            const f32 width_different =
+                image_dimensions.width - total_preview_width;
+            const f32 height_different =
+                image_dimensions.height - total_preview_height;
+
+            f32 different = 0.0f;
+            if (width_different > height_different)
+            {
+                different = width_different;
+            }
+            else
+            {
+                different = height_different;
+            }
+
+            V2 preview_dimensions = { 0 };
+            if (different > 0)
+            {
+                if (height_different < 0)
+                {
+                    image_dimensions.height = image_dimensions.height;
+                }
+                else if (width_different < 0)
+                {
+                    image_dimensions.width = image_dimensions.width;
+                }
+                image_dimensions.height -= different;
+                image_dimensions.width -= different;
+            }
+            preview_dimensions = image_dimensions;
+            v2_sub_equal(&preview_dimensions, v2i(border_width * 2.0f));
+
+            V3 preview_position =
+                v3_v2(v2_sub(v2f(10.0f, 10.0f), v2i(border_width)));
+
+            AABB* scissor = &preview_render->scissor;
+            scissor->min = v2_v3(preview_position);
+            scissor->min.y = dimensions.y - scissor->min.y;
+            scissor->min.y -= preview_dimensions.y;
+            scissor->size = preview_dimensions;
+
+            quad_with_border(&preview_render->vertices,
+                             &preview_render->index_count, border_color,
+                             preview_position, preview_dimensions, 2.0f, 0.0f);
+            v3_add_equal(&preview_position, v3_v2(v2i(border_width)));
+            v2_sub_equal(&preview_dimensions, v2i(border_width * 2.0f));
+
+            quad(&preview_render->vertices, preview_position,
+                 preview_dimensions, clear_color, 0.0f);
+            preview_render->index_count++;
+
+            quad(&preview_render->vertices, preview_position,
+                 preview_dimensions, v4i(1.0f), 1.0f);
+            preview_render->index_count++;
+        }
+
+        rendering_properties_check_and_grow_buffers(main_render, &index_array);
+        rendering_properties_check_and_grow_buffers(preview_render,
+                                                    &index_array);
+
+        buffer_set_sub_data(main_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
+                            sizeof(Vertex) * main_render->vertices.size,
+                            main_render->vertices.data);
+
+        buffer_set_sub_data(preview_render->vertex_buffer_id, GL_ARRAY_BUFFER,
+                            0, sizeof(Vertex) * preview_render->vertices.size,
+                            preview_render->vertices.data);
 
         if (mouse_wheel->activated)
         {
@@ -1339,9 +1444,9 @@ int main(int argc, char** argv)
         buffer_delete(rp->index_buffer_id);
     }
     texture_delete(font_texture);
-    texture_delete(default_texture);
+    texture_delete(default_texture_red);
     shader_destroy(main_shader);
-    shader_destroy(shader2);
+    shader_destroy(preview_shader);
     platform_opengl_clean(platform);
     threads_destroy(&thread_queue);
     platform_shut_down(platform);

@@ -58,6 +58,11 @@ u32 shader_create(const char* vertex_file_path, const char* fragment_file_path)
     free(vertex_file.buffer);
     free(fragment_file.buffer);
 
+    if (!vertex_shader || !fragemnt_shader)
+    {
+        return 0;
+    }
+
     u32 program = glCreateProgram();
 
     glAttachShader(program, vertex_shader);
@@ -97,7 +102,6 @@ void shader_set_uniform_matrix4fv(u32 shader, int uniform_location, M4 value)
 {
     glUniformMatrix4fv(uniform_location, 1, GL_FALSE, &value.data[0][0]);
 }
-
 
 ShaderProperties shader_create_properties(u32 shader, const char* projection,
                                           const char* view, const char* model)
