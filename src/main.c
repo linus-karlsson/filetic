@@ -22,7 +22,7 @@
 
 global V4 clear_color = { .r = 0.1f, .g = 0.1f, .b = 0.1f, .a = 1.0f };
 global V4 high_light_color = { .r = 0.2f, .g = 0.2f, .b = 0.2f, .a = 1.0f };
-global V4 border_color = { .r = 0.3f, .g = 0.3f, .b = 0.3f, .a = 1.0f };
+global V4 border_color = { .r = 0.35f, .g = 0.35f, .b = 0.35f, .a = 1.0f };
 global f32 border_width = 2.0f;
 
 typedef struct SafeFileArray
@@ -587,16 +587,20 @@ void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
     }
 }
 
-b8 directory_item_list(const DirectoryItemArray* sub_directories,
-                       const DirectoryItemArray* files, const f32 scale,
-                       const FontTTF* font, const f32 padding_top,
-                       const f32 item_height, const f32 item_width,
-                       const f32 dimension_y, const Event* mouse_move_event,
-                       const Event* mouse_button_event, V3* starting_position,
-                       SelectedItemValues* selected_item_values,
-                       RenderingProperties* font_render,
-                       DirectoryArray* directory_history,
-                       DirectoryPage** current_directory)
+typedef struct DirectoryItemListReturnValue
+{
+    u32 count;
+    b8 hit;
+} DirectoryItemListReturnValue;
+
+DirectoryItemListReturnValue directory_item_list(
+    const DirectoryItemArray* sub_directories, const DirectoryItemArray* files,
+    const f32 scale, const FontTTF* font, const f32 padding_top,
+    const f32 item_height, const f32 item_width, const f32 dimension_y,
+    const Event* mouse_move_event, const Event* mouse_button_event,
+    V3* starting_position, SelectedItemValues* selected_item_values,
+    RenderingProperties* font_render, DirectoryArray* directory_history,
+    DirectoryPage** current_directory)
 {
     b8 folder_hit = false;
     i32 hit_index = -1;
@@ -632,7 +636,10 @@ b8 directory_item_list(const DirectoryItemArray* sub_directories,
     }
     check_and_open_file(mouse_button_event, file_hit, files->data, hit_index);
 
-    return folder_hit || file_hit;
+    return (DirectoryItemListReturnValue){
+        .count = sub_directories->size + files->size,
+        .hit = (folder_hit || file_hit),
+    };
 }
 
 f32 clampf32_low(f32 value, f32 low)
@@ -688,17 +695,17 @@ void render_input(const FontTTF* font, const char* text, u32 text_length,
     }
 }
 
-void set_scroll_offset(const f32 current_y, const f32 offset_y,
-                       const f32 dimension_y, const Event* mouse_wheel_event,
+void set_scroll_offset(const u32 item_count, const f32 item_height,
+                       const f32 area_y, const Event* mouse_wheel_event,
                        f32* offset)
 {
-    f32 total_height = current_y - offset_y;
-    f32 z_delta = (f32)mouse_wheel_event->mouse_wheel_event.z_delta;
-    if ((z_delta > 0) || ((total_height + (*offset)) > dimension_y))
-    {
-        *offset += z_delta;
-    }
+    const f32 total_height = item_count * item_height;
+    const f32 z_delta = (f32)mouse_wheel_event->mouse_wheel_event.z_delta;
+    *offset += z_delta;
     *offset = clampf32_high(*offset, 0.0f);
+
+    const f32 low = area_y - (total_height + item_height);
+    *offset = clampf32_low(*offset, low);
 }
 
 f32 smooth_scroll(const f64 delta_time, const f32 offset, f32 scroll_offset)
@@ -750,6 +757,14 @@ u32 load_icon_as_only_red(const char* file_path)
     u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
     free(texture_properties.bytes);
     return icon_texture;
+}
+
+AABB ui_add_border(RenderingProperties* render, V3 position, V2 size)
+{
+    AABB border_aabb =
+        quad(&render->vertices, position, size, border_color, 0.0f);
+    ++render->index_count;
+    return border_aabb;
 }
 
 int main(int argc, char** argv)
@@ -946,35 +961,38 @@ int main(int argc, char** argv)
         }
 
         V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
-        AABB rect = quad(&font_render->vertices, starting_position,
-                         v2f(border_width, dimensions.y), border_color, 0.0f);
-        ++font_render->index_count;
+        AABB rect = ui_add_border(font_render, starting_position,
+                                  v2f(border_width, dimensions.y));
 
         V3 search_bar_position = v3f(dimensions.x * 0.6f, 10.0f, 0.0f);
 
-        V3 parent_directory_path_position = v3f(rect.min.x + border_width, 30.0f, 0.0f);
+        V3 parent_directory_path_position =
+            v3f(rect.min.x + border_width, 30.0f, 0.0f);
         V3 text_starting_position = parent_directory_path_position;
-        text_starting_position.x += 10.0f;
-        text_starting_position.y +=
-            font.pixel_height + current_directory->scroll_offset;
 
-        const f32 scale = 1.0f;
-        const f32 padding_top = 2.0f;
-        const f32 quad_height = scale * font.pixel_height + padding_top * 5.0f;
+        text_starting_position.x += 10.0f;
+        text_starting_position.y += font.pixel_height;
+
         const f32 width =
             (search_bar_position.x - 10.0f) - text_starting_position.x;
 
         AABB directory_aabb = {
-            .min = v2f(text_starting_position.x, 0.0f),
+            .min = v2_v3(text_starting_position),
             .size = v2f(width, dimensions.y),
         };
+        text_starting_position.y += current_directory->scroll_offset;
 
-        b8 hit = directory_item_list(
-            &current_directory->directory.sub_directories,
-            &current_directory->directory.files, scale, &font, padding_top,
-            quad_height, width, dimensions.y, mouse_move, mouse_button,
-            &text_starting_position, &selected_item_values, font_render,
-            &directory_history, &current_directory);
+        const f32 scale = 1.0f;
+        const f32 padding_top = 2.0f;
+        const f32 quad_height = scale * font.pixel_height + padding_top * 5.0f;
+
+        DirectoryItemListReturnValue main_list_return_value =
+            directory_item_list(
+                &current_directory->directory.sub_directories,
+                &current_directory->directory.files, scale, &font, padding_top,
+                quad_height, width, dimensions.y, mouse_move, mouse_button,
+                &text_starting_position, &selected_item_values, font_render,
+                &directory_history, &current_directory);
 
         const f32 back_drop_height =
             parent_directory_path_position.y + font.pixel_height;
@@ -990,11 +1008,10 @@ int main(int argc, char** argv)
             parent_directory_path_position, scale, font.pixel_height, NULL,
             NULL, &font_render->vertices);
 
-        AABB right_border_aabb =
-            quad(&font_render->vertices,
-                 v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
-                 v2f(border_width, dimensions.y), border_color, 0.0f);
-        ++font_render->index_count;
+        AABB right_border_aabb = ui_add_border(
+            font_render,
+            v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
+            v2f(border_width, dimensions.y));
 
         // Search bar
         const f32 search_bar_width = 250.0f;
@@ -1094,24 +1111,25 @@ int main(int argc, char** argv)
         search_text_position.y += scale * font.pixel_height + 10.0f;
         V3 search_input_position = search_text_position;
 
-        AABB search_result_aabb = { 0 };
-
         V3 search_result_position = search_bar_position;
-        search_result_position.y +=
-            search_bar_aabb.size.y + 20.0f + scroll_offset;
+        search_result_position.y += search_bar_aabb.size.y + 20.0f;
 
-        b8 search_hit = false;
+        AABB search_result_aabb = {
+            .min = v2_v3(search_result_position),
+        };
+
+        search_result_position.y += scroll_offset;
+
+        DirectoryItemListReturnValue search_list_return_value = { 0 };
         if (file_array.array.size || folder_array.array.size)
         {
-            search_result_aabb.min = v2f(search_result_position.x, 0.0f);
-
             const f32 search_result_width =
                 (dimensions.x - search_result_position.x) - 10.0f;
 
             platform_mutex_lock(&file_array.mutex);
             platform_mutex_lock(&folder_array.mutex);
 
-            search_hit = directory_item_list(
+            search_list_return_value = directory_item_list(
                 &folder_array.array, &file_array.array, scale, &font,
                 padding_top, quad_height, search_result_width, dimensions.y,
                 mouse_move, mouse_button, &search_result_position,
@@ -1144,14 +1162,12 @@ int main(int argc, char** argv)
                      search_bar_hit, delta_time, &search_blinking_time,
                      font_render);
 
-
         quad_with_border(&font_render->vertices, &font_render->index_count,
                          border_color, v3_v2(search_bar_aabb.min),
                          search_bar_aabb.size, border_width, 0.0f);
 
-        quad(&font_render->vertices, v3_v2(side_under_border_aabb.min),
-             side_under_border_aabb.size, border_color, 0.0f);
-        font_render->index_count++;
+        ui_add_border(font_render, v3_v2(side_under_border_aabb.min),
+                      side_under_border_aabb.size);
 
         V3 back_button_position = v3f(10.0f, 10.0f, 0.0f);
 
@@ -1181,7 +1197,7 @@ int main(int argc, char** argv)
             {
                 button_color = high_light_color;
             }
-            hit = true;
+            main_list_return_value.hit = true;
         }
         quad(&font_render->vertices, back_button_position, button_aabb.size,
              button_color, 0.0f);
@@ -1199,11 +1215,10 @@ int main(int argc, char** argv)
 
         V3 back_button_border_position =
             v3f(0.0f, side_under_border_aabb.min.y, 0.0f);
-        quad(&font_render->vertices, back_button_border_position,
-             v2f(rect.min.x, border_width), border_color, 0.0f);
-        font_render->index_count++;
+        ui_add_border(font_render, back_button_border_position,
+                      v2f(rect.min.x, border_width));
 
-        if (hit || search_hit)
+        if (main_list_return_value.hit || search_list_return_value.hit)
         {
             platform_change_cursor(platform, FTIC_HAND_CURSOR);
         }
@@ -1222,14 +1237,16 @@ int main(int argc, char** argv)
         {
             if (collision_point_in_aabb(mouse_position, &search_result_aabb))
             {
-                set_scroll_offset(search_result_position.y, scroll_offset,
-                                  dimensions.y, mouse_wheel, &offset);
+                set_scroll_offset(search_list_return_value.count, quad_height,
+                                  search_result_aabb.size.y -
+                                      search_result_aabb.min.y,
+                                  mouse_wheel, &offset);
             }
             else if (collision_point_in_aabb(mouse_position, &directory_aabb))
             {
-                set_scroll_offset(
-                    text_starting_position.y, current_directory->scroll_offset,
-                    dimensions.y, mouse_wheel, &current_directory->offset);
+                set_scroll_offset(main_list_return_value.count, quad_height,
+                                  directory_aabb.size.y - directory_aabb.min.y,
+                                  mouse_wheel, &current_directory->offset);
             }
         }
         current_directory->scroll_offset =
