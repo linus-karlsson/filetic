@@ -23,6 +23,7 @@
 global V4 clear_color = { .r = 0.1f, .g = 0.1f, .b = 0.1f, .a = 1.0f };
 global V4 high_light_color = { .r = 0.2f, .g = 0.2f, .b = 0.2f, .a = 1.0f };
 global V4 border_color = { .r = 0.35f, .g = 0.35f, .b = 0.35f, .a = 1.0f };
+global V4 lighter_color = { .r = 0.6f, .g = 0.6f, .b = 0.6f, .a = 1.0f };
 global f32 border_width = 2.0f;
 
 typedef struct SafeFileArray
@@ -308,6 +309,8 @@ typedef struct RenderingProperties
     u32 texture_count;
     u32* textures;
 
+    AABB scissor;
+
     ShaderProperties shader_properties;
     VertexArray vertices;
 
@@ -366,6 +369,11 @@ void rendering_properties_draw(const RenderingProperties* rendering_properties,
     {
         texture_bind(rendering_properties->textures[i], (int)i);
     }
+
+    const AABB* scissor = &rendering_properties->scissor;
+    glScissor((int)scissor->min.x, (int)scissor->min.y,
+              (int)scissor->size.width, (int)scissor->size.height);
+
     vertex_array_bind(rendering_properties->vertex_array_id);
     index_buffer_bind(rendering_properties->index_buffer_id);
     glDrawElements(GL_TRIANGLES, rendering_properties->index_count * 6,
@@ -704,7 +712,8 @@ void set_scroll_offset(const u32 item_count, const f32 item_height,
     *offset += z_delta;
     *offset = clampf32_high(*offset, 0.0f);
 
-    const f32 low = area_y - (total_height + item_height);
+    f32 low = area_y - (total_height + item_height);
+    low = clampf32_high(low, 0.0f);
     *offset = clampf32_low(*offset, low);
 }
 
@@ -767,6 +776,39 @@ AABB ui_add_border(RenderingProperties* render, V3 position, V2 size)
     return border_aabb;
 }
 
+f32 lerp_f32(const f32 a, const f32 b, const f32 t)
+{
+    return a + (t * (b - a));
+}
+
+void add_scroll_bar(V3 position, const f32 dimension_y, const f32 area_y,
+                    const f32 total_height, const f32 item_height,
+                    const f32 scroll_offset, RenderingProperties* render)
+{
+    const f32 scroll_bar_width = 5.0f;
+    position.x -= scroll_bar_width;
+
+    quad(&render->vertices, position, v2f(scroll_bar_width, area_y),
+         high_light_color, 0.0f);
+    render->index_count++;
+
+    if (area_y < total_height)
+    {
+        const f32 high = 0.0f;
+        const f32 low = area_y - (total_height + item_height);
+        const f32 p = (scroll_offset - low) / (high - low);
+        const V2 scroll_bar_dimensions =
+            v2f(scroll_bar_width, area_y * (area_y / total_height));
+
+        position.y =
+            lerp_f32(dimension_y - scroll_bar_dimensions.height, position.y, p);
+
+        quad(&render->vertices, position, scroll_bar_dimensions, lighter_color,
+             0.0f);
+        render->index_count++;
+    }
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -806,11 +848,13 @@ int main(int argc, char** argv)
     u32 close_icon_texture = load_icon_as_only_red("res/icons/close.png");
     u32 arrow_icon_texture = load_icon_as_only_red("res/icons/arrow.png");
 
-    u32 font_shader = shader_create("./res/shaders/vertex.glsl",
+    u32 main_shader = shader_create("./res/shaders/vertex.glsl",
                                     "./res/shaders/font_fragment.glsl");
-    u32 shader2 = shader_create("./res/shaders/vertex.glsl",
-                                "./res/shaders/fragment.glsl");
-    ftic_assert(font_shader);
+
+    u32 preview_shader = shader_create("./res/shaders/vertex.glsl",
+                                       "./res/shaders/fragment.glsl");
+    ftic_assert(main_shader);
+    ftic_assert(preview_shader);
 
     IndexArray index_array = { 0 };
     array_create(&index_array, 100 * 6);
@@ -839,7 +883,7 @@ int main(int argc, char** argv)
                        close_icon_texture, arrow_icon_texture };
     array_push(&rendering_properties,
                rendering_properties_init(
-                   font_shader, textures, static_array_size(textures),
+                   main_shader, textures, static_array_size(textures),
                    index_buffer_id, &vertex_buffer_layout, 100 * 4));
 
     RenderingProperties* font_render = rendering_properties.data;
@@ -897,6 +941,7 @@ int main(int argc, char** argv)
     mvp.model = m4d();
     enable_gldebugging();
     glEnable(GL_BLEND);
+    glEnable(GL_SCISSOR_TEST);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (platform_is_running(platform))
     {
@@ -914,6 +959,8 @@ int main(int argc, char** argv)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         rendering_properties_clear(font_render);
+
+        font_render->scissor.size = dimensions;
 
         if (mouse_button->activated &&
             mouse_button->mouse_button_event.action == 0 &&
@@ -974,11 +1021,11 @@ int main(int argc, char** argv)
         text_starting_position.y += font.pixel_height;
 
         const f32 width =
-            (search_bar_position.x - 10.0f) - text_starting_position.x;
+            ((search_bar_position.x - 10.0f) - text_starting_position.x);
 
         AABB directory_aabb = {
             .min = v2_v3(text_starting_position),
-            .size = v2f(width, dimensions.y),
+            .size = v2f(width, dimensions.y - text_starting_position.y),
         };
         text_starting_position.y += current_directory->scroll_offset;
 
@@ -990,9 +1037,9 @@ int main(int argc, char** argv)
             directory_item_list(
                 &current_directory->directory.sub_directories,
                 &current_directory->directory.files, scale, &font, padding_top,
-                quad_height, width, dimensions.y, mouse_move, mouse_button,
-                &text_starting_position, &selected_item_values, font_render,
-                &directory_history, &current_directory);
+                quad_height, width - 5.0f, dimensions.y, mouse_move,
+                mouse_button, &text_starting_position, &selected_item_values,
+                font_render, &directory_history, &current_directory);
 
         const f32 back_drop_height =
             parent_directory_path_position.y + font.pixel_height;
@@ -1117,7 +1164,7 @@ int main(int argc, char** argv)
         AABB search_result_aabb = {
             .min = v2_v3(search_result_position),
         };
-
+        search_result_aabb.size = v2_sub(dimensions, search_result_aabb.min);
         search_result_position.y += scroll_offset;
 
         DirectoryItemListReturnValue search_list_return_value = { 0 };
@@ -1135,11 +1182,6 @@ int main(int argc, char** argv)
                 mouse_move, mouse_button, &search_result_position,
                 &selected_item_values, font_render, &directory_history,
                 &current_directory);
-
-            search_result_aabb.size =
-                v2f(dimensions.x - search_result_position.x,
-                    (file_array.array.size + folder_array.array.size) *
-                        quad_height);
 
             platform_mutex_unlock(&folder_array.mutex);
             platform_mutex_unlock(&file_array.mutex);
@@ -1218,6 +1260,21 @@ int main(int argc, char** argv)
         ui_add_border(font_render, back_button_border_position,
                       v2f(rect.min.x, border_width));
 
+        V3 scroll_bar_position =
+            v3f(right_border_aabb.min.x, directory_aabb.min.y, 0.0f);
+        f32 area_y = directory_aabb.size.y;
+        f32 total_height = main_list_return_value.count * quad_height;
+        add_scroll_bar(scroll_bar_position, dimensions.y, area_y, total_height,
+                       quad_height, current_directory->scroll_offset,
+                       font_render);
+
+        scroll_bar_position =
+            v3f(dimensions.width, search_result_aabb.min.y - 8.0f, 0.0f);
+        area_y = search_result_aabb.size.y + 8.0f;
+        total_height = search_list_return_value.count * quad_height;
+        add_scroll_bar(scroll_bar_position, dimensions.y, area_y, total_height,
+                       quad_height, scroll_offset, font_render);
+
         if (main_list_return_value.hit || search_list_return_value.hit)
         {
             platform_change_cursor(platform, FTIC_HAND_CURSOR);
@@ -1238,15 +1295,14 @@ int main(int argc, char** argv)
             if (collision_point_in_aabb(mouse_position, &search_result_aabb))
             {
                 set_scroll_offset(search_list_return_value.count, quad_height,
-                                  search_result_aabb.size.y -
-                                      search_result_aabb.min.y,
-                                  mouse_wheel, &offset);
+                                  search_result_aabb.size.y, mouse_wheel,
+                                  &offset);
             }
             else if (collision_point_in_aabb(mouse_position, &directory_aabb))
             {
                 set_scroll_offset(main_list_return_value.count, quad_height,
-                                  directory_aabb.size.y - directory_aabb.min.y,
-                                  mouse_wheel, &current_directory->offset);
+                                  directory_aabb.size.y, mouse_wheel,
+                                  &current_directory->offset);
             }
         }
         current_directory->scroll_offset =
@@ -1284,7 +1340,7 @@ int main(int argc, char** argv)
     }
     texture_delete(font_texture);
     texture_delete(default_texture);
-    shader_destroy(font_shader);
+    shader_destroy(main_shader);
     shader_destroy(shader2);
     platform_opengl_clean(platform);
     threads_destroy(&thread_queue);
