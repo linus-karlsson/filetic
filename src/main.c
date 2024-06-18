@@ -21,7 +21,9 @@
 #include "hash.h"
 
 global V4 clear_color = { .r = 0.1f, .g = 0.1f, .b = 0.1f, .a = 1.0f };
+global V4 high_light_color = { .r = 0.2f, .g = 0.2f, .b = 0.2f, .a = 1.0f };
 global V4 border_color = { .r = 0.3f, .g = 0.3f, .b = 0.3f, .a = 1.0f };
+global f32 border_width = 2.0f;
 
 typedef struct SafeFileArray
 {
@@ -740,6 +742,16 @@ b8 is_ctrl_and_key_pressed(const Event* event, u32 key)
            event->key_event.ctrl_pressed && event->key_event.key == key;
 }
 
+u32 load_icon_as_only_red(const char* file_path)
+{
+    TextureProperties texture_properties = { 0 };
+    texture_load(file_path, &texture_properties);
+    extract_only_aplha_channel(&texture_properties);
+    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
+    free(texture_properties.bytes);
+    return icon_texture;
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -774,23 +786,10 @@ int main(int argc, char** argv)
     texture_properties.bytes = &pixel;
     u32 default_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
 
-    texture_load("res/icons/files.png", &texture_properties);
-    extract_only_aplha_channel(&texture_properties);
-    u32 file_icon_texture =
-        texture_create(&texture_properties, GL_RGBA8, GL_RED);
-    free(texture_properties.bytes);
-
-    texture_load("res/icons/folder.png", &texture_properties);
-    extract_only_aplha_channel(&texture_properties);
-    u32 folder_icon_texture =
-        texture_create(&texture_properties, GL_RGBA8, GL_RED);
-    free(texture_properties.bytes);
-
-    texture_load("res/icons/close.png", &texture_properties);
-    extract_only_aplha_channel(&texture_properties);
-    u32 close_icon_texture =
-        texture_create(&texture_properties, GL_RGBA8, GL_RED);
-    free(texture_properties.bytes);
+    u32 file_icon_texture = load_icon_as_only_red("res/icons/files.png");
+    u32 folder_icon_texture = load_icon_as_only_red("res/icons/folder.png");
+    u32 close_icon_texture = load_icon_as_only_red("res/icons/close.png");
+    u32 arrow_icon_texture = load_icon_as_only_red("res/icons/arrow.png");
 
     u32 font_shader = shader_create("./res/shaders/vertex.glsl",
                                     "./res/shaders/font_fragment.glsl");
@@ -820,8 +819,9 @@ int main(int argc, char** argv)
 
     RenderingPropertiesArray rendering_properties = { 0 };
     array_create(&rendering_properties, 1);
-    u32 textures[] = { default_texture, font_texture, file_icon_texture,
-                       folder_icon_texture, close_icon_texture };
+    u32 textures[] = { default_texture,    font_texture,
+                       file_icon_texture,  folder_icon_texture,
+                       close_icon_texture, arrow_icon_texture };
     array_push(&rendering_properties,
                rendering_properties_init(
                    font_shader, textures, static_array_size(textures),
@@ -872,10 +872,6 @@ int main(int argc, char** argv)
     f32 offset = 0.0f;
     f32 scroll_offset = 0.0f;
 
-    i32 hit_index = -1;
-
-    b8 enter_pressed = false;
-
     u32 running_id = 0;
     u32 last_running_id = 0;
 
@@ -902,22 +898,14 @@ int main(int argc, char** argv)
                      clear_color.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        rendering_properties_clear(font_render);
+
         if (mouse_button->activated &&
-            mouse_button->mouse_button_event.action == 1 &&
+            mouse_button->mouse_button_event.action == 0 &&
             mouse_button->mouse_button_event.key == FTIC_RIGHT_BUTTON)
         {
-            if (directory_history.size > 1)
-            {
-                platform_reset_directory(
-                    &array_back(&directory_history)->directory);
-                directory_history.size -= 1;
-                current_directory = array_back(&directory_history);
-                reset_selected_items(&selected_item_values);
-                reload_directory(current_directory);
-            }
+            reset_selected_items(&selected_item_values);
         }
-
-        rendering_properties_clear(font_render);
 
         if (selected_item_values.paths.size)
         {
@@ -959,12 +947,12 @@ int main(int argc, char** argv)
 
         V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
         AABB rect = quad(&font_render->vertices, starting_position,
-                         v2f(2.0f, dimensions.y), border_color, 0.0f);
+                         v2f(border_width, dimensions.y), border_color, 0.0f);
         ++font_render->index_count;
 
-        V3 search_bar_position = v3f(dimensions.x * 0.6f, 20.0f, 0.0f);
+        V3 search_bar_position = v3f(dimensions.x * 0.6f, 10.0f, 0.0f);
 
-        V3 parent_directory_path_position = v3f(rect.min.x + 2.0f, 30.0f, 0.0f);
+        V3 parent_directory_path_position = v3f(rect.min.x + border_width, 30.0f, 0.0f);
         V3 text_starting_position = parent_directory_path_position;
         text_starting_position.x += 10.0f;
         text_starting_position.y +=
@@ -992,7 +980,7 @@ int main(int argc, char** argv)
             parent_directory_path_position.y + font.pixel_height;
         quad(&font_render->vertices,
              v3f(parent_directory_path_position.x, 0.0f, 0.0f),
-             v2f(width + 10.0f, back_drop_height), v4ic(0.15f), 0.0f);
+             v2f(width + 10.0f, back_drop_height), high_light_color, 0.0f);
         font_render->index_count++;
 
         parent_directory_path_position.x += 10.0f;
@@ -1002,17 +990,19 @@ int main(int argc, char** argv)
             parent_directory_path_position, scale, font.pixel_height, NULL,
             NULL, &font_render->vertices);
 
-        quad(&font_render->vertices,
-             v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
-             v2f(2.0f, dimensions.y), border_color, 0.0f);
+        AABB right_border_aabb =
+            quad(&font_render->vertices,
+                 v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
+                 v2f(border_width, dimensions.y), border_color, 0.0f);
         ++font_render->index_count;
 
         // Search bar
         const f32 search_bar_width = 250.0f;
         const f32 search_bar_input_text_padding = 10.0f;
-        AABB search_bar_aabb = quad_with_border(
-            &font_render->vertices, &font_render->index_count, border_color,
-            search_bar_position, v2f(search_bar_width, 40.0f), 2.0f, 0.0f);
+        AABB search_bar_aabb = {
+            .min = v2_v3(search_bar_position),
+            .size = v2f(search_bar_width, 40.0f),
+        };
 
         if (mouse_button->activated)
         {
@@ -1077,6 +1067,7 @@ int main(int argc, char** argv)
                         arguments->string_to_match_length = search_buffer.size;
                         arguments->running_id = last_running_id;
                         finding_callback(arguments);
+                        offset = 0.0f;
                     }
                     search_bar_hit = false;
                     search_blinking_time = 0.4f;
@@ -1101,11 +1092,7 @@ int main(int argc, char** argv)
         V3 search_text_position = search_bar_position;
         search_text_position.x += search_bar_input_text_padding;
         search_text_position.y += scale * font.pixel_height + 10.0f;
-
-        render_input(&font, search_buffer.data, search_buffer.size, scale,
-                     search_text_position, search_bar_position.y + 10.0f,
-                     search_bar_hit, delta_time, &search_blinking_time,
-                     font_render);
+        V3 search_input_position = search_text_position;
 
         AABB search_result_aabb = { 0 };
 
@@ -1139,6 +1126,83 @@ int main(int argc, char** argv)
             platform_mutex_unlock(&folder_array.mutex);
             platform_mutex_unlock(&file_array.mutex);
         }
+
+        AABB side_under_border_aabb = {
+            .min = v2f(right_border_aabb.min.x,
+                       search_bar_aabb.min.y + search_bar_aabb.size.y + 10.0f),
+            .size = v2f(dimensions.x - right_border_aabb.min.x, border_width),
+        };
+
+        quad(&font_render->vertices,
+             v3f(side_under_border_aabb.min.x + border_width, 0.0f, 0.0f),
+             v2f(side_under_border_aabb.size.x, side_under_border_aabb.min.y),
+             clear_color, 0.0f);
+        font_render->index_count++;
+
+        render_input(&font, search_buffer.data, search_buffer.size, scale,
+                     search_input_position, search_bar_position.y + 10.0f,
+                     search_bar_hit, delta_time, &search_blinking_time,
+                     font_render);
+
+
+        quad_with_border(&font_render->vertices, &font_render->index_count,
+                         border_color, v3_v2(search_bar_aabb.min),
+                         search_bar_aabb.size, border_width, 0.0f);
+
+        quad(&font_render->vertices, v3_v2(side_under_border_aabb.min),
+             side_under_border_aabb.size, border_color, 0.0f);
+        font_render->index_count++;
+
+        V3 back_button_position = v3f(10.0f, 10.0f, 0.0f);
+
+        AABB button_aabb = {
+            .min = v2_v3(back_button_position),
+            .size = v2i(search_bar_aabb.size.y),
+        };
+
+        V4 button_color = clear_color;
+
+        if (directory_history.size > 1 &&
+            collision_point_in_aabb(mouse_position, &button_aabb))
+        {
+            const MouseButtonEvent* event = &mouse_button->mouse_button_event;
+            if (mouse_button->activated && event->action == 0 &&
+                event->key == FTIC_LEFT_BUTTON)
+            {
+                platform_reset_directory(
+                    &array_back(&directory_history)->directory);
+                directory_history.size -= 1;
+                current_directory = array_back(&directory_history);
+                current_directory->scroll_offset = 0.0f;
+                reset_selected_items(&selected_item_values);
+                reload_directory(current_directory);
+            }
+            else
+            {
+                button_color = high_light_color;
+            }
+            hit = true;
+        }
+        quad(&font_render->vertices, back_button_position, button_aabb.size,
+             button_color, 0.0f);
+        font_render->index_count++;
+
+        back_button_position.x += 9.0f;
+        back_button_position.y += 10.0f;
+
+        const V4 back_icon_color =
+            directory_history.size == 1 ? border_color : v4ic(1.0f);
+
+        quad(&font_render->vertices, back_button_position, v2i(20.0f),
+             back_icon_color, 5.0f);
+        font_render->index_count++;
+
+        V3 back_button_border_position =
+            v3f(0.0f, side_under_border_aabb.min.y, 0.0f);
+        quad(&font_render->vertices, back_button_border_position,
+             v2f(rect.min.x, border_width), border_color, 0.0f);
+        font_render->index_count++;
+
         if (hit || search_hit)
         {
             platform_change_cursor(platform, FTIC_HAND_CURSOR);
@@ -1146,7 +1210,6 @@ int main(int argc, char** argv)
         else
         {
             platform_change_cursor(platform, FTIC_NORMAL_CURSOR);
-            hit_index = -1;
         }
 
         rendering_properties_check_and_grow_buffers(font_render, &index_array);
