@@ -145,6 +145,9 @@ V4 v4_add(V4 v1, V4 v2);
 V2 v2_sub(V2 v1, V2 v2);
 V3 v3_sub(V3 v1, V3 v2);
 V4 v4_sub(V4 v1, V4 v2);
+V2 v2_div(V2 v1, V2 v2);
+V3 v3_div(V3 v1, V3 v2);
+V4 v4_div(V4 v1, V4 v2);
 V2 v2_s_add(V2 v1, float s);
 V3 v3_s_add(V3 v1, float s);
 V4 v4_s_add(V4 v1, float s);
@@ -435,6 +438,21 @@ V3 v3_sub(V3 v1, V3 v2)
 V4 v4_sub(V4 v1, V4 v2)
 {
     return v4f(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z, v1.w - v2.w);
+}
+
+V2 v2_div(V2 v1, V2 v2)
+{
+    return v2f(v1.x / v2.x, v1.y / v2.y);
+}
+
+V3 v3_div(V3 v1, V3 v2)
+{
+    return v3f(v1.x / v2.x, v1.y / v2.y, v1.z / v2.z);
+}
+
+V4 v4_div(V4 v1, V4 v2)
+{
+    return v4f(v1.x / v2.x, v1.y / v2.y, v1.z / v2.z, v1.w / v2.w);
 }
 
 V2 v2_s_add(V2 v1, float s)

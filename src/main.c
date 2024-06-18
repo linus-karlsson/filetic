@@ -920,7 +920,8 @@ int main(int argc, char** argv)
 
     DirectoryArray directory_history = { 0 };
     array_create(&directory_history, 10);
-    const char* dir = "C:\\Users\\linus\\dev\\*";
+    // const char* dir = "C:\\Users\\linus\\dev\\*";
+    const char* dir = "C:\\*";
     DirectoryPage page = { 0 };
     page.directory = platform_get_directory(dir, (u32)strlen(dir));
     array_push(&directory_history, page);
@@ -1325,54 +1326,34 @@ int main(int argc, char** argv)
             V2 image_dimensions = v2f((f32)texture_properties.width,
                                       (f32)texture_properties.height);
 
-            const f32 total_preview_width = dimensions.width - 20.0f;
-            const f32 total_preview_height = dimensions.height - 20.0f;
-            const f32 width_different =
-                image_dimensions.width - total_preview_width;
-            const f32 height_different =
-                image_dimensions.height - total_preview_height;
-
-            f32 different = 0.0f;
-            if (width_different > height_different)
-            {
-                different = width_different;
-            }
-            else
-            {
-                different = height_different;
-            }
-
+            const V2 total_preview_dimensions = v2_s_sub(dimensions, 20.0f);
+            const V2 ratios = v2_div(total_preview_dimensions, image_dimensions);
+            f32 scale_factor =
+                ratios.width < ratios.height ? ratios.width : ratios.height;
             V2 preview_dimensions = { 0 };
-            if (different > 0)
+            if (scale_factor < 1.0f)
             {
-                if (height_different < 0)
-                {
-                    image_dimensions.height = image_dimensions.height;
-                }
-                else if (width_different < 0)
-                {
-                    image_dimensions.width = image_dimensions.width;
-                }
-                image_dimensions.height -= different;
-                image_dimensions.width -= different;
+                v2_s_multi_equal(&image_dimensions, scale_factor);
             }
             preview_dimensions = image_dimensions;
-            v2_sub_equal(&preview_dimensions, v2i(border_width * 2.0f));
+            v2_s_add_equal(&preview_dimensions, border_width * 2.0f);
 
-            V3 preview_position =
-                v3_v2(v2_sub(v2f(10.0f, 10.0f), v2i(border_width)));
+            V3 preview_position = v3_v2(v2_s_multi(dimensions, 0.5f));
+            v3_sub_equal(&preview_position,
+                         v3_v2(v2_s_multi(preview_dimensions, 0.5f)));
 
             AABB* scissor = &preview_render->scissor;
             scissor->min = v2_v3(preview_position);
             scissor->min.y = dimensions.y - scissor->min.y;
             scissor->min.y -= preview_dimensions.y;
             scissor->size = preview_dimensions;
+            scissor->size.width += border_width; 
 
             quad_with_border(&preview_render->vertices,
                              &preview_render->index_count, border_color,
-                             preview_position, preview_dimensions, 2.0f, 0.0f);
+                             preview_position, preview_dimensions, border_width, 0.0f);
             v3_add_equal(&preview_position, v3_v2(v2i(border_width)));
-            v2_sub_equal(&preview_dimensions, v2i(border_width * 2.0f));
+            v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
 
             quad(&preview_render->vertices, preview_position,
                  preview_dimensions, clear_color, 0.0f);
