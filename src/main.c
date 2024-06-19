@@ -114,6 +114,12 @@ typedef struct RenderingPropertiesArray
     RenderingProperties* data;
 } RenderingPropertiesArray;
 
+typedef struct ScrollBar
+{
+    f32 mouse_pointer_offset;
+    b8 dragging;
+} ScrollBar;
+
 typedef struct ApplicationContext
 {
     Platform* platform;
@@ -152,6 +158,8 @@ typedef struct SearchPage
     SafeFileArray search_result_file_array;
     SafeFileArray search_result_folder_array;
     RenderingProperties* render;
+
+    ScrollBar scroll_bar;
 
     u32 running_id;
     u32 last_running_id;
@@ -892,9 +900,12 @@ f32 lerp_f32(const f32 a, const f32 b, const f32 t)
     return a + (t * (b - a));
 }
 
-void add_scroll_bar(V3 position, const f32 dimension_y, const f32 area_y,
+void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
+                    const Event* mouse_button, const V2 mouse_position,
+                    const f32 dimension_y, const f32 area_y,
                     const f32 total_height, const f32 item_height,
-                    const f32 scroll_offset, RenderingProperties* render)
+                    f32* scroll_offset, f32* offset,
+                    RenderingProperties* render)
 {
     const f32 scroll_bar_width = 5.0f;
     position.x -= scroll_bar_width;
@@ -905,18 +916,44 @@ void add_scroll_bar(V3 position, const f32 dimension_y, const f32 area_y,
 
     if (area_y < total_height)
     {
+        const f32 initial_y = position.y;
         const f32 high = 0.0f;
         const f32 low = area_y - (total_height + item_height);
-        const f32 p = (scroll_offset - low) / (high - low);
+        const f32 p = (*scroll_offset - low) / (high - low);
         const V2 scroll_bar_dimensions =
             v2f(scroll_bar_width, area_y * (area_y / total_height));
 
         position.y =
-            lerp_f32(dimension_y - scroll_bar_dimensions.height, position.y, p);
+            lerp_f32(dimension_y - scroll_bar_dimensions.height, initial_y, p);
 
-        quad(&render->vertices, position, scroll_bar_dimensions, lighter_color,
-             0.0f);
+        AABB scroll_bar_aabb = quad(&render->vertices, position,
+                                    scroll_bar_dimensions, lighter_color, 0.0f);
         render->index_count++;
+
+        if (mouse_button->mouse_button_event.action == 1 &&
+            collision_point_in_aabb(mouse_position, &scroll_bar_aabb))
+        {
+            scroll_bar->dragging = true;
+            scroll_bar->mouse_pointer_offset =
+                scroll_bar_aabb.min.y - mouse_position.y;
+        }
+        if (mouse_button->mouse_button_event.action == 0)
+        {
+            scroll_bar->dragging = false;
+        }
+
+        if (scroll_bar->dragging)
+        {
+            const f32 end_position_y =
+                dimension_y - scroll_bar_dimensions.height;
+            const f32 new_y =
+                mouse_position.y + scroll_bar->mouse_pointer_offset;
+            const f32 offset_p =
+                (new_y - end_position_y) / (initial_y - end_position_y);
+            const f32 lerp = lerp_f32(low, high, offset_p);
+            *scroll_offset = lerp;
+            *offset = lerp;
+        }
     }
 }
 
@@ -1215,6 +1252,7 @@ void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
 DirectoryItemListReturnValue
 search_page_update(SearchPage* page, const ApplicationContext* application,
                    const b8 check_colission, const V3 search_bar_position,
+                   const f32 search_page_header_start_x,
                    DirectoryArray* directory_history,
                    ThreadTaskQueue* thread_task_queue,
                    SelectedItemValues* selected_item_values)
@@ -1237,6 +1275,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
 
     V3 search_result_position = search_bar_position;
     search_result_position.y += page->search_bar_aabb.size.y + 20.0f;
+    const f32 search_page_header_size_y = search_result_position.y;
 
     page->search_result_aabb = (AABB){
         .min = v2_v3(search_result_position),
@@ -1288,6 +1327,12 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
             &application->font, directory_history, thread_task_queue);
     }
 
+    quad(&page->render->vertices, v3f(search_page_header_start_x, 0.0f, 0.0f),
+         v2f(application->dimensions.x - search_page_header_start_x,
+             search_page_header_size_y),
+         clear_color, 0.0f);
+    page->render->index_count++;
+
     // Search bar
     render_input(&application->font, page->search_buffer.data,
                  page->search_buffer.size, scale, search_input_position,
@@ -1305,9 +1350,10 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
             page->search_result_aabb.min.y - 8.0f, 0.0f);
     const f32 area_y = page->search_result_aabb.size.y + 8.0f;
     const f32 total_height = search_list_return_value.count * quad_height;
-    add_scroll_bar(scroll_bar_position, application->dimensions.y, area_y,
-                   total_height, quad_height, page->scroll_offset,
-                   page->render);
+    scroll_bar_add(&page->scroll_bar, scroll_bar_position,
+                   application->mouse_button, application->mouse_position,
+                   application->dimensions.y, area_y, total_height, quad_height,
+                   &page->scroll_offset, &page->offset, page->render);
 
     return search_list_return_value;
 }
@@ -1492,17 +1538,17 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
     scissor->size.width += border_width;
 
     AABB preview_aabb = quad_with_border(
-        &render->vertices, &render->index_count,
-        preview_position, preview_dimensions, border_color, border_width, 0.0f);
+        &render->vertices, &render->index_count, preview_position,
+        preview_dimensions, border_color, border_width, 0.0f);
     v3_add_equal(&preview_position, v3_v2(v2i(border_width)));
     v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
 
-    quad(&render->vertices, preview_position, preview_dimensions,
-         clear_color, 0.0f);
+    quad(&render->vertices, preview_position, preview_dimensions, clear_color,
+         0.0f);
     render->index_count++;
 
-    quad(&render->vertices, preview_position, preview_dimensions,
-         v4i(1.0f), 1.0f);
+    quad(&render->vertices, preview_position, preview_dimensions, v4i(1.0f),
+         1.0f);
     render->index_count++;
 
     const MouseButtonEvent* event =
@@ -1513,8 +1559,7 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
     {
         if (render->texture_count > 1)
         {
-            texture_delete(
-                render->textures[--render->texture_count]);
+            texture_delete(render->textures[--render->texture_count]);
         }
         rendering_properties_clear(render);
     }
@@ -1575,6 +1620,9 @@ int main(int argc, char** argv)
 
     V2 image_dimensions = v2d();
 
+    ScrollBar main_scroll_bar = { 0 };
+    b8 search_scroll_bar_dragging = false;
+
     enable_gldebugging();
     glEnable(GL_BLEND);
     glEnable(GL_SCISSOR_TEST);
@@ -1615,7 +1663,8 @@ int main(int argc, char** argv)
                 const char* path = selected_item_values.paths.data[0];
                 const char* extension =
                     get_file_extension(path, (u32)strlen(path));
-                if (!strcmp(extension, ".png") || !strcmp(extension, ".jpg"))
+                if (extension &&
+                    (!strcmp(extension, ".png") || !strcmp(extension, ".jpg")))
                 {
                     TextureProperties texture_properties = { 0 };
                     texture_load(path, &texture_properties);
@@ -1714,14 +1763,6 @@ int main(int argc, char** argv)
             v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
             v2f(border_width, application.dimensions.y));
 
-        // Search bar
-
-        DirectoryItemListReturnValue search_list_return_value =
-            search_page_update(&search_page, &application, check_colission,
-                               search_bar_position,
-                               &application.directory_history,
-                               &thread_queue.task_queue, &selected_item_values);
-
         AABB side_under_border_aabb = {
             .min = v2f(right_border_aabb.min.x,
                        search_page.search_bar_aabb.min.y +
@@ -1730,12 +1771,14 @@ int main(int argc, char** argv)
                         border_width),
         };
 
-        // TODO(Linus): Backdrop under search_bar
-        quad(&main_render->vertices,
-             v3f(side_under_border_aabb.min.x + border_width, 0.0f, 0.0f),
-             v2f(side_under_border_aabb.size.x, side_under_border_aabb.min.y),
-             clear_color, 0.0f);
-        main_render->index_count++;
+        // Search bar
+
+        DirectoryItemListReturnValue search_list_return_value =
+            search_page_update(&search_page, &application, check_colission,
+                               search_bar_position,
+                               side_under_border_aabb.min.x + border_width,
+                               &application.directory_history,
+                               &thread_queue.task_queue, &selected_item_values);
 
         ui_add_border(main_render, v3_v2(side_under_border_aabb.min),
                       side_under_border_aabb.size);
@@ -1796,10 +1839,12 @@ int main(int argc, char** argv)
             v3f(right_border_aabb.min.x, directory_aabb.min.y, 0.0f);
         f32 area_y = directory_aabb.size.y;
         f32 total_height = main_list_return_value.count * quad_height;
-        add_scroll_bar(
-            scroll_bar_position, application.dimensions.y, area_y, total_height,
-            quad_height,
-            current_directory(&application.directory_history)->scroll_offset,
+        scroll_bar_add(
+            &main_scroll_bar, scroll_bar_position, application.mouse_button,
+            application.mouse_position, application.dimensions.y, area_y,
+            total_height, quad_height,
+            &current_directory(&application.directory_history)->scroll_offset,
+            &current_directory(&application.directory_history)->offset,
             main_render);
 
         if (is_mouse_button_clicked(application.mouse_button,
