@@ -20,11 +20,17 @@
 #include "event.h"
 #include "hash.h"
 
-global V4 clear_color = { .r = 0.1f, .g = 0.1f, .b = 0.1f, .a = 1.0f };
-global V4 high_light_color = { .r = 0.2f, .g = 0.2f, .b = 0.2f, .a = 1.0f };
-global V4 border_color = { .r = 0.35f, .g = 0.35f, .b = 0.35f, .a = 1.0f };
-global V4 lighter_color = { .r = 0.6f, .g = 0.6f, .b = 0.6f, .a = 1.0f };
-global f32 border_width = 2.0f;
+global const V4 clear_color = { .r = 0.1f, .g = 0.1f, .b = 0.1f, .a = 1.0f };
+global const V4 high_light_color = {
+    .r = 0.2f, .g = 0.2f, .b = 0.2f, .a = 1.0f
+};
+global const V4 border_color = {
+    .r = 0.35f, .g = 0.35f, .b = 0.35f, .a = 1.0f
+};
+global const V4 lighter_color = { .r = 0.6f, .g = 0.6f, .b = 0.6f, .a = 1.0f };
+global const f32 border_width = 2.0f;
+
+global const f32 PI = 3.141592653589f;
 
 typedef struct SafeFileArray
 {
@@ -134,6 +140,17 @@ void enable_gldebugging()
     glDebugMessageCallback(opengl_log_message, NULL);
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+}
+
+f32 ease_out_elastic(f32 x)
+{
+    if (x == 0 || x == 1)
+    {
+        return x;
+    }
+    const f32 c4 = (2.0f * PI) / 3.0f;
+
+    return powf(2.0f, -10.0f * x) * sinf((x * 10.0f - 0.75f) * c4) + 1.0f;
 }
 
 void parse_all_subdirectories(const char* start_directory, const u32 length)
@@ -484,10 +501,12 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
             }
         }
     }
-    const V4 color = (this_hit || selected) ? v4ic(0.3f) : v4ic(0.1f);
+    const V4 color = (this_hit || selected) ? border_color : clear_color;
+    // Backdrop
     quad(&render->vertices, starting_position, aabb.size, color, 0.0f);
     render->index_count += 1;
 
+    // Icon
     aabb =
         quad(&render->vertices,
              v3f(starting_position.x + 5.0f, starting_position.y + 3.0f, 0.0f),
@@ -834,6 +853,33 @@ const char* get_file_extension(const char* path, const u32 path_length)
     return NULL;
 }
 
+void paste_in_directory(CharPtrArray* pasted_paths,
+                        DirectoryPage* current_directory)
+{
+    platform_paste_from_clipboard(pasted_paths);
+    if (pasted_paths->size)
+    {
+        platform_paste_to_directory(pasted_paths,
+                                    current_directory->directory.parent);
+        for (u32 i = 0; i < pasted_paths->size; ++i)
+        {
+            free(pasted_paths->data[i]);
+        }
+        pasted_paths->size = 0;
+        reload_directory(current_directory);
+    }
+}
+
+b8 is_mouse_button_clicked(const Event* event, u8 button)
+{
+    return event->activated && event->mouse_button_event.action == 0 &&
+           event->mouse_button_event.key == button;
+}
+
+#define COPY_PROMPT_INDEX 0
+#define PASTE_PROMPT_INDEX 1
+#define DELET_PROMPT_INDEX 2
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -974,6 +1020,15 @@ int main(int argc, char** argv)
     u32 running_id = 0;
     u32 last_running_id = 0;
 
+    f32 x = 0.0f;
+    b8 right_clicked = false;
+    V3 drop_down_position = v3d();
+    const char* drop_down_prompts[] = {
+        [COPY_PROMPT_INDEX] = "Copy",
+        [PASTE_PROMPT_INDEX] = "Paste",
+        [DELET_PROMPT_INDEX] = "Delete",
+    };
+
     f64 last_time = platform_get_time();
     f64 delta_time = 0.0f;
     MVP mvp = { 0 };
@@ -1002,13 +1057,6 @@ int main(int argc, char** argv)
         rendering_properties_clear(preview_render);
 
         main_render->scissor.size = dimensions;
-
-        if (mouse_button->activated &&
-            mouse_button->mouse_button_event.action == 0 &&
-            mouse_button->mouse_button_event.key == FTIC_RIGHT_BUTTON)
-        {
-            reset_selected_items(&selected_item_values);
-        }
 
         if (selected_item_values.paths.size)
         {
@@ -1057,19 +1105,7 @@ int main(int argc, char** argv)
         }
         if (is_ctrl_and_key_pressed(key_event, FTIC_KEY_V))
         {
-            platform_paste_from_clipboard(&pasted_paths);
-            if (pasted_paths.size)
-            {
-                platform_paste_to_directory(
-                    &pasted_paths, current_directory->directory.parent);
-                for (u32 i = 0; i < pasted_paths.size; ++i)
-                {
-                    free(pasted_paths.data[i]);
-                }
-                pasted_paths.size = 0;
-                reset_selected_items(&selected_item_values);
-                reload_directory(current_directory);
-            }
+            paste_in_directory(&pasted_paths, current_directory);
         }
 
         V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
@@ -1270,8 +1306,8 @@ int main(int argc, char** argv)
                      main_render);
 
         quad_with_border(&main_render->vertices, &main_render->index_count,
-                         border_color, v3_v2(search_bar_aabb.min),
-                         search_bar_aabb.size, border_width, 0.0f);
+                         v3_v2(search_bar_aabb.min), search_bar_aabb.size,
+                         border_color, border_width, 0.0f);
 
         ui_add_border(main_render, v3_v2(side_under_border_aabb.min),
                       side_under_border_aabb.size);
@@ -1340,6 +1376,147 @@ int main(int argc, char** argv)
         add_scroll_bar(scroll_bar_position, dimensions.y, area_y, total_height,
                        quad_height, scroll_offset, main_render);
 
+        if (is_mouse_button_clicked(mouse_button, FTIC_RIGHT_BUTTON))
+        {
+            right_clicked = true;
+            drop_down_position = v3_v2(mouse_position);
+            x = 0.0f;
+        }
+        if (right_clicked)
+        {
+            x += (f32)delta_time * 2.0f;
+
+            const u32 drop_down_item_count =
+                static_array_size(drop_down_prompts);
+            const f32 drop_down_item_height = 40.0f;
+            const f32 end_value = drop_down_item_count * drop_down_item_height;
+            const f32 val = ease_out_elastic(x) * end_value;
+            const f32 p = val / end_value;
+            const f32 drop_down_width = 100.0f;
+            const f32 drop_down_border_width = 1.0f;
+            const f32 border_extra_padding = drop_down_border_width * 2.0f;
+            const f32 drop_down_outer_padding = 10.0f + border_extra_padding;
+            const V2 end_position =
+                v2f(drop_down_position.x + drop_down_width +
+                        drop_down_outer_padding,
+                    drop_down_position.y + end_value + drop_down_outer_padding);
+
+            f32 diff = end_position.y - dimensions.y;
+            if (diff > 0)
+            {
+                drop_down_position.y -= diff;
+            }
+            diff = end_position.x - dimensions.x;
+            if (diff > 0)
+            {
+                drop_down_position.x -= diff;
+            }
+
+            quad_with_border(&main_render->vertices, &main_render->index_count,
+                             v3f(drop_down_position.x - drop_down_border_width,
+                                 drop_down_position.y - drop_down_border_width,
+                                 0.0f),
+                             v2f(drop_down_width + border_extra_padding,
+                                 val + border_extra_padding),
+                             lighter_color, drop_down_border_width, 0.0f);
+
+            b8 mouse_button_clicked =
+                is_mouse_button_clicked(mouse_button, FTIC_LEFT_BUTTON);
+
+            b8 any_drop_down_item_hit = false;
+            const f32 promt_item_text_padding = 5.0f;
+            V3 promt_item_position = drop_down_position;
+            for (u32 i = 0; i < drop_down_item_count; ++i)
+            {
+                AABB drop_down_item_aabb = {
+                    .min = v2_v3(promt_item_position),
+                    .size = v2f(drop_down_width, drop_down_item_height * p),
+                };
+
+                b8 drop_down_item_hit = false;
+                if (collision_point_in_aabb(mouse_position,
+                                            &drop_down_item_aabb))
+                {
+                    drop_down_item_hit = true;
+                    any_drop_down_item_hit = true;
+                }
+                const V4 drop_down_color =
+                    drop_down_item_hit ? border_color : high_light_color;
+
+                quad(&main_render->vertices, promt_item_position,
+                     drop_down_item_aabb.size, drop_down_color, 0.0f);
+                main_render->index_count++;
+
+                V3 promt_item_text_position = promt_item_position;
+                promt_item_text_position.y +=
+                    font.pixel_height + promt_item_text_padding + 3.0f;
+                promt_item_text_position.x += promt_item_text_padding;
+
+                V4 text_color = v4i(1.0f);
+
+                switch (i)
+                {
+                    case COPY_PROMPT_INDEX:
+                    {
+                        if (selected_item_values.paths.size == 0)
+                        {
+                            text_color = lighter_color;
+                        }
+                        else
+                        {
+                            if (mouse_button_clicked && drop_down_item_hit)
+                            {
+                                platform_copy_to_clipboard(
+                                    &selected_item_values.paths);
+                            }
+                        }
+                        break;
+                    }
+                    case PASTE_PROMPT_INDEX:
+                    {
+                        if (platform_clipboard_is_empty())
+                        {
+                            text_color = lighter_color;
+                        }
+                        else
+                        {
+                            if (mouse_button_clicked && drop_down_item_hit)
+                            {
+                                paste_in_directory(&pasted_paths,
+                                                   current_directory);
+                            }
+                        }
+                        break;
+                    }
+                    case DELET_PROMPT_INDEX:
+                    {
+                        if (selected_item_values.paths.size == 0)
+                        {
+                            text_color = lighter_color;
+                        }
+                        else
+                        {
+                            if (mouse_button_clicked && drop_down_item_hit)
+                            {
+                                platform_delete_files(
+                                    &selected_item_values.paths);
+                                reload_directory(current_directory);
+                            }
+                        }
+                        break;
+                    }
+                    default: break;
+                }
+                main_render->index_count += text_generation_color(
+                    font.chars, drop_down_prompts[i], 1.0f,
+                    promt_item_text_position, scale, font.pixel_height * p,
+                    text_color, NULL, NULL, &main_render->vertices);
+
+                promt_item_position.y += drop_down_item_aabb.size.y;
+            }
+            right_clicked = !((!any_drop_down_item_hit) & mouse_button_clicked);
+        }
+
         if (main_list_return_value.hit || search_list_return_value.hit)
         {
             platform_change_cursor(platform, FTIC_HAND_CURSOR);
@@ -1378,10 +1555,10 @@ int main(int argc, char** argv)
             scissor->size = preview_dimensions;
             scissor->size.width += border_width;
 
-            AABB preview_aabb = quad_with_border(&preview_render->vertices,
-                             &preview_render->index_count, border_color,
-                             preview_position, preview_dimensions, border_width,
-                             0.0f);
+            AABB preview_aabb = quad_with_border(
+                &preview_render->vertices, &preview_render->index_count,
+                preview_position, preview_dimensions, border_color,
+                border_width, 0.0f);
             v3_add_equal(&preview_position, v3_v2(v2i(border_width)));
             v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
 

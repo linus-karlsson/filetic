@@ -33,9 +33,10 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
     free(file.buffer);
 }
 
-u32 text_generation(const CharacterTTF* c_ttf, const char* text,
-                    float texture_index, V3 pos, f32 scale, f32 line_height,
-                    u32* new_lines_count, f32* x_advance, VertexArray* array)
+u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
+                          float texture_index, V3 pos, f32 scale,
+                          f32 line_height, V4 color, u32* new_lines_count,
+                          f32* x_advance, VertexArray* array)
 {
     u32 count = 0;
     f32 start_x = pos.x;
@@ -56,7 +57,7 @@ u32 text_generation(const CharacterTTF* c_ttf, const char* text,
 
             V2 size = v2_s_multi(c->dimensions, scale);
             V3 curr_pos = v3_add(pos, v3_v2(v2_s_multi(c->offset, scale)));
-            quad_co(array, curr_pos, size, v4i(1.0f), c->text_coords,
+            quad_co(array, curr_pos, size, color, c->text_coords,
                     texture_index);
 
             pos.x += c->x_advance * scale;

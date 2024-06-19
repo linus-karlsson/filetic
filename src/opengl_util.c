@@ -62,8 +62,8 @@ void generate_indicies(IndexArray* array, u32 offset, u32 indices_count)
     }
 }
 
-AABB quad_with_border(VertexArray* vert_array, u32* num_indices, V4 border_color,
-                V3 top_left, V2 size, f32 thickness, f32 tex_index)
+AABB quad_with_border(VertexArray* vert_array, u32* num_indices, V3 top_left,
+                      V2 size, V4 border_color, f32 thickness, f32 tex_index)
 {
     V2 h_size = v2f(size.x, thickness);
     V2 v_size = v2f(thickness, size.y);
@@ -80,7 +80,7 @@ AABB quad_with_border(VertexArray* vert_array, u32* num_indices, V4 border_color
          v3f(top_left.x + h_size.x - thickness, top_left.y, top_left.z), v_size,
          border_color, tex_index);
 
-    if(num_indices)
+    if (num_indices)
     {
         *num_indices += 4;
     }

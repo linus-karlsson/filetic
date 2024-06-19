@@ -119,6 +119,7 @@ void platform_sleep(u64 milliseconds);
 
 void platform_open_file(const char* file_path);
 void platform_copy_to_clipboard(const CharPtrArray* paths);
+b8 platform_clipboard_is_empty();
 void platform_paste_from_clipboard(CharPtrArray* paths);
 void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path);
 void platform_delete_files(const CharPtrArray* paths);

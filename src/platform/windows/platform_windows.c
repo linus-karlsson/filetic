@@ -69,7 +69,8 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
                 u16 key = (u16)w_param;
                 b8 ctrl_pressed = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
                 b8 alt_pressed = (GetKeyState(VK_MENU) & 0x8000) != 0;
-                platform->callbacks.on_key_pressed(key, ctrl_pressed, alt_pressed);
+                platform->callbacks.on_key_pressed(key, ctrl_pressed,
+                                                   alt_pressed);
             }
             break;
         }
@@ -81,7 +82,8 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
                 u16 key = (u16)w_param;
                 b8 ctrl_pressed = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
                 b8 alt_pressed = (GetKeyState(VK_MENU) & 0x8000) != 0;
-                platform->callbacks.on_key_released(key, ctrl_pressed, alt_pressed);
+                platform->callbacks.on_key_released(key, ctrl_pressed,
+                                                    alt_pressed);
             }
             break;
         }
@@ -767,6 +769,22 @@ void platform_paste_from_clipboard(CharPtrArray* paths)
         }
         CloseClipboard();
     }
+}
+
+b8 platform_clipboard_is_empty()
+{
+    b8 result = true;
+    if (OpenClipboard(NULL))
+    {
+        HGLOBAL hGlobal = GetClipboardData(CF_HDROP);
+        if (hGlobal)
+        {
+            result = false;
+            GlobalUnlock(hGlobal);
+        }
+        CloseClipboard();
+    }
+    return result;
 }
 
 void platform_paste_to_directory(const CharPtrArray* paths,
