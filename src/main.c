@@ -1092,7 +1092,7 @@ void rendering_properties_array_init(const u32 index_buffer_id,
                                          index_buffer_id, &vertex_buffer_layout,
                                          100 * 4));
 
-    u32* preview_textures = (u32*)calloc(1, sizeof(u32));
+    u32* preview_textures = (u32*)calloc(2, sizeof(u32));
     preview_textures[0] = default_texture;
     array_push(&rendering_properties,
                rendering_properties_init(preview_shader, preview_textures, 1,
@@ -1127,7 +1127,6 @@ void application_end_frame(ApplicationContext* application)
 
     f64 now = platform_get_time();
     application->delta_time = now - application->last_time;
-    /*
     const u32 target_milliseconds = 8;
     const u64 curr_milliseconds = (u64)(application->delta_time * 1000.0f);
     if (target_milliseconds > curr_milliseconds)
@@ -1138,7 +1137,6 @@ void application_end_frame(ApplicationContext* application)
         now = platform_get_time();
         application->delta_time = now - application->last_time;
     }
-    */
     application->last_time = now;
 }
 
@@ -1466,6 +1464,62 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
     return should_close || ((!any_drop_down_item_hit) & mouse_button_clicked);
 }
 
+void open_preview(V2 image_dimensions, const ApplicationContext* application,
+                  RenderingProperties* render)
+{
+    const V2 total_preview_dimensions =
+        v2_s_sub(application->dimensions, 40.0f);
+    const V2 ratios = v2_div(total_preview_dimensions, image_dimensions);
+    f32 scale_factor =
+        ratios.width < ratios.height ? ratios.width : ratios.height;
+    V2 preview_dimensions = { 0 };
+    if (scale_factor < 1.0f)
+    {
+        v2_s_multi_equal(&image_dimensions, scale_factor);
+    }
+    preview_dimensions = image_dimensions;
+    v2_s_add_equal(&preview_dimensions, border_width * 2.0f);
+
+    V3 preview_position = v3_v2(v2_s_multi(application->dimensions, 0.5f));
+    v3_sub_equal(&preview_position,
+                 v3_v2(v2_s_multi(preview_dimensions, 0.5f)));
+
+    AABB* scissor = &render->scissor;
+    scissor->min = v2_v3(preview_position);
+    scissor->min.y = application->dimensions.y - scissor->min.y;
+    scissor->min.y -= preview_dimensions.y;
+    scissor->size = preview_dimensions;
+    scissor->size.width += border_width;
+
+    AABB preview_aabb = quad_with_border(
+        &render->vertices, &render->index_count,
+        preview_position, preview_dimensions, border_color, border_width, 0.0f);
+    v3_add_equal(&preview_position, v3_v2(v2i(border_width)));
+    v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
+
+    quad(&render->vertices, preview_position, preview_dimensions,
+         clear_color, 0.0f);
+    render->index_count++;
+
+    quad(&render->vertices, preview_position, preview_dimensions,
+         v4i(1.0f), 1.0f);
+    render->index_count++;
+
+    const MouseButtonEvent* event =
+        &application->mouse_button->mouse_button_event;
+    if (!collision_point_in_aabb(application->mouse_position, &preview_aabb) &&
+        application->mouse_button->activated && event->action == 0 &&
+        event->key == FTIC_LEFT_BUTTON)
+    {
+        if (render->texture_count > 1)
+        {
+            texture_delete(
+                render->textures[--render->texture_count]);
+        }
+        rendering_properties_clear(render);
+    }
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext application = { 0 };
@@ -1519,7 +1573,7 @@ int main(int argc, char** argv)
     array_push(&drop_down_menu.options, options[PASTE_OPTION_INDEX]);
     array_push(&drop_down_menu.options, options[DELETE_OPTION_INDEX]);
 
-    TextureProperties texture_properties = { 0 };
+    V2 image_dimensions = v2d();
 
     enable_gldebugging();
     glEnable(GL_BLEND);
@@ -1563,7 +1617,11 @@ int main(int argc, char** argv)
                     get_file_extension(path, (u32)strlen(path));
                 if (!strcmp(extension, ".png") || !strcmp(extension, ".jpg"))
                 {
+                    TextureProperties texture_properties = { 0 };
                     texture_load(path, &texture_properties);
+                    image_dimensions = v2f((f32)texture_properties.width,
+                                           (f32)texture_properties.height);
+
                     ftic_assert(texture_properties.bytes);
                     u32 texture =
                         texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
@@ -1749,6 +1807,7 @@ int main(int argc, char** argv)
         {
             right_clicked = true;
             drop_down_menu.position = v3_v2(application.mouse_position);
+            drop_down_menu.position.x += 18.0f;
             drop_down_menu.x = 0.0f;
         }
         if (right_clicked)
@@ -1757,7 +1816,8 @@ int main(int argc, char** argv)
                 .directory = current_directory(&application.directory_history),
                 .selected_paths = &selected_item_values.paths,
             };
-            right_clicked = !drop_down_menu_add(&drop_down_menu, &application, &data);
+            right_clicked =
+                !drop_down_menu_add(&drop_down_menu, &application, &data);
         }
         else
         {
@@ -1775,65 +1835,7 @@ int main(int argc, char** argv)
 
         if (preview_render->texture_count > 1)
         {
-            V2 image_dimensions = v2f((f32)texture_properties.width,
-                                      (f32)texture_properties.height);
-
-            const V2 total_preview_dimensions =
-                v2_s_sub(application.dimensions, 40.0f);
-            const V2 ratios =
-                v2_div(total_preview_dimensions, image_dimensions);
-            f32 scale_factor =
-                ratios.width < ratios.height ? ratios.width : ratios.height;
-            V2 preview_dimensions = { 0 };
-            if (scale_factor < 1.0f)
-            {
-                v2_s_multi_equal(&image_dimensions, scale_factor);
-            }
-            preview_dimensions = image_dimensions;
-            v2_s_add_equal(&preview_dimensions, border_width * 2.0f);
-
-            V3 preview_position =
-                v3_v2(v2_s_multi(application.dimensions, 0.5f));
-            v3_sub_equal(&preview_position,
-                         v3_v2(v2_s_multi(preview_dimensions, 0.5f)));
-
-            AABB* scissor = &preview_render->scissor;
-            scissor->min = v2_v3(preview_position);
-            scissor->min.y = application.dimensions.y - scissor->min.y;
-            scissor->min.y -= preview_dimensions.y;
-            scissor->size = preview_dimensions;
-            scissor->size.width += border_width;
-
-            AABB preview_aabb = quad_with_border(
-                &preview_render->vertices, &preview_render->index_count,
-                preview_position, preview_dimensions, border_color,
-                border_width, 0.0f);
-            v3_add_equal(&preview_position, v3_v2(v2i(border_width)));
-            v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
-
-            quad(&preview_render->vertices, preview_position,
-                 preview_dimensions, clear_color, 0.0f);
-            preview_render->index_count++;
-
-            quad(&preview_render->vertices, preview_position,
-                 preview_dimensions, v4i(1.0f), 1.0f);
-            preview_render->index_count++;
-
-            const MouseButtonEvent* event =
-                &application.mouse_button->mouse_button_event;
-            if (!collision_point_in_aabb(application.mouse_position,
-                                         &preview_aabb) &&
-                application.mouse_button->activated && event->action == 0 &&
-                event->key == FTIC_LEFT_BUTTON)
-            {
-                if (preview_render->texture_count > 1)
-                {
-                    texture_delete(
-                        preview_render
-                            ->textures[--preview_render->texture_count]);
-                }
-                rendering_properties_clear(preview_render);
-            }
+            open_preview(image_dimensions, &application, preview_render);
         }
 
         rendering_properties_check_and_grow_buffers(main_render, &index_array);
