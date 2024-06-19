@@ -243,7 +243,14 @@ void enable_gldebugging()
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 }
 
-f32 ease_out_elastic(f32 x)
+void log_f32(const char* message, const f32 value)
+{
+    char buffer[100] = { 0 };
+    sprintf_s(buffer, 100, "%s%f", message, value);
+    log_message(buffer, strlen(buffer));
+}
+
+f32 ease_out_elastic(const f32 x)
 {
     if (x == 0 || x == 1)
     {
@@ -930,7 +937,7 @@ void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
                                     scroll_bar_dimensions, lighter_color, 0.0f);
         render->index_count++;
 
-        if (mouse_button->mouse_button_event.action == 1 &&
+        if (mouse_button->activated &&
             collision_point_in_aabb(mouse_position, &scroll_bar_aabb))
         {
             scroll_bar->dragging = true;
@@ -946,11 +953,29 @@ void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
         {
             const f32 end_position_y =
                 dimension_y - scroll_bar_dimensions.height;
-            const f32 new_y =
-                mouse_position.y + scroll_bar->mouse_pointer_offset;
+
+            f32 new_y = mouse_position.y + scroll_bar->mouse_pointer_offset;
+
+            if (new_y < initial_y)
+            {
+                scroll_bar->mouse_pointer_offset =
+                    scroll_bar_aabb.min.y - mouse_position.y;
+                new_y = initial_y;
+            }
+            if (new_y > end_position_y)
+            {
+                scroll_bar->mouse_pointer_offset =
+                    scroll_bar_aabb.min.y - mouse_position.y;
+                new_y = end_position_y;
+            }
+
             const f32 offset_p =
-                (new_y - end_position_y) / (initial_y - end_position_y);
-            const f32 lerp = lerp_f32(low, high, offset_p);
+                (new_y - initial_y) / (end_position_y - initial_y);
+
+            f32 lerp = lerp_f32(high, low, offset_p);
+
+            lerp = clampf32_high(lerp, high);
+            lerp = clampf32_low(lerp, low);
             *scroll_offset = lerp;
             *offset = lerp;
         }
@@ -1345,6 +1370,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
                      page->search_bar_aabb.size, border_color, border_width,
                      0.0f);
 
+    /*
     const V3 scroll_bar_position =
         v3f(application->dimensions.width,
             page->search_result_aabb.min.y - 8.0f, 0.0f);
@@ -1354,6 +1380,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
                    application->mouse_button, application->mouse_position,
                    application->dimensions.y, area_y, total_height, quad_height,
                    &page->scroll_offset, &page->offset, page->render);
+                   */
 
     return search_list_return_value;
 }
@@ -1897,29 +1924,34 @@ int main(int argc, char** argv)
 
         DirectoryPage* current =
             current_directory(&application.directory_history);
-        if (application.mouse_wheel->activated)
+        if (!search_page.scroll_bar.dragging && !main_scroll_bar.dragging)
         {
-            if (collision_point_in_aabb(application.mouse_position,
-                                        &search_page.search_result_aabb))
+            if (application.mouse_wheel->activated)
             {
-                set_scroll_offset(search_list_return_value.count, quad_height,
-                                  search_page.search_result_aabb.size.y,
-                                  application.mouse_wheel, &search_page.offset);
+                if (collision_point_in_aabb(application.mouse_position,
+                                            &search_page.search_result_aabb))
+                {
+                    set_scroll_offset(
+                        search_list_return_value.count, quad_height,
+                        search_page.search_result_aabb.size.y,
+                        application.mouse_wheel, &search_page.offset);
+                }
+                else if (collision_point_in_aabb(application.mouse_position,
+                                                 &directory_aabb))
+                {
+                    set_scroll_offset(main_list_return_value.count, quad_height,
+                                      directory_aabb.size.y,
+                                      application.mouse_wheel,
+                                      &current->offset);
+                }
             }
-            else if (collision_point_in_aabb(application.mouse_position,
-                                             &directory_aabb))
-            {
-                set_scroll_offset(main_list_return_value.count, quad_height,
-                                  directory_aabb.size.y,
-                                  application.mouse_wheel, &current->offset);
-            }
+            current->scroll_offset =
+                smooth_scroll(application.delta_time, current->offset,
+                              current->scroll_offset);
+            search_page.scroll_offset =
+                smooth_scroll(application.delta_time, search_page.offset,
+                              search_page.scroll_offset);
         }
-        current->scroll_offset = smooth_scroll(
-            application.delta_time, current->offset, current->scroll_offset);
-        search_page.scroll_offset =
-            smooth_scroll(application.delta_time, search_page.offset,
-                          search_page.scroll_offset);
-
         for (u32 i = 0; i < rendering_properties.size; ++i)
         {
             rendering_properties_draw(&rendering_properties.data[i],
