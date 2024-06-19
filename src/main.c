@@ -31,7 +31,10 @@ global const V4 high_light_color = {
 global const V4 border_color = {
     .r = 0.35f, .g = 0.35f, .b = 0.35f, .a = 1.0f
 };
-global const V4 lighter_color = { .r = 0.6f, .g = 0.6f, .b = 0.6f, .a = 1.0f };
+global const V4 lighter_color = {
+    .r = 0.55f, .g = 0.55f, .b = 0.55f, .a = 1.0f
+};
+global const V4 bright_color = { .r = 0.7f, .g = 0.7f, .b = 0.7f, .a = 1.0f };
 global const f32 border_width = 2.0f;
 
 global const f32 PI = 3.141592653589f;
@@ -914,7 +917,7 @@ void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
                     f32* scroll_offset, f32* offset,
                     RenderingProperties* render)
 {
-    const f32 scroll_bar_width = 5.0f;
+    const f32 scroll_bar_width = 8.0f;
     position.x -= scroll_bar_width;
 
     quad(&render->vertices, position, v2f(scroll_bar_width, area_y),
@@ -933,12 +936,21 @@ void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
         position.y =
             lerp_f32(dimension_y - scroll_bar_dimensions.height, initial_y, p);
 
-        AABB scroll_bar_aabb = quad(&render->vertices, position,
-                                    scroll_bar_dimensions, lighter_color, 0.0f);
+        AABB scroll_bar_aabb = {
+            .min = v2_v3(position),
+            .size = scroll_bar_dimensions,
+        };
+
+        b8 collided = collision_point_in_aabb(mouse_position, &scroll_bar_aabb);
+
+        V4 scroll_bar_color =
+            collided || scroll_bar->dragging ? bright_color : lighter_color;
+
+        quad(&render->vertices, position, scroll_bar_dimensions,
+             scroll_bar_color, 0.0f);
         render->index_count++;
 
-        if (mouse_button->activated &&
-            collision_point_in_aabb(mouse_position, &scroll_bar_aabb))
+        if (mouse_button->activated && collided)
         {
             scroll_bar->dragging = true;
             scroll_bar->mouse_pointer_offset =
@@ -1370,7 +1382,6 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
                      page->search_bar_aabb.size, border_color, border_width,
                      0.0f);
 
-    /*
     const V3 scroll_bar_position =
         v3f(application->dimensions.width,
             page->search_result_aabb.min.y - 8.0f, 0.0f);
@@ -1380,7 +1391,6 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
                    application->mouse_button, application->mouse_position,
                    application->dimensions.y, area_y, total_height, quad_height,
                    &page->scroll_offset, &page->offset, page->render);
-                   */
 
     return search_list_return_value;
 }
@@ -1767,7 +1777,7 @@ int main(int argc, char** argv)
                 &current_directory(&application.directory_history)
                      ->directory.files,
                 check_colission, text_starting_position, quad_height,
-                width - 5.0f, padding_top, &selected_item_values, main_render,
+                width - 10.0f, padding_top, &selected_item_values, main_render,
                 &application.directory_history);
 
         const f32 back_drop_height =
