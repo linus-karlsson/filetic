@@ -817,6 +817,23 @@ void add_scroll_bar(V3 position, const f32 dimension_y, const f32 area_y,
     }
 }
 
+const char* get_file_extension(const char* path, const u32 path_length)
+{
+    for (i32 i = path_length - 1; i >= 0; --i)
+    {
+        char current_char = path[i];
+        if (current_char == '\\' || current_char == '/')
+        {
+            return NULL;
+        }
+        else if (current_char == '.')
+        {
+            return path + i;
+        }
+    }
+    return NULL;
+}
+
 int main(int argc, char** argv)
 {
     Platform* platform = NULL;
@@ -1001,18 +1018,29 @@ int main(int argc, char** argv)
             {
                 platform_copy_to_clipboard(&selected_item_values.paths);
             }
-            else if (is_ctrl_and_key_pressed(key_event, FTIC_KEY_D))
+            else if (selected_item_values.paths.size == 1 &&
+                     is_ctrl_and_key_pressed(key_event, FTIC_KEY_D))
             {
-                texture_properties = (TextureProperties){ 0 };
-                texture_load(selected_item_values.paths.data[0],
-                             &texture_properties);
-                ftic_assert(texture_properties.bytes);
-                u32 texture =
-                    texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
-                preview_render->textures[preview_render->texture_count++] =
-                    texture;
-                free(texture_properties.bytes);
-                reset_selected_items(&selected_item_values);
+                if (preview_render->texture_count > 1)
+                {
+                    texture_delete(
+                        preview_render
+                            ->textures[--preview_render->texture_count]);
+                }
+                const char* path = selected_item_values.paths.data[0];
+                const char* extension =
+                    get_file_extension(path, (u32)strlen(path));
+                if (!strcmp(extension, ".png") || !strcmp(extension, ".jpg"))
+                {
+                    texture_load(path, &texture_properties);
+                    ftic_assert(texture_properties.bytes);
+                    u32 texture =
+                        texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+                    preview_render->textures[preview_render->texture_count++] =
+                        texture;
+                    free(texture_properties.bytes);
+                    reset_selected_items(&selected_item_values);
+                }
             }
             else if (key_event->activated && key_event->key_event.action == 1 &&
                      key_event->key_event.key == FTIC_KEY_ESCAPE)
@@ -1326,8 +1354,9 @@ int main(int argc, char** argv)
             V2 image_dimensions = v2f((f32)texture_properties.width,
                                       (f32)texture_properties.height);
 
-            const V2 total_preview_dimensions = v2_s_sub(dimensions, 20.0f);
-            const V2 ratios = v2_div(total_preview_dimensions, image_dimensions);
+            const V2 total_preview_dimensions = v2_s_sub(dimensions, 40.0f);
+            const V2 ratios =
+                v2_div(total_preview_dimensions, image_dimensions);
             f32 scale_factor =
                 ratios.width < ratios.height ? ratios.width : ratios.height;
             V2 preview_dimensions = { 0 };
@@ -1347,11 +1376,12 @@ int main(int argc, char** argv)
             scissor->min.y = dimensions.y - scissor->min.y;
             scissor->min.y -= preview_dimensions.y;
             scissor->size = preview_dimensions;
-            scissor->size.width += border_width; 
+            scissor->size.width += border_width;
 
-            quad_with_border(&preview_render->vertices,
+            AABB preview_aabb = quad_with_border(&preview_render->vertices,
                              &preview_render->index_count, border_color,
-                             preview_position, preview_dimensions, border_width, 0.0f);
+                             preview_position, preview_dimensions, border_width,
+                             0.0f);
             v3_add_equal(&preview_position, v3_v2(v2i(border_width)));
             v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
 
@@ -1362,6 +1392,19 @@ int main(int argc, char** argv)
             quad(&preview_render->vertices, preview_position,
                  preview_dimensions, v4i(1.0f), 1.0f);
             preview_render->index_count++;
+
+            const MouseButtonEvent* event = &mouse_button->mouse_button_event;
+            if (!collision_point_in_aabb(mouse_position, &preview_aabb) &&
+                mouse_button->activated && event->action == 0 &&
+                event->key == FTIC_LEFT_BUTTON)
+            {
+                if (preview_render->texture_count > 1)
+                {
+                    texture_delete(
+                        preview_render
+                            ->textures[--preview_render->texture_count]);
+                }
+            }
         }
 
         rendering_properties_check_and_grow_buffers(main_render, &index_array);
