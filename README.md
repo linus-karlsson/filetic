@@ -27,7 +27,7 @@ A lightweight file management application designed to provide basic file operati
 
 1. **Clone the repository**
     ```bash
-    git clone https://github.com/linus-karlsson/filetic.git
+    git clone --recurse-submodules https://github.com/linus-karlsson/filetic.git
     cd filetic
     ```
 
