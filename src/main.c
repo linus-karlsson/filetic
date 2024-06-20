@@ -943,11 +943,6 @@ AABB ui_add_border(RenderingProperties* render, V3 position, V2 size)
     return border_aabb;
 }
 
-f32 lerp_f32(const f32 a, const f32 b, const f32 t)
-{
-    return a + (t * (b - a));
-}
-
 void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
                     const Event* mouse_button, const V2 mouse_position,
                     const f32 dimension_y, const f32 area_y,
@@ -981,12 +976,19 @@ void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
 
         b8 collided = collision_point_in_aabb(mouse_position, &scroll_bar_aabb);
 
-        V4 scroll_bar_color =
-            collided || scroll_bar->dragging ? bright_color : lighter_color;
-
-        quad(&render->vertices, position, scroll_bar_dimensions,
-             scroll_bar_color, 0.0f);
-        render->index_count++;
+        if (collided || scroll_bar->dragging)
+        {
+            quad(&render->vertices, position, scroll_bar_dimensions,
+                 v4ic(0.8f), 0.0f);
+            render->index_count++;
+        }
+        else
+        {
+            quad_gradiant_t_b(&render->vertices, position,
+                              scroll_bar_dimensions, bright_color,
+                              v4ic(0.45f), 0.0f);
+            render->index_count++;
+        }
 
         if (mouse_button->activated && collided)
         {
@@ -1415,10 +1417,10 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
                  application->delta_time, &page->search_blinking_time,
                  page->render);
 
-    quad_with_border(&page->render->vertices, &page->render->index_count,
-                     v3_v2(page->search_bar_aabb.min),
-                     page->search_bar_aabb.size, border_color, border_width,
-                     0.0f);
+    quad_border_gradiant(&page->render->vertices, &page->render->index_count,
+                         v3_v2(page->search_bar_aabb.min),
+                         page->search_bar_aabb.size, bright_color, border_color,
+                         border_width, 0.0f);
 
     const V3 scroll_bar_position =
         v3f(application->dimensions.width,
@@ -1505,7 +1507,7 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
                 if (mouse_button_clicked && hit)
                 {
                     platform_show_properties(
-                        arguments->selected_paths->data[0]);
+                        10, 10, arguments->selected_paths->data[0]);
                     // reload_directory(arguments->directory);
                     should_close = true;
                 }
@@ -1527,7 +1529,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
     const f32 end_height = drop_down_item_count * drop_down_item_height;
     const f32 current_y = ease_out_elastic(drop_down_menu->x) * end_height;
     const f32 precent = current_y / end_height;
-    const f32 drop_down_width = 100.0f;
+    const f32 drop_down_width = 200.0f;
     const f32 drop_down_border_width = 1.0f;
     const f32 border_extra_padding = drop_down_border_width * 2.0f;
     const f32 drop_down_outer_padding = 10.0f + border_extra_padding;
@@ -1546,13 +1548,13 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
         drop_down_menu->position.x -= diff;
     }
 
-    drop_down_menu->aabb = quad_with_border(
+    drop_down_menu->aabb = quad_border_gradiant(
         &drop_down_menu->render->vertices, &drop_down_menu->render->index_count,
         v3f(drop_down_menu->position.x - drop_down_border_width,
             drop_down_menu->position.y - drop_down_border_width, 0.0f),
         v2f(drop_down_width + border_extra_padding,
             current_y + border_extra_padding),
-        lighter_color, drop_down_border_width, 0.0f);
+        v4i(1.0f), lighter_color, drop_down_border_width, 0.0f);
 
     b8 mouse_button_clicked =
         is_mouse_button_clicked(application->mouse_button, FTIC_LEFT_BUTTON);
@@ -1630,9 +1632,9 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
     scissor->size = preview_dimensions;
     scissor->size.width += border_width;
 
-    AABB preview_aabb = quad_with_border(
-        &render->vertices, &render->index_count, preview_position,
-        preview_dimensions, border_color, border_width, 0.0f);
+    AABB preview_aabb =
+        quad_border(&render->vertices, &render->index_count, preview_position,
+                    preview_dimensions, lighter_color, border_width, 0.0f);
     v3_add_equal(&preview_position, v3_v2(v2i(border_width)));
     v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
 

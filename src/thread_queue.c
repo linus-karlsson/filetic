@@ -35,23 +35,25 @@ void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task,
 {
     platform_semaphore_wait_and_decrement(&task_queue->mutex);
 
-    ftic_assert(task_queue->size < task_queue->capacity);
-
-    task_queue->tail %= task_queue->capacity;
-    task_queue->tasks[task_queue->tail] =
-        (ThreadTaskInternal){ .task = task, .semaphore = semaphore };
-
-    task_queue->tail++;
-    task_queue->size++;
-
-    u64* count = hash_table_get_uu64(&task_queue->id_to_count, task.id);
-    if(count)
+    // TODO: make it growing or something else
+    if (task_queue->size < task_queue->capacity)
     {
-        ++(*count);
-    }
-    else
-    {
-        hash_table_insert_uu64(&task_queue->id_to_count, task.id, 1);
+        task_queue->tail %= task_queue->capacity;
+        task_queue->tasks[task_queue->tail] =
+            (ThreadTaskInternal){ .task = task, .semaphore = semaphore };
+
+        task_queue->tail++;
+        task_queue->size++;
+
+        u64* count = hash_table_get_uu64(&task_queue->id_to_count, task.id);
+        if (count)
+        {
+            ++(*count);
+        }
+        else
+        {
+            hash_table_insert_uu64(&task_queue->id_to_count, task.id, 1);
+        }
     }
 
     platform_semaphore_increment(&task_queue->mutex, NULL);

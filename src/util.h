@@ -38,3 +38,4 @@ typedef struct CharArray
 } CharArray;
 
 FileAttrib read_file(const char* file_path);
+f32 lerp_f32(const f32 a, const f32 b, const f32 t);

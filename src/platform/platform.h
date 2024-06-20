@@ -123,7 +123,7 @@ b8 platform_clipboard_is_empty();
 void platform_paste_from_clipboard(CharPtrArray* paths);
 void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path);
 void platform_delete_files(const CharPtrArray* paths);
-void platform_show_properties(const char* file_path);
+void platform_show_properties(i32 x, i32 y, const char* file_path);
 
 void platform_listen_to_directory_change(void* data);
 

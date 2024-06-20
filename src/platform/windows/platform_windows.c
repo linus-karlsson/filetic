@@ -841,7 +841,7 @@ void platform_delete_files(const CharPtrArray* paths)
     }
 }
 
-wchar_t* charToWChar(const char* text)
+internal wchar_t* charToWChar(const char* text)
 {
     size_t origSize = strlen(text) + 1;
     size_t convertedChars = 0;
@@ -850,7 +850,7 @@ wchar_t* charToWChar(const char* text)
     return wText;
 }
 
-void platform_show_properties(const char* file_path)
+void platform_show_properties(i32 x, i32 y, const char* file_path)
 {
     wchar_t* w_file_path = charToWChar(file_path);
 
@@ -862,15 +862,15 @@ void platform_listen_to_directory_change(void* data)
 {
     LPCWSTR directoryPath = (LPCWSTR)data;
     HANDLE hDir = CreateFile(
-        directoryPath,               
-        FILE_LIST_DIRECTORY,        
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, 
-        NULL,                      
-        OPEN_EXISTING,              
-        FILE_FLAG_BACKUP_SEMANTICS, 
-        NULL                        
+        directoryPath,
+        FILE_LIST_DIRECTORY,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS,
+        NULL
     );
 
-    
+
 }
 */
