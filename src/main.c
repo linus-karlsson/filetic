@@ -1260,6 +1260,7 @@ void application_end_frame(ApplicationContext* application)
 
 void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
                                   const FontTTF* font,
+                                  const b8 reload_search_result,
                                   DirectoryArray* directory_history,
                                   ThreadTaskQueue* thread_task_queue)
 {
@@ -1279,42 +1280,42 @@ void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
                 --page->search_buffer.size;
             }
         }
-        if (i == key_buffer->size - 1)
+    }
+    if (key_buffer->size || reload_search_result)
+    {
+        search_page_clear_search_result(page);
+
+        running_callbacks[page->last_running_id] = false;
+
+        if (page->search_buffer.size)
         {
-            search_page_clear_search_result(page);
+            page->last_running_id = page->running_id;
+            running_callbacks[page->running_id++] = true;
+            page->running_id %= 100;
 
-            running_callbacks[page->last_running_id] = false;
+            const char* parent =
+                current_directory(directory_history)->directory.parent;
+            size_t parent_length = strlen(parent);
+            char* dir2 = (char*)calloc(parent_length + 3, sizeof(char));
+            memcpy(dir2, parent, parent_length);
+            dir2[parent_length++] = '\\';
+            dir2[parent_length++] = '*';
 
-            if (page->search_buffer.size)
-            {
-                page->last_running_id = page->running_id;
-                running_callbacks[page->running_id++] = true;
-                page->running_id %= 100;
+            const char* string_to_match = page->search_buffer.data;
 
-                const char* parent =
-                    current_directory(directory_history)->directory.parent;
-                size_t parent_length = strlen(parent);
-                char* dir2 = (char*)calloc(parent_length + 3, sizeof(char));
-                memcpy(dir2, parent, parent_length);
-                dir2[parent_length++] = '\\';
-                dir2[parent_length++] = '*';
-
-                const char* string_to_match = page->search_buffer.data;
-
-                FindingCallbackAttribute* arguments =
-                    (FindingCallbackAttribute*)calloc(
-                        1, sizeof(FindingCallbackAttribute));
-                arguments->thread_queue = thread_task_queue;
-                arguments->file_array = &page->search_result_file_array;
-                arguments->folder_array = &page->search_result_folder_array;
-                arguments->start_directory = dir2;
-                arguments->start_directory_length = (u32)parent_length;
-                arguments->string_to_match = string_to_match;
-                arguments->string_to_match_length = page->search_buffer.size;
-                arguments->running_id = page->last_running_id;
-                finding_callback(arguments);
-                page->offset = 0.0f;
-            }
+            FindingCallbackAttribute* arguments =
+                (FindingCallbackAttribute*)calloc(
+                    1, sizeof(FindingCallbackAttribute));
+            arguments->thread_queue = thread_task_queue;
+            arguments->file_array = &page->search_result_file_array;
+            arguments->folder_array = &page->search_result_folder_array;
+            arguments->start_directory = dir2;
+            arguments->start_directory_length = (u32)parent_length;
+            arguments->string_to_match = string_to_match;
+            arguments->string_to_match_length = page->search_buffer.size;
+            arguments->running_id = page->last_running_id;
+            finding_callback(arguments);
+            page->offset = 0.0f;
         }
     }
 }
@@ -1392,6 +1393,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
 
     if (page->search_bar_hit)
     {
+        b8 reload_search_result = false;
         if (application->key_event->activated &&
             (application->key_event->key_event.action == FTIC_PRESS ||
              application->key_event->key_event.action == FTIC_REPEAT) &&
@@ -1401,11 +1403,13 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
             {
                 *array_back(&page->search_buffer) = 0;
                 --page->search_buffer.size;
+                reload_search_result = true;
             }
         }
         search_page_parse_key_buffer(
             page, search_bar_width - (search_bar_input_text_padding * 2),
-            &application->font, directory_history, thread_task_queue);
+            &application->font, reload_search_result, directory_history,
+            thread_task_queue);
     }
 
     quad(&page->render->vertices, v3f(search_page_header_start_x, 0.0f, 0.0f),
