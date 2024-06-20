@@ -126,11 +126,6 @@ AABB quad_gradiant_t_b(VertexArray* vertex_array, V3 position, V2 size,
     return out;
 }
 
-V4 v4_lerp(V4 v1, V4 v2, f32 t)
-{
-    return v4_add(v1, v4_s_multi(v4_sub(v2, v1), t));
-}
-
 AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
                           V3 top_left, V2 size, V4 border_color_top_left,
                           V4 border_color_bottom_right, f32 thickness,

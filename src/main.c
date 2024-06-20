@@ -978,15 +978,15 @@ void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
 
         if (collided || scroll_bar->dragging)
         {
-            quad(&render->vertices, position, scroll_bar_dimensions,
-                 v4ic(0.8f), 0.0f);
+            quad(&render->vertices, position, scroll_bar_dimensions, v4ic(0.8f),
+                 0.0f);
             render->index_count++;
         }
         else
         {
             quad_gradiant_t_b(&render->vertices, position,
-                              scroll_bar_dimensions, bright_color,
-                              v4ic(0.45f), 0.0f);
+                              scroll_bar_dimensions, bright_color, v4ic(0.45f),
+                              0.0f);
             render->index_count++;
         }
 
@@ -1809,8 +1809,12 @@ int main(int argc, char** argv)
         }
 
         V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
-        AABB rect = ui_add_border(main_render, starting_position,
-                                  v2f(border_width, application.dimensions.y));
+        AABB rect = quad_gradiant_t_b(
+            &main_render->vertices,
+            starting_position,
+            v2f(border_width, application.dimensions.y), bright_color,
+            border_color, 0.0f);
+        ++main_render->index_count;
 
         V3 search_bar_position =
             v3f(application.dimensions.x * 0.6f, 10.0f, 0.0f);
@@ -1864,10 +1868,12 @@ int main(int argc, char** argv)
             1.0f, parent_directory_path_position, scale,
             application.font.pixel_height, NULL, NULL, &main_render->vertices);
 
-        AABB right_border_aabb = ui_add_border(
-            main_render,
+        AABB right_border_aabb = quad_gradiant_t_b(
+            &main_render->vertices,
             v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
-            v2f(border_width, application.dimensions.y));
+            v2f(border_width, application.dimensions.y), bright_color,
+            border_color, 0.0f);
+        ++main_render->index_count;
 
         AABB side_under_border_aabb = {
             .min = v2f(right_border_aabb.min.x,
@@ -1876,6 +1882,10 @@ int main(int argc, char** argv)
             .size = v2f(application.dimensions.x - right_border_aabb.min.x,
                         border_width),
         };
+
+        V4 side_under_border_start_color =
+            v4_lerp(bright_color, border_color,
+                    side_under_border_aabb.min.y / right_border_aabb.size.y);
 
         // Search bar
 
@@ -1886,8 +1896,11 @@ int main(int argc, char** argv)
                                &application.directory_history,
                                &thread_queue.task_queue, &selected_item_values);
 
-        ui_add_border(main_render, v3_v2(side_under_border_aabb.min),
-                      side_under_border_aabb.size);
+        quad_gradiant_l_r(&main_render->vertices,
+                          v3_v2(side_under_border_aabb.min),
+                          side_under_border_aabb.size,
+                          side_under_border_start_color, border_color, 0.0f);
+        ++main_render->index_count;
 
         V3 back_button_position = v3f(10.0f, 10.0f, 0.0f);
 
@@ -1938,8 +1951,12 @@ int main(int argc, char** argv)
 
         V3 back_button_border_position =
             v3f(0.0f, side_under_border_aabb.min.y, 0.0f);
-        ui_add_border(main_render, back_button_border_position,
-                      v2f(rect.min.x, border_width));
+
+        quad_gradiant_l_r(&main_render->vertices,
+                          back_button_border_position,
+                          v2f(rect.min.x, border_width),
+                          bright_color,side_under_border_start_color, 0.0f);
+        ++main_render->index_count;
 
         V3 scroll_bar_position =
             v3f(right_border_aabb.min.x, directory_aabb.min.y, 0.0f);
