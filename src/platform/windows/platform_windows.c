@@ -840,3 +840,37 @@ void platform_delete_files(const CharPtrArray* paths)
         int result = SHFileOperation(&file_op);
     }
 }
+
+wchar_t* charToWChar(const char* text)
+{
+    size_t origSize = strlen(text) + 1;
+    size_t convertedChars = 0;
+    wchar_t* wText = (wchar_t*)calloc(origSize, sizeof(wchar_t));
+    mbstowcs_s(&convertedChars, wText, origSize, text, _TRUNCATE);
+    return wText;
+}
+
+void platform_show_properties(const char* file_path)
+{
+    wchar_t* w_file_path = charToWChar(file_path);
+
+    HRESULT hr = SHObjectProperties(NULL, SHOP_FILEPATH, w_file_path, NULL);
+}
+
+/*
+void platform_listen_to_directory_change(void* data)
+{
+    LPCWSTR directoryPath = (LPCWSTR)data;
+    HANDLE hDir = CreateFile(
+        directoryPath,               
+        FILE_LIST_DIRECTORY,        
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, 
+        NULL,                      
+        OPEN_EXISTING,              
+        FILE_FLAG_BACKUP_SEMANTICS, 
+        NULL                        
+    );
+
+    
+}
+*/

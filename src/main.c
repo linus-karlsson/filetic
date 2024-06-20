@@ -23,6 +23,7 @@
 #define COPY_OPTION_INDEX 0
 #define PASTE_OPTION_INDEX 1
 #define DELETE_OPTION_INDEX 2
+#define PROPERTIES_OPTION_INDEX 3
 
 global const V4 clear_color = { .r = 0.1f, .g = 0.1f, .b = 0.1f, .a = 1.0f };
 global const V4 high_light_color = {
@@ -560,6 +561,15 @@ void format_file_size(u64 size_in_bytes, char* output, size_t output_size)
     }
 }
 
+void swap_strings(char* first, char* second)
+{
+    char temp[4] = { 0 };
+    const size_t length = sizeof(temp);
+    memcpy(temp, first, length);
+    memcpy(first, second, length);
+    memcpy(second, temp, length);
+}
+
 b8 directory_item(b8 hit, i32 index, const V3 starting_position,
                   const f32 padding_top, const f32 height, const f32 width,
                   const FontTTF* font, const Event* mouse_button_event,
@@ -635,34 +645,22 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
     }
 
     const u32 text_len = (u32)strlen(item->name);
-    i32 i = text_check_length_within_boundary(
+    const i32 i = text_check_length_within_boundary(
         font->chars, item->name, text_len, 1.0f,
         (width - aabb.size.x - padding_top - x_advance));
-    b8 too_long = i >= 3;
-    char saved_name[4];
+    const b8 too_long = i >= 3;
+    char saved_name[4] = "...";
     if (too_long)
     {
         i32 j = i - 3;
-        saved_name[0] = item->name[j];
-        item->name[j++] = '.';
-        saved_name[1] = item->name[j];
-        item->name[j++] = '.';
-        saved_name[2] = item->name[j];
-        item->name[j++] = '.';
-        saved_name[3] = item->name[j];
-        item->name[j] = '\0';
+        swap_strings(item->name + j, saved_name); // Truncate
     }
     render->index_count +=
         text_generation(font->chars, item->name, 1.0f, text_position, 1.0f,
                         font->pixel_height, NULL, NULL, &render->vertices);
-
     if (too_long)
     {
-        i32 j = i - 3;
-        item->name[j++] = saved_name[0];
-        item->name[j++] = saved_name[1];
-        item->name[j++] = saved_name[2];
-        item->name[j] = saved_name[3];
+        memcpy(item->name + (i - 3), saved_name, sizeof(saved_name));
     }
     return hit;
 }
@@ -722,60 +720,100 @@ typedef struct DirectoryItemListReturnValue
 {
     u32 count;
     f32 total_height;
+    u32 hit_index;
     b8 hit;
 } DirectoryItemListReturnValue;
+
+DirectoryItemListReturnValue
+item_list(const ApplicationContext* application,
+          const DirectoryItemArray* items, const f32 icon_index,
+          const b8 check_collision, V3 starting_position, const f32 item_width,
+          const f32 item_height, const f32 padding,
+          SelectedItemValues* selected_item_values, RenderingProperties* render)
+{
+    const f32 starting_y = starting_position.y;
+    b8 hit = false;
+    i32 hit_index = -1;
+    for (i32 i = 0; i < (i32)items->size; ++i)
+    {
+        if (item_in_view(starting_position.y, item_height,
+                         application->dimensions.y))
+        {
+            hit = directory_item(
+                hit, i, starting_position,
+                application->font.pixel_height + padding, item_height,
+                item_width, &application->font, application->mouse_button,
+                application->mouse_move, icon_index, check_collision,
+                &items->data[i], selected_item_values, &hit_index, render);
+        }
+        starting_position.y += item_height;
+    }
+    return (DirectoryItemListReturnValue){
+        .count = items->size,
+        .total_height = starting_position.y - starting_y,
+        .hit_index = hit_index,
+        .hit = hit,
+    };
+}
+
+DirectoryItemListReturnValue
+folder_item_list(const ApplicationContext* application,
+                 const DirectoryItemArray* folders, const b8 check_collision,
+                 V3 starting_position, const f32 item_width,
+                 const f32 item_height, const f32 padding,
+                 SelectedItemValues* selected_item_values,
+                 RenderingProperties* render, DirectoryArray* directory_history)
+{
+    DirectoryItemListReturnValue list_return = item_list(
+        application, folders, 3.0f, check_collision, starting_position,
+        item_width, item_height, padding, selected_item_values, render);
+
+    check_and_open_folder(application->mouse_button, list_return.hit,
+                          list_return.hit_index, folders->data,
+                          directory_history);
+    return list_return;
+}
+
+DirectoryItemListReturnValue files_item_list(
+    const ApplicationContext* application, const DirectoryItemArray* files,
+    const b8 check_collision, V3 starting_position, const f32 item_width,
+    const f32 item_height, const f32 padding,
+    SelectedItemValues* selected_item_values, RenderingProperties* render)
+{
+    DirectoryItemListReturnValue list_return = item_list(
+        application, files, 2.0f, check_collision, starting_position,
+        item_width, item_height, padding, selected_item_values, render);
+
+    check_and_open_file(application->mouse_button, list_return.hit, files->data,
+                        list_return.hit_index);
+
+    return list_return;
+}
 
 DirectoryItemListReturnValue directory_item_list(
     const ApplicationContext* application,
     const DirectoryItemArray* sub_directories, const DirectoryItemArray* files,
-    const b8 check_colission, V3 starting_position, const f32 item_height,
-    const f32 item_width, const f32 padding,
+    const b8 check_collision, V3 starting_position, const f32 item_width,
+    const f32 item_height, const f32 padding,
     SelectedItemValues* selected_item_values, RenderingProperties* render,
     DirectoryArray* directory_history)
 {
-    const f32 starting_y = starting_position.y;
-    b8 folder_hit = false;
-    i32 hit_index = -1;
-    for (i32 i = 0; i < (i32)sub_directories->size; ++i)
-    {
-        if (item_in_view(starting_position.y, item_height,
-                         application->dimensions.y))
-        {
-            folder_hit = directory_item(
-                folder_hit, i, starting_position,
-                application->font.pixel_height + padding, item_height,
-                item_width, &application->font, application->mouse_button,
-                application->mouse_move, 3.0f, check_colission,
-                &sub_directories->data[i], selected_item_values, &hit_index,
-                render);
-        }
-        starting_position.y += item_height;
-    }
-    check_and_open_folder(application->mouse_button, folder_hit, hit_index,
-                          sub_directories->data, directory_history);
-    b8 file_hit = false;
-    hit_index = -1;
-    for (i32 i = 0; i < (i32)files->size; ++i)
-    {
-        if (item_in_view(starting_position.y, item_height,
-                         application->dimensions.y))
-        {
-            file_hit = directory_item(
-                file_hit, i, starting_position,
-                application->font.pixel_height + padding, item_height,
-                item_width, &application->font, application->mouse_button,
-                application->mouse_move, 2.0f, check_colission, &files->data[i],
-                selected_item_values, &hit_index, render);
-        }
-        starting_position.y += item_height;
-    }
-    check_and_open_file(application->mouse_button, file_hit, files->data,
-                        hit_index);
+    DirectoryItemListReturnValue folder_list_return =
+        folder_item_list(application, sub_directories, check_collision,
+                         starting_position, item_width, item_height, padding,
+                         selected_item_values, render, directory_history);
+
+    starting_position.y += folder_list_return.total_height;
+
+    DirectoryItemListReturnValue files_list_return = files_item_list(
+        application, files, check_collision, starting_position, item_width,
+        item_height, padding, selected_item_values, render);
 
     return (DirectoryItemListReturnValue){
-        .count = sub_directories->size + files->size,
-        .total_height = starting_position.y - starting_y,
-        .hit = (folder_hit || file_hit),
+        .count = folder_list_return.count + files_list_return.count,
+        .total_height =
+            folder_list_return.total_height + files_list_return.total_height,
+        .hit = (folder_list_return.hit || files_list_return.hit),
     };
 }
 
@@ -1335,7 +1373,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
         search_list_return_value = directory_item_list(
             application, &page->search_result_folder_array.array,
             &page->search_result_file_array.array, check_colission,
-            search_result_position, quad_height, search_result_width,
+            search_result_position, search_result_width, quad_height,
             padding_top, selected_item_values, page->render, directory_history);
 
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
@@ -1451,6 +1489,24 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
                 {
                     platform_delete_files(arguments->selected_paths);
                     reload_directory(arguments->directory);
+                    should_close = true;
+                }
+            }
+            break;
+        }
+        case PROPERTIES_OPTION_INDEX:
+        {
+            if (arguments->selected_paths->size == 0)
+            {
+                *text_color = lighter_color;
+            }
+            else
+            {
+                if (mouse_button_clicked && hit)
+                {
+                    platform_show_properties(
+                        arguments->selected_paths->data[0]);
+                    // reload_directory(arguments->directory);
                     should_close = true;
                 }
             }
@@ -1602,6 +1658,12 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
     }
 }
 
+char* file_to_listen_to;
+
+void listen_to_directory_change(void* data)
+{
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext application = { 0 };
@@ -1649,16 +1711,21 @@ int main(int argc, char** argv)
         [COPY_OPTION_INDEX] = "Copy",
         [PASTE_OPTION_INDEX] = "Paste",
         [DELETE_OPTION_INDEX] = "Delete",
+        [PROPERTIES_OPTION_INDEX] = "Properties",
     };
-    array_create(&drop_down_menu.options, 3);
+    array_create(&drop_down_menu.options, static_array_size(options));
     array_push(&drop_down_menu.options, options[COPY_OPTION_INDEX]);
     array_push(&drop_down_menu.options, options[PASTE_OPTION_INDEX]);
     array_push(&drop_down_menu.options, options[DELETE_OPTION_INDEX]);
+    array_push(&drop_down_menu.options, options[PROPERTIES_OPTION_INDEX]);
 
     V2 image_dimensions = v2d();
 
     ScrollBar main_scroll_bar = { 0 };
     b8 search_scroll_bar_dragging = false;
+
+    DirectoryItemArray quick_access_folders = { 0 };
+    array_create(&quick_access_folders, 10);
 
     enable_gldebugging();
     glEnable(GL_BLEND);
@@ -1672,7 +1739,7 @@ int main(int argc, char** argv)
         main_render->scissor.size = application.dimensions;
 
         b8 check_colission = preview_render->texture_count == 1;
-        if (!check_colission &&
+        if (check_colission &&
             collision_point_in_aabb(application.mouse_position,
                                     &drop_down_menu.aabb))
         {
@@ -1776,8 +1843,8 @@ int main(int argc, char** argv)
                      ->directory.sub_directories,
                 &current_directory(&application.directory_history)
                      ->directory.files,
-                check_colission, text_starting_position, quad_height,
-                width - 10.0f, padding_top, &selected_item_values, main_render,
+                check_colission, text_starting_position, width - 10.0f,
+                quad_height, padding_top, &selected_item_values, main_render,
                 &application.directory_history);
 
         const f32 back_drop_height =
