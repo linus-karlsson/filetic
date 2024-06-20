@@ -23,6 +23,8 @@ ENDIF()
 file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.c")
 file(GLOB STB "${CMAKE_SOURCE_DIR}/lib/stb/*.c")
 
+add_subdirectory("${CMAKE_SOURCE_DIR}/lib/glfw")
+
 IF (WIN32)
     file(GLOB PLATFORM "${CMAKE_SOURCE_DIR}/src/platform/windows/*.c")
 ELSE()
@@ -37,13 +39,15 @@ target_include_directories(${EXE}
     PUBLIC "${CMAKE_SOURCE_DIR}/lib"
     PUBLIC "${CMAKE_SOURCE_DIR}/lib/math"
     PUBLIC "${CMAKE_SOURCE_DIR}/lib/glad/include"
+    PUBLIC "${CMAKE_SOURCE_DIR}/lib/glfw/include"
 )
 
 IF (WIN32)
     target_link_options(${EXE} PRIVATE "/SUBSYSTEM:WINDOWS" PRIVATE "/ENTRY:mainCRTStartup") 
+    target_link_directories(${EXE} PRIVATE "${CMAKE_BINARY_DIR}/lib/glfw/src")
     # For gcc and g++, clang
     #target_link_options(${EXE} PRIVATE "-mwindows") 
-    target_link_libraries(${EXE} user32 Winmm opengl32)
+    target_link_libraries(${EXE} user32 Winmm opengl32 glfw3)
 
     option(WINDOW_32 "Windows" ON)
     option(LINUX "Linux" OFF)

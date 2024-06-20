@@ -17,12 +17,12 @@ typedef void (*OnKeyPressedCallback)(u16 key, b8 ctrl_pressed, b8 alt_pressed);
 typedef void (*OnKeyReleasedCallback)(u16 key, b8 ctrl_pressed, b8 alt_pressed);
 typedef void (*OnButtonPressedCallback)(u8 key, b8 double_clicked);
 typedef void (*OnButtonReleasedCallback)(u8 key);
-typedef void (*OnMouseMovedCallback)(i16 x, i16 y);
-typedef void (*OnMouseWheelCallback)(i16 z_delta);
+typedef void (*OnMouseMovedCallback_)(i16 x, i16 y);
+typedef void (*OnMouseWheelCallback_)(i16 z_delta);
 typedef void (*OnWindowFocusedCallback)(b8 focused);
 typedef void (*OnWindowResizeCallback)(u16 width, u16 height);
 typedef void (*OnWindowEnterLeaveCallback)(b8 enter_leave);
-typedef void (*OnKeyStrokeCallback)(char key);
+typedef void (*OnKeyStrokeCallback_)(char key);
 
 typedef struct ClientRect
 {
@@ -80,12 +80,12 @@ void platform_event_set_on_key_pressed(Platform* platform, OnKeyPressedCallback 
 void platform_event_set_on_key_released(Platform* platform, OnKeyReleasedCallback callback);
 void platform_event_set_on_button_pressed(Platform* platform, OnButtonPressedCallback callback);
 void platform_event_set_on_button_released(Platform* platform, OnButtonReleasedCallback callback);
-void platform_event_set_on_mouse_move(Platform* platform, OnMouseMovedCallback callback);
-void platform_event_set_on_mouse_wheel(Platform* platform, OnMouseWheelCallback callback);
+void platform_event_set_on_mouse_move(Platform* platform, OnMouseMovedCallback_ callback);
+void platform_event_set_on_mouse_wheel(Platform* platform, OnMouseWheelCallback_ callback);
 void platform_event_set_on_window_focused(Platform* platform, OnWindowFocusedCallback callback);
 void platform_event_set_on_window_resize(Platform* platform, OnWindowResizeCallback callback);
 void platform_event_set_on_window_enter_leave(Platform* platform, OnWindowEnterLeaveCallback callback);
-void platform_event_set_on_key_stroke(Platform* platform, OnKeyStrokeCallback callback);
+void platform_event_set_on_key_stroke(Platform* platform, OnKeyStrokeCallback_ callback);
 
 void platform_change_cursor(Platform* platform, u32 cursor_id);
 

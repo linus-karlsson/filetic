@@ -2,11 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #include <stb/stb_truetype.h>
 #include <math.h>
 
 #include "define.h"
 #include "platform/platform.h"
+#include "ftic_window.h"
 #include "logging.h"
 #include "buffers.h"
 #include "thread_queue.h"
@@ -64,7 +66,6 @@ typedef struct U32Array
 typedef struct SelectedItemValues
 {
     CharPtrArray paths;
-    CharPtrArray names;
     HashTableCharU32 selected_items;
 } SelectedItemValues;
 
@@ -126,7 +127,7 @@ typedef struct ScrollBar
 
 typedef struct ApplicationContext
 {
-    Platform* platform;
+    GLFWwindow* window;
     FontTTF font;
 
     DirectoryArray directory_history;
@@ -581,7 +582,7 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
     AABB aabb = { .min = v2_v3(starting_position), .size = v2f(width, height) };
 
     u32* check_if_selected = hash_table_get_char_u32(
-        &selected_item_values->selected_items, item->name);
+        &selected_item_values->selected_items, item->path);
     b8 selected = check_if_selected ? true : false;
 
     b8 this_hit = false;
@@ -597,18 +598,18 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
         }
         const MouseButtonEvent* event = &mouse_button_event->mouse_button_event;
         if (!check_if_selected && mouse_button_event->activated &&
-            event->action == 0 &&
-            (event->key == FTIC_LEFT_BUTTON || event->key == FTIC_RIGHT_BUTTON))
+            event->action == FTIC_RELEASE &&
+            (event->button == FTIC_MOUSE_BUTTON_1 ||
+             event->button == FTIC_MOUSE_BUTTON_2))
         {
             if (!check_if_selected)
             {
-                const u32 name_length = (u32)strlen(item->name);
-                char* name = (char*)calloc(name_length + 3, sizeof(char));
-                memcpy(name, item->name, name_length);
+                const u32 path_length = (u32)strlen(item->path);
+                char* path = (char*)calloc(path_length + 3, sizeof(char));
+                memcpy(path, item->path, path_length);
                 hash_table_insert_char_u32(
-                    &selected_item_values->selected_items, name, 1);
-                array_push(&selected_item_values->names, name);
-                array_push(&selected_item_values->paths, item->path);
+                    &selected_item_values->selected_items, path, 1);
+                array_push(&selected_item_values->paths, path);
                 selected = true;
             }
         }
@@ -677,7 +678,7 @@ void check_and_open_file(const Event* mouse_button_event, const b8 hit,
                          const i32 file_index)
 {
     if (mouse_button_event->mouse_button_event.double_clicked &&
-        mouse_button_event->mouse_button_event.key == FTIC_LEFT_BUTTON)
+        mouse_button_event->mouse_button_event.button == FTIC_MOUSE_BUTTON_1)
     {
         if (hit)
         {
@@ -694,7 +695,7 @@ void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
                            DirectoryArray* directory_history)
 {
     if (mouse_button_event->mouse_button_event.double_clicked &&
-        mouse_button_event->mouse_button_event.key == FTIC_LEFT_BUTTON)
+        mouse_button_event->mouse_button_event.button == FTIC_MOUSE_BUTTON_1)
     {
         if (hit)
         {
@@ -875,8 +876,9 @@ void set_scroll_offset(const u32 item_count, const f32 item_height,
                        f32* offset)
 {
     const f32 total_height = item_count * item_height;
-    const f32 z_delta = (f32)mouse_wheel_event->mouse_wheel_event.z_delta;
-    *offset += z_delta;
+    const f32 y_offset = mouse_wheel_event->mouse_wheel_event.y_offset * 100.0f;
+    log_f32("Y: ", y_offset);
+    *offset += y_offset;
     *offset = clampf32_high(*offset, 0.0f);
 
     f32 low = area_y - (total_height + item_height);
@@ -897,12 +899,11 @@ internal u64 u64_hash_function(const void* data, u32 len, u64 seed)
 
 void reset_selected_items(SelectedItemValues* selected_item_values)
 {
-    for (u32 i = 0; i < selected_item_values->names.size; ++i)
+    for (u32 i = 0; i < selected_item_values->paths.size; ++i)
     {
-        free(selected_item_values->names.data[i]);
+        free(selected_item_values->paths.data[i]);
     }
     hash_table_clear_char_u32(&selected_item_values->selected_items);
-    selected_item_values->names.size = 0;
     selected_item_values->paths.size = 0;
 }
 
@@ -919,7 +920,7 @@ void reload_directory(DirectoryPage* directory_page)
     directory_page->directory = reloaded_directory;
 }
 
-b8 is_ctrl_and_key_pressed(const Event* event, u32 key)
+b8 is_ctrl_and_key_pressed(const Event* event, i32 key)
 {
     return event->activated && event->key_event.action == 1 &&
            event->key_event.ctrl_pressed && event->key_event.key == key;
@@ -1069,14 +1070,15 @@ void paste_in_directory(DirectoryPage* current_directory)
     free(pasted_paths.data);
 }
 
-b8 is_mouse_button_clicked(const Event* event, u8 button)
+b8 is_mouse_button_clicked(const Event* event, i32 button)
 {
     return event->activated && event->mouse_button_event.action == 0 &&
-           event->mouse_button_event.key == button;
+           event->mouse_button_event.button == button;
 }
 
 u8* application_init(ApplicationContext* application)
 {
+#if 0
     platform_init("FileTic", 1000, 600, &application->platform);
     platform_opengl_init(application->platform);
     if (!gladLoadGL())
@@ -1085,12 +1087,15 @@ u8* application_init(ApplicationContext* application)
         log_error_message(message, strlen(message));
         ftic_assert(false);
     }
-    event_init(application->platform);
+#else
+    application->window = window_init("FileTic", 1250, 800);
+#endif
+    event_init(application->window);
 
     application->font = (FontTTF){ 0 };
     const i32 width_atlas = 512;
     const i32 height_atlas = 512;
-    const f32 pixel_height = 16;
+    const f32 pixel_height = 20;
     u8* font_bitmap = (u8*)calloc(width_atlas * height_atlas, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
                    "res/fonts/arial.ttf", font_bitmap, &application->font);
@@ -1217,15 +1222,14 @@ void rendering_properties_array_init(const u32 index_buffer_id,
 
 void application_begin_frame(ApplicationContext* application)
 {
-    ClientRect client_rect = platform_get_client_rect(application->platform);
-    GLint viewport_width = client_rect.right - client_rect.left;
-    GLint viewport_height = client_rect.bottom - client_rect.top;
-    application->dimensions = v2f((f32)viewport_width, (f32)viewport_height);
+    int width, height;
+    window_get_size(application->window, &width, &height);
+    application->dimensions = v2f((f32)width, (f32)height);
     application->mouse_position =
         v2f(application->mouse_move->mouse_move_event.position_x,
             application->mouse_move->mouse_move_event.position_y);
 
-    glViewport(0, 0, viewport_width, viewport_height);
+    glViewport(0, 0, width, height);
     glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -1236,10 +1240,10 @@ void application_begin_frame(ApplicationContext* application)
 
 void application_end_frame(ApplicationContext* application)
 {
-    platform_opengl_swap_buffers(application->platform);
-    event_poll(application->platform);
+    window_swap(application->window);
+    event_poll();
 
-    f64 now = platform_get_time();
+    f64 now = window_get_time();
     application->delta_time = now - application->last_time;
     const u32 target_milliseconds = 8;
     const u64 curr_milliseconds = (u64)(application->delta_time * 1000.0f);
@@ -1248,7 +1252,7 @@ void application_end_frame(ApplicationContext* application)
         const u64 milli_to_sleep =
             (u64)(target_milliseconds - curr_milliseconds);
         platform_sleep(milli_to_sleep);
-        now = platform_get_time();
+        now = window_get_time();
         application->delta_time = now - application->last_time;
     }
     application->last_time = now;
@@ -1263,18 +1267,7 @@ void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
     for (u32 i = 0; i < key_buffer->size; ++i)
     {
         char current_char = key_buffer->data[i];
-        if (current_char == '\b') // BACKSPACE
-        {
-            if (page->search_buffer.size)
-            {
-                *array_back(&page->search_buffer) = 0;
-                --page->search_buffer.size;
-            }
-        }
-        else if (current_char == '\r') // ENTER
-        {
-        }
-        else if (closed_interval(0, (current_char - 32), 96))
+        if (closed_interval(0, (current_char - 32), 96))
         {
             array_push(&page->search_buffer, current_char);
             f32 x_advance =
@@ -1348,7 +1341,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
 
     V3 search_input_position = search_bar_position;
     search_input_position.x += search_bar_input_text_padding;
-    search_input_position.y += scale * application->font.pixel_height + 10.0f;
+    search_input_position.y += scale * application->font.pixel_height + 8.0f;
 
     V3 search_result_position = search_bar_position;
     search_result_position.y += page->search_bar_aabb.size.y + 20.0f;
@@ -1399,6 +1392,17 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
 
     if (page->search_bar_hit)
     {
+        if (application->key_event->activated &&
+            (application->key_event->key_event.action == FTIC_PRESS ||
+             application->key_event->key_event.action == FTIC_REPEAT) &&
+            application->key_event->key_event.key == FTIC_KEY_BACKSPACE)
+        {
+            if (page->search_buffer.size)
+            {
+                *array_back(&page->search_buffer) = 0;
+                --page->search_buffer.size;
+            }
+        }
         search_page_parse_key_buffer(
             page, search_bar_width - (search_bar_input_text_padding * 2),
             &application->font, directory_history, thread_task_queue);
@@ -1557,7 +1561,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
         v4i(1.0f), lighter_color, drop_down_border_width, 0.0f);
 
     b8 mouse_button_clicked =
-        is_mouse_button_clicked(application->mouse_button, FTIC_LEFT_BUTTON);
+        is_mouse_button_clicked(application->mouse_button, FTIC_MOUSE_BUTTON_1);
 
     b8 any_drop_down_item_hit = false;
     b8 should_close = false;
@@ -1650,7 +1654,7 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
         &application->mouse_button->mouse_button_event;
     if (!collision_point_in_aabb(application->mouse_position, &preview_aabb) &&
         application->mouse_button->activated && event->action == 0 &&
-        event->key == FTIC_LEFT_BUTTON)
+        event->button == FTIC_MOUSE_BUTTON_1)
     {
         if (render->texture_count > 1)
         {
@@ -1695,7 +1699,6 @@ int main(int argc, char** argv)
     // TODO(Linus): Make a set for this instead
     SelectedItemValues selected_item_values = { 0 };
     array_create(&selected_item_values.paths, 10);
-    array_create(&selected_item_values.names, 10);
     selected_item_values.selected_items =
         hash_table_create_char_u32(100, hash_murmur);
 
@@ -1733,7 +1736,7 @@ int main(int argc, char** argv)
     glEnable(GL_BLEND);
     glEnable(GL_SCISSOR_TEST);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    while (platform_is_running(application.platform))
+    while (!window_should_close(application.window))
     {
         application_begin_frame(&application);
 
@@ -1797,7 +1800,7 @@ int main(int argc, char** argv)
             else if (check_colission &&
                      !application.key_event->key_event.ctrl_pressed &&
                      application.mouse_button->activated &&
-                     event->action == 0 && event->key == FTIC_LEFT_BUTTON)
+                     event->action == 0 && event->button == FTIC_MOUSE_BUTTON_1)
             {
                 reset_selected_items(&selected_item_values);
             }
@@ -1809,11 +1812,10 @@ int main(int argc, char** argv)
         }
 
         V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
-        AABB rect = quad_gradiant_t_b(
-            &main_render->vertices,
-            starting_position,
-            v2f(border_width, application.dimensions.y), bright_color,
-            border_color, 0.0f);
+        AABB rect =
+            quad_gradiant_t_b(&main_render->vertices, starting_position,
+                              v2f(border_width, application.dimensions.y),
+                              bright_color, border_color, 0.0f);
         ++main_render->index_count;
 
         V3 search_bar_position =
@@ -1917,7 +1919,7 @@ int main(int argc, char** argv)
             const MouseButtonEvent* event =
                 &application.mouse_button->mouse_button_event;
             if (application.mouse_button->activated && event->action == 0 &&
-                event->key == FTIC_LEFT_BUTTON)
+                event->button == FTIC_MOUSE_BUTTON_1)
             {
                 platform_reset_directory(
                     &current_directory(&application.directory_history)
@@ -1952,10 +1954,9 @@ int main(int argc, char** argv)
         V3 back_button_border_position =
             v3f(0.0f, side_under_border_aabb.min.y, 0.0f);
 
-        quad_gradiant_l_r(&main_render->vertices,
-                          back_button_border_position,
-                          v2f(rect.min.x, border_width),
-                          bright_color,side_under_border_start_color, 0.0f);
+        quad_gradiant_l_r(&main_render->vertices, back_button_border_position,
+                          v2f(rect.min.x, border_width), bright_color,
+                          side_under_border_start_color, 0.0f);
         ++main_render->index_count;
 
         V3 scroll_bar_position =
@@ -1971,7 +1972,7 @@ int main(int argc, char** argv)
             main_render);
 
         if (is_mouse_button_clicked(application.mouse_button,
-                                    FTIC_RIGHT_BUTTON))
+                                    FTIC_MOUSE_BUTTON_2))
         {
             right_clicked = true;
             drop_down_menu.position = v3_v2(application.mouse_position);
@@ -1994,11 +1995,11 @@ int main(int argc, char** argv)
 
         if (main_list_return_value.hit || search_list_return_value.hit)
         {
-            platform_change_cursor(application.platform, FTIC_HAND_CURSOR);
+            // platform_change_cursor(application.platform, FTIC_HAND_CURSOR);
         }
         else
         {
-            platform_change_cursor(application.platform, FTIC_NORMAL_CURSOR);
+            // platform_change_cursor(application.platform, FTIC_NORMAL_CURSOR);
         }
 
         if (preview_render->texture_count > 1)
@@ -2068,7 +2069,5 @@ int main(int argc, char** argv)
         free(rp->textures);
     }
     // TODO: Cleanup of all
-    platform_opengl_clean(application.platform);
     threads_destroy(&thread_queue);
-    platform_shut_down(application.platform);
 }

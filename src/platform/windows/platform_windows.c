@@ -14,12 +14,12 @@ typedef struct Callbacks
     OnKeyReleasedCallback on_key_released;
     OnButtonPressedCallback on_button_pressed;
     OnButtonReleasedCallback on_button_released;
-    OnMouseMovedCallback on_mouse_moved;
-    OnMouseWheelCallback on_mouse_wheel;
+    OnMouseMovedCallback_ on_mouse_moved;
+    OnMouseWheelCallback_ on_mouse_wheel;
     OnWindowFocusedCallback on_window_focused;
     OnWindowResizeCallback on_window_resize;
     OnWindowEnterLeaveCallback on_window_enter_leave;
-    OnKeyStrokeCallback on_key_stroke;
+    OnKeyStrokeCallback_ on_key_stroke;
 } Callbacks;
 
 typedef struct OpenGLProperties
@@ -411,7 +411,7 @@ void platform_event_set_on_button_released(Platform* platform,
 }
 
 void platform_event_set_on_mouse_move(Platform* platform,
-                                      OnMouseMovedCallback callback)
+                                      OnMouseMovedCallback_ callback)
 {
     WindowsPlatformInternal* platform_internal =
         (WindowsPlatformInternal*)platform;
@@ -419,7 +419,7 @@ void platform_event_set_on_mouse_move(Platform* platform,
 }
 
 void platform_event_set_on_mouse_wheel(Platform* platform,
-                                       OnMouseWheelCallback callback)
+                                       OnMouseWheelCallback_ callback)
 {
     WindowsPlatformInternal* platform_internal =
         (WindowsPlatformInternal*)platform;
@@ -451,7 +451,7 @@ void platform_event_set_on_window_enter_leave(
 }
 
 void platform_event_set_on_key_stroke(Platform* platform,
-                                      OnKeyStrokeCallback callback)
+                                      OnKeyStrokeCallback_ callback)
 {
     WindowsPlatformInternal* platform_internal =
         (WindowsPlatformInternal*)platform;

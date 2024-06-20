@@ -1,23 +1,15 @@
 #pragma once
 
 #include "define.h"
-#include "platform/platform.h"
+#include "ftic_window.h"
 #include "util.h"
 
+// Taken from GLFW
 #define FTIC_KEY_SPACE 32
+#define FTIC_KEY_APOSTROPHE 39
 #define FTIC_KEY_COMMA 44
-#define FTIC_KEY_MINUS 189
-#define FTIC_KEY_PERIOD 190
-#define FTIC_KEY_SHIFT 16
-#define FTIC_KEY_CTRL 17
-#define FTIC_KEY_BACKSPACE 8
-#define FTIC_KEY_TAB 9
-#define FTIC_KEY_ENTER 13
-#define FTIC_KEY_CAPS 20
-#define FTIC_KEY_SPACE 32
-#define FTIC_KEY_APOSTROPHE 191
-
-#define FTIC_KEY_ESCAPE 46
+#define FTIC_KEY_MINUS 45
+#define FTIC_KEY_PERIOD 46
 #define FTIC_KEY_SLASH 47
 #define FTIC_KEY_0 48
 #define FTIC_KEY_1 49
@@ -57,18 +49,102 @@
 #define FTIC_KEY_X 88
 #define FTIC_KEY_Y 89
 #define FTIC_KEY_Z 90
+#define FTIC_KEY_LEFT_BRACKET 91
+#define FTIC_KEY_BACKSLASH 92
+#define FTIC_KEY_RIGHT_BRACKET 93
+#define FTIC_KEY_GRAVE_ACCENT 96
+#define FTIC_KEY_WORLD_1 161
+#define FTIC_KEY_WORLD_2 162
 
-#define FTIC_KEY_LEFT 37
-#define FTIC_KEY_UP 38
-#define FTIC_KEY_RIGHT 39
-#define FTIC_KEY_DOWN 40
+#define FTIC_KEY_ESCAPE 256
+#define FTIC_KEY_ENTER 257
+#define FTIC_KEY_TAB 258
+#define FTIC_KEY_BACKSPACE 259
+#define FTIC_KEY_INSERT 260
+#define FTIC_KEY_DELETE 261
+#define FTIC_KEY_RIGHT 262
+#define FTIC_KEY_LEFT 263
+#define FTIC_KEY_DOWN 264
+#define FTIC_KEY_UP 265
+#define FTIC_KEY_PAGE_UP 266
+#define FTIC_KEY_PAGE_DOWN 267
+#define FTIC_KEY_HOME 268
+#define FTIC_KEY_END 269
+#define FTIC_KEY_CAPS_LOCK 280
+#define FTIC_KEY_SCROLL_LOCK 281
+#define FTIC_KEY_NUM_LOCK 282
+#define FTIC_KEY_PRINT_SCREEN 283
+#define FTIC_KEY_PAUSE 284
+#define FTIC_KEY_F1 290
+#define FTIC_KEY_F2 291
+#define FTIC_KEY_F3 292
+#define FTIC_KEY_F4 293
+#define FTIC_KEY_F5 294
+#define FTIC_KEY_F6 295
+#define FTIC_KEY_F7 296
+#define FTIC_KEY_F8 297
+#define FTIC_KEY_F9 298
+#define FTIC_KEY_F10 299
+#define FTIC_KEY_F11 300
+#define FTIC_KEY_F12 301
+#define FTIC_KEY_F13 302
+#define FTIC_KEY_F14 303
+#define FTIC_KEY_F15 304
+#define FTIC_KEY_F16 305
+#define FTIC_KEY_F17 306
+#define FTIC_KEY_F18 307
+#define FTIC_KEY_F19 308
+#define FTIC_KEY_F20 309
+#define FTIC_KEY_F21 310
+#define FTIC_KEY_F22 311
+#define FTIC_KEY_F23 312
+#define FTIC_KEY_F24 313
+#define FTIC_KEY_F25 314
+#define FTIC_KEY_KP_0 320
+#define FTIC_KEY_KP_1 321
+#define FTIC_KEY_KP_2 322
+#define FTIC_KEY_KP_3 323
+#define FTIC_KEY_KP_4 324
+#define FTIC_KEY_KP_5 325
+#define FTIC_KEY_KP_6 326
+#define FTIC_KEY_KP_7 327
+#define FTIC_KEY_KP_8 328
+#define FTIC_KEY_KP_9 329
+#define FTIC_KEY_KP_DECIMAL 330
+#define FTIC_KEY_KP_DIVIDE 331
+#define FTIC_KEY_KP_MULTIPLY 332
+#define FTIC_KEY_KP_SUBTRACT 333
+#define FTIC_KEY_KP_ADD 334
+#define FTIC_KEY_KP_ENTER 335
+#define FTIC_KEY_KP_EQUAL 336
+#define FTIC_KEY_LEFT_SHIFT 340
+#define FTIC_KEY_LEFT_CONTROL 341
+#define FTIC_KEY_LEFT_ALT 342
+#define FTIC_KEY_LEFT_SUPER 343
+#define FTIC_KEY_RIGHT_SHIFT 344
+#define FTIC_KEY_RIGHT_CONTROL 345
+#define FTIC_KEY_RIGHT_ALT 346
+#define FTIC_KEY_RIGHT_SUPER 347
+#define FTIC_KEY_MENU 348
 
-#define FTIC_LEFT_BUTTON 1
-#define FTIC_MIDDLE_BUTTON 3
-#define FTIC_RIGHT_BUTTON 2
+#define FTIC_KEY_LAST GLFW_KEY_MENU
 
-#define FTIC_BUTTON_PRESS 1
-#define FTIC_BUTTON_RELEASE 0
+#define FTIC_MOUSE_BUTTON_1 0
+#define FTIC_MOUSE_BUTTON_2 1
+#define FTIC_MOUSE_BUTTON_3 2
+#define FTIC_MOUSE_BUTTON_4 3
+#define FTIC_MOUSE_BUTTON_5 4
+#define FTIC_MOUSE_BUTTON_6 5
+#define FTIC_MOUSE_BUTTON_7 6
+#define FTIC_MOUSE_BUTTON_8 7
+#define FTIC_MOUSE_BUTTON_LAST GLFW_MOUSE_BUTTON_8
+#define FTIC_MOUSE_BUTTON_LEFT GLFW_MOUSE_BUTTON_1
+#define FTIC_MOUSE_BUTTON_RIGHT GLFW_MOUSE_BUTTON_2
+#define FTIC_MOUSE_BUTTON_MIDDLE GLFW_MOUSE_BUTTON_3
+
+#define FTIC_RELEASE 0
+#define FTIC_PRESS 1
+#define FTIC_REPEAT 2
 
 #define FTIC_NORMAL_CURSOR 0
 #define FTIC_HAND_CURSOR 1
@@ -90,28 +166,29 @@ typedef enum EventType
 
 typedef struct KeyEvent
 {
-    u16 key;
+    i32 key;
+    i32 action;
     b8 ctrl_pressed;
     b8 alt_pressed;
-    u8 action;
 } KeyEvent;
 
 typedef struct MouseMoveEvent
 {
-    i16 position_x;
-    i16 position_y;
+    f32 position_x;
+    f32 position_y;
 } MouseMoveEvent;
 
 typedef struct MouseButtonEvent
 {
-    u8 key;
-    u8 action;
+    int button;
+    int action;
     b8 double_clicked;
 } MouseButtonEvent;
 
 typedef struct MouseWheelEvent
 {
-    i16 z_delta;
+    f32 x_offset;
+    f32 y_offset;
 } MouseWheelEvent;
 
 typedef struct Event
@@ -127,8 +204,8 @@ typedef struct Event
     };
 } Event;
 
-void event_init(Platform* platform);
-void event_poll(Platform* platform);
+void event_init(FTicWindow* window);
+void event_poll();
 Event* event_subscribe(EventType type);
 
 const CharArray* event_get_key_buffer();
