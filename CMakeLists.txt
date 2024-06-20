@@ -42,12 +42,13 @@ target_include_directories(${EXE}
     PUBLIC "${CMAKE_SOURCE_DIR}/lib/glfw/include"
 )
 
+target_link_libraries(${EXE} glfw)
+
 IF (WIN32)
     target_link_options(${EXE} PRIVATE "/SUBSYSTEM:WINDOWS" PRIVATE "/ENTRY:mainCRTStartup") 
-    target_link_directories(${EXE} PRIVATE "${CMAKE_BINARY_DIR}/lib/glfw/src")
     # For gcc and g++, clang
     #target_link_options(${EXE} PRIVATE "-mwindows") 
-    target_link_libraries(${EXE} user32 Winmm opengl32 glfw3)
+    target_link_libraries(${EXE} user32 Winmm opengl32)
 
     option(WINDOW_32 "Windows" ON)
     option(LINUX "Linux" OFF)
