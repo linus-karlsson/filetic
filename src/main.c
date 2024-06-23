@@ -208,7 +208,7 @@ typedef struct SearchPage
 typedef struct DropDownMenu
 {
     f32 x;
-    V3 position;
+    V2 position;
     AABB aabb;
     u32 item_count;
     CharPtrArray options;
@@ -604,7 +604,7 @@ void swap_strings(char* first, char* second)
     memcpy(second, temp, length);
 }
 
-b8 directory_item(b8 hit, i32 index, V3 starting_position,
+b8 directory_item(b8 hit, i32 index, V2 starting_position,
                   const f32 padding_top, f32 width, const f32 height,
                   const FontTTF* font, const Event* mouse_button_event,
                   const V2 mouse_position, const f32 icon_index,
@@ -612,7 +612,7 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position,
                   DirectoryItem* item, SelectedItemValues* selected_item_values,
                   i32* hit_index, RenderingProperties* render)
 {
-    AABB aabb = { .min = v2_v3(starting_position), .size = v2f(width, height) };
+    AABB aabb = { .min = starting_position, .size = v2f(width, height) };
 
     u32* check_if_selected = hash_table_get_char_u32(
         &selected_item_values->selected_items, item->path);
@@ -658,31 +658,28 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position,
         };
         color =
             v4_lerp(border_color, end_color, ((f32)sin(pulse_x) + 1.0f) / 2.0f);
+
+        starting_position.x += 8.0f;
+        width -= 6.0f;
     }
 
     // Backdrop
-    quad_gradiant_l_r(&render->vertices, starting_position, aabb.size, color,
+    quad_gradiant_l_r(&render->vertices, aabb.min, aabb.size, color,
                       clear_color, 0.0f);
     render->index_count += 1;
 
-    quad(&render->vertices, starting_position, v2f(aabb.size.x, 1.0f),
-         border_color, 0.0f);
+    quad(&render->vertices, aabb.min, v2f(aabb.size.x, 1.0f), border_color,
+         0.0f);
     render->index_count++;
 
-    if (this_hit || selected)
-    {
-        starting_position.x += 8.0f;
-        width -= 8.0f;
-    }
     // Icon
     aabb = quad_gradiant_tl_br(
         &render->vertices,
-        v3f(starting_position.x + 5.0f, starting_position.y + 3.0f, 0.0f),
+        v2f(starting_position.x + 5.0f, starting_position.y + 3.0f),
         v2f(20.0f, 20.0f), secondary_color, v4i(1.0f), icon_index);
     render->index_count += 1;
 
-    V3 text_position =
-        v3_add(starting_position, v3f(padding_top, padding_top, 0.0f));
+    V2 text_position = v2_s_add(starting_position, padding_top);
 
     text_position.x += aabb.size.x;
 
@@ -693,7 +690,7 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position,
         format_file_size(item->size, buffer, 100);
         x_advance =
             text_x_advance(font->chars, buffer, (u32)strlen(buffer), 1.0f);
-        V3 size_text_position = text_position;
+        V2 size_text_position = text_position;
         size_text_position.x = starting_position.x + width - x_advance - 5.0f;
         render->index_count +=
             text_generation(font->chars, buffer, 1.0f, size_text_position, 1.0f,
@@ -783,7 +780,7 @@ typedef struct DirectoryItemListReturnValue
 DirectoryItemListReturnValue
 item_list(const ApplicationContext* application,
           const DirectoryItemArray* items, const f32 icon_index,
-          const b8 check_collision, V3 starting_position, const f32 item_width,
+          const b8 check_collision, V2 starting_position, const f32 item_width,
           const f32 item_height, const f32 padding, const f64 pulse_x,
           SelectedItemValues* selected_item_values, RenderingProperties* render)
 {
@@ -819,7 +816,7 @@ item_list(const ApplicationContext* application,
 DirectoryItemListReturnValue
 folder_item_list(const ApplicationContext* application,
                  const DirectoryItemArray* folders, const b8 check_collision,
-                 V3 starting_position, const f32 item_width,
+                 V2 starting_position, const f32 item_width,
                  const f32 item_height, const f32 padding, const f64 pulse_x,
                  SelectedItemValues* selected_item_values,
                  RenderingProperties* render, DirectoryArray* directory_history)
@@ -837,7 +834,7 @@ folder_item_list(const ApplicationContext* application,
 
 DirectoryItemListReturnValue files_item_list(
     const ApplicationContext* application, const DirectoryItemArray* files,
-    const b8 check_collision, V3 starting_position, const f32 item_width,
+    const b8 check_collision, V2 starting_position, const f32 item_width,
     const f32 item_height, const f32 padding, const f64 pulse_x,
     SelectedItemValues* selected_item_values, RenderingProperties* render)
 {
@@ -855,7 +852,7 @@ DirectoryItemListReturnValue files_item_list(
 DirectoryItemListReturnValue directory_item_list(
     const ApplicationContext* application,
     const DirectoryItemArray* sub_directories, const DirectoryItemArray* files,
-    const b8 check_collision, V3 starting_position, const f32 item_width,
+    const b8 check_collision, V2 starting_position, const f32 item_width,
     const f32 item_height, const f32 padding, const f64 pulse_x,
     SelectedItemValues* selected_item_values, RenderingProperties* render,
     DirectoryArray* directory_history)
@@ -904,7 +901,7 @@ void extract_only_aplha_channel(TextureProperties* texture_properties)
 }
 
 void render_input(const FontTTF* font, const char* text, u32 text_length,
-                  f32 scale, V3 text_position, f32 cursor_y, b8 active,
+                  f32 scale, V2 text_position, f32 cursor_y, b8 active,
                   f64 delta_time, f64* time, RenderingProperties* render)
 {
     // Blinking cursor
@@ -917,7 +914,7 @@ void render_input(const FontTTF* font, const char* text, u32 text_length,
                 text_x_advance(font->chars, text, text_length, scale);
 
             quad(&render->vertices,
-                 v3f(text_position.x + x_advance + 1.0f, cursor_y + 2.0f, 0.0f),
+                 v2f(text_position.x + x_advance + 1.0f, cursor_y + 2.0f),
                  v2f(2.0f, 16.0f), v4i(1.0f), 0.0f);
             render->index_count++;
 
@@ -1002,7 +999,7 @@ u32 load_icon_as_only_red(const char* file_path)
     return icon_texture;
 }
 
-AABB ui_add_border(RenderingProperties* render, V3 position, V2 size)
+AABB ui_add_border(RenderingProperties* render, V2 position, V2 size)
 {
     AABB border_aabb =
         quad(&render->vertices, position, size, border_color, 0.0f);
@@ -1010,7 +1007,7 @@ AABB ui_add_border(RenderingProperties* render, V3 position, V2 size)
     return border_aabb;
 }
 
-void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
+void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
                     const Event* mouse_button, const V2 mouse_position,
                     const f32 dimension_y, const f32 area_y,
                     const f32 total_height, const f32 item_height,
@@ -1037,7 +1034,7 @@ void scroll_bar_add(ScrollBar* scroll_bar, V3 position,
             lerp_f32(dimension_y - scroll_bar_dimensions.height, initial_y, p);
 
         AABB scroll_bar_aabb = {
-            .min = v2_v3(position),
+            .min = position,
             .size = scroll_bar_dimensions,
         };
 
@@ -1163,9 +1160,18 @@ u8* application_init(ApplicationContext* application)
     const i32 width_atlas = 512;
     const i32 height_atlas = 512;
     const f32 pixel_height = 16;
-    u8* font_bitmap = (u8*)calloc(width_atlas * height_atlas, sizeof(u8));
+    const u32 bitmap_size = width_atlas * height_atlas;
+    u8* font_bitmap_temp = (u8*)calloc(bitmap_size, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
-                   "res/fonts/arial.ttf", font_bitmap, &application->font);
+                   "res/fonts/arial.ttf", font_bitmap_temp, &application->font);
+
+    // Puts the red channel in the alpha.
+    u8* font_bitmap = (u8*)malloc(bitmap_size * 4 * sizeof(u8));
+    memset(font_bitmap, 1, bitmap_size * 4 * sizeof(u8));
+    for (u32 i = 0, j = 3; i < bitmap_size; ++i, j += 4)
+    {
+        font_bitmap[j] = font_bitmap_temp[i];
+    }
 
     application->key_event = event_subscribe(KEY);
     application->mouse_button = event_subscribe(MOUSE_BUTTON);
@@ -1248,7 +1254,7 @@ void rendering_properties_array_init(const u32 index_buffer_id,
     u32 arrow_icon_texture = load_icon_as_only_red("res/icons/arrow.png");
 
     u32 main_shader = shader_create("./res/shaders/vertex.glsl",
-                                    "./res/shaders/font_fragment.glsl");
+                                    "./res/shaders/fragment.glsl");
 
     u32 preview_shader = shader_create("./res/shaders/vertex.glsl",
                                        "./res/shaders/fragment.glsl");
@@ -1388,7 +1394,7 @@ void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
 
 DirectoryItemListReturnValue
 search_page_update(SearchPage* page, const ApplicationContext* application,
-                   const b8 check_colission, const V3 search_bar_position,
+                   const b8 check_colission, const V2 search_bar_position,
                    const f32 search_page_header_start_x,
                    DirectoryArray* directory_history,
                    ThreadTaskQueue* thread_task_queue,
@@ -1397,7 +1403,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
     const f32 search_bar_width = 250.0f;
     const f32 search_bar_input_text_padding = 10.0f;
     page->search_bar_aabb = (AABB){
-        .min = v2_v3(search_bar_position),
+        .min = search_bar_position,
         .size = v2f(search_bar_width, 40.0f),
     };
 
@@ -1406,16 +1412,16 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
     const f32 quad_height =
         scale * application->font.pixel_height + padding_top * 5.0f;
 
-    V3 search_input_position = search_bar_position;
+    V2 search_input_position = search_bar_position;
     search_input_position.x += search_bar_input_text_padding;
     search_input_position.y += scale * application->font.pixel_height + 8.0f;
 
-    V3 search_result_position = search_bar_position;
+    V2 search_result_position = search_bar_position;
     search_result_position.y += page->search_bar_aabb.size.y + 20.0f;
     const f32 search_page_header_size_y = search_result_position.y;
 
     page->search_result_aabb = (AABB){
-        .min = v2_v3(search_result_position),
+        .min = search_result_position,
     };
     page->search_result_aabb.size =
         v2_sub(application->dimensions, page->search_result_aabb.min);
@@ -1481,7 +1487,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
             thread_task_queue);
     }
 
-    quad(&page->render->vertices, v3f(search_page_header_start_x, 0.0f, 0.0f),
+    quad(&page->render->vertices, v2f(search_page_header_start_x, 0.0f),
          v2f(application->dimensions.x - search_page_header_start_x,
              search_page_header_size_y),
          clear_color, 0.0f);
@@ -1495,13 +1501,11 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
                  page->render);
 
     quad_border_gradiant(&page->render->vertices, &page->render->index_count,
-                         v3_v2(page->search_bar_aabb.min),
-                         page->search_bar_aabb.size, secondary_color,
-                         border_color, border_width, 0.0f);
+                         page->search_bar_aabb.min, page->search_bar_aabb.size,
+                         secondary_color, border_color, border_width, 0.0f);
 
-    const V3 scroll_bar_position =
-        v3f(application->dimensions.width,
-            page->search_result_aabb.min.y - 8.0f, 0.0f);
+    const V2 scroll_bar_position = v2f(application->dimensions.width,
+                                       page->search_result_aabb.min.y - 8.0f);
     const f32 area_y = page->search_result_aabb.size.y + 8.0f;
     const f32 total_height = search_list_return_value.count * quad_height;
     scroll_bar_add(&page->scroll_bar, scroll_bar_position,
@@ -1627,8 +1631,8 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
 
     drop_down_menu->aabb = quad_border_gradiant(
         &drop_down_menu->render->vertices, &drop_down_menu->render->index_count,
-        v3f(drop_down_menu->position.x - drop_down_border_width,
-            drop_down_menu->position.y - drop_down_border_width, 0.0f),
+        v2f(drop_down_menu->position.x - drop_down_border_width,
+            drop_down_menu->position.y - drop_down_border_width),
         v2f(drop_down_width + border_extra_padding,
             current_y + border_extra_padding),
         v4i(1.0f), lighter_color, drop_down_border_width, 0.0f);
@@ -1639,11 +1643,11 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
     b8 any_drop_down_item_hit = false;
     b8 should_close = false;
     const f32 promt_item_text_padding = 5.0f;
-    V3 promt_item_position = drop_down_menu->position;
+    V2 promt_item_position = drop_down_menu->position;
     for (u32 i = 0; i < drop_down_item_count; ++i)
     {
         AABB drop_down_item_aabb = {
-            .min = v2_v3(promt_item_position),
+            .min = promt_item_position,
             .size = v2f(drop_down_width, drop_down_item_height * precent),
         };
 
@@ -1661,7 +1665,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
              drop_down_item_aabb.size, drop_down_color, 0.0f);
         drop_down_menu->render->index_count++;
 
-        V3 promt_item_text_position = promt_item_position;
+        V2 promt_item_text_position = promt_item_position;
         promt_item_text_position.y +=
             application->font.pixel_height + promt_item_text_padding + 3.0f;
         promt_item_text_position.x += promt_item_text_padding;
@@ -1698,12 +1702,11 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
     preview_dimensions = image_dimensions;
     v2_s_add_equal(&preview_dimensions, border_width * 2.0f);
 
-    V3 preview_position = v3_v2(v2_s_multi(application->dimensions, 0.5f));
-    v3_sub_equal(&preview_position,
-                 v3_v2(v2_s_multi(preview_dimensions, 0.5f)));
+    V2 preview_position = v2_s_multi(application->dimensions, 0.5f);
+    v2_sub_equal(&preview_position, v2_s_multi(preview_dimensions, 0.5f));
 
     AABB* scissor = &render->scissor;
-    scissor->min = v2_v3(preview_position);
+    scissor->min = preview_position;
     scissor->min.y = application->dimensions.y - scissor->min.y;
     scissor->min.y -= preview_dimensions.y;
     scissor->size = preview_dimensions;
@@ -1712,7 +1715,7 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
     AABB preview_aabb =
         quad_border(&render->vertices, &render->index_count, preview_position,
                     preview_dimensions, lighter_color, border_width, 0.0f);
-    v3_add_equal(&preview_position, v3_v2(v2i(border_width)));
+    v2_s_add_equal(&preview_position, border_width);
     v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
 
     quad(&render->vertices, preview_position, preview_dimensions, clear_color,
@@ -1781,7 +1784,7 @@ int main(int argc, char** argv)
     b8 right_clicked = false;
 
     DropDownMenu drop_down_menu = {
-        .position = v3d(),
+        .position = v2d(),
         .menu_options_selection = main_drop_down_selection,
         .render = main_render,
     };
@@ -1890,19 +1893,18 @@ int main(int argc, char** argv)
                 current_directory(&application.directory_history));
         }
 
-        V3 starting_position = v3f(150.0f, 0.0f, 0.0f);
+        V2 starting_position = v2f(150.0f, 0.0f);
         AABB rect =
             quad_gradiant_t_b(&main_render->vertices, starting_position,
                               v2f(border_width, application.dimensions.y),
                               secondary_color, border_color, 0.0f);
         ++main_render->index_count;
 
-        V3 search_bar_position =
-            v3f(application.dimensions.x * 0.6f, 10.0f, 0.0f);
+        V2 search_bar_position = v2f(application.dimensions.x * 0.6f, 10.0f);
 
-        V3 parent_directory_path_position =
-            v3f(rect.min.x + border_width, 30.0f, 0.0f);
-        V3 text_starting_position = parent_directory_path_position;
+        V2 parent_directory_path_position =
+            v2f(rect.min.x + border_width, 30.0f);
+        V2 text_starting_position = parent_directory_path_position;
 
         text_starting_position.x += 10.0f;
         text_starting_position.y += application.font.pixel_height;
@@ -1911,7 +1913,7 @@ int main(int argc, char** argv)
             ((search_bar_position.x - 10.0f) - text_starting_position.x);
 
         AABB directory_aabb = {
-            .min = v2_v3(text_starting_position),
+            .min = text_starting_position,
             .size =
                 v2f(width, application.dimensions.y - text_starting_position.y),
         };
@@ -1929,13 +1931,12 @@ int main(int argc, char** argv)
                 current_directory(&application.directory_history);
             current->pulse_x += application.delta_time * 6.0f;
 
-            main_list_return_value =
-                directory_item_list(
-                    &application, &current->directory.sub_directories,
-                    &current->directory.files, check_colission,
-                    text_starting_position, width - 10.0f, quad_height,
-                    padding_top, current->pulse_x, &selected_item_values,
-                    main_render, &application.directory_history);
+            main_list_return_value = directory_item_list(
+                &application, &current->directory.sub_directories,
+                &current->directory.files, check_colission,
+                text_starting_position, width - 10.0f, quad_height, padding_top,
+                current->pulse_x, &selected_item_values, main_render,
+                &application.directory_history);
         }
 
         const f32 back_drop_height =
@@ -1963,7 +1964,7 @@ int main(int argc, char** argv)
         }
 
         quad(&main_render->vertices,
-             v3f(parent_directory_path_position.x, 0.0f, 0.0f),
+             v2f(parent_directory_path_position.x, 0.0f),
              v2f(width + 10.0f, back_drop_height), high_light_color, 0.0f);
         main_render->index_count++;
 
@@ -1992,7 +1993,7 @@ int main(int argc, char** argv)
 
         AABB right_border_aabb = quad_gradiant_t_b(
             &main_render->vertices,
-            v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
+            v2f(directory_aabb.min.x + directory_aabb.size.x, 0.0f),
             v2f(border_width, application.dimensions.y), secondary_color,
             border_color, 0.0f);
         ++main_render->index_count;
@@ -2018,16 +2019,15 @@ int main(int argc, char** argv)
                                &application.directory_history,
                                &thread_queue.task_queue, &selected_item_values);
 
-        quad_gradiant_l_r(&main_render->vertices,
-                          v3_v2(side_under_border_aabb.min),
+        quad_gradiant_l_r(&main_render->vertices, side_under_border_aabb.min,
                           side_under_border_aabb.size,
                           side_under_border_start_color, border_color, 0.0f);
         ++main_render->index_count;
 
-        V3 back_button_position = v3f(10.0f, 10.0f, 0.0f);
+        V2 back_button_position = v2f(10.0f, 10.0f);
 
         AABB button_aabb = {
-            .min = v2_v3(back_button_position),
+            .min = back_button_position,
             .size = v2i(search_page.search_bar_aabb.size.y),
         };
 
@@ -2071,16 +2071,16 @@ int main(int argc, char** argv)
              back_icon_color, 5.0f);
         main_render->index_count++;
 
-        V3 back_button_border_position =
-            v3f(0.0f, side_under_border_aabb.min.y, 0.0f);
+        V2 back_button_border_position =
+            v2f(0.0f, side_under_border_aabb.min.y);
 
         quad_gradiant_l_r(&main_render->vertices, back_button_border_position,
                           v2f(rect.min.x, border_width), secondary_color,
                           side_under_border_start_color, 0.0f);
         ++main_render->index_count;
 
-        V3 scroll_bar_position =
-            v3f(right_border_aabb.min.x, directory_aabb.min.y, 0.0f);
+        V2 scroll_bar_position =
+            v2f(right_border_aabb.min.x, directory_aabb.min.y);
         f32 area_y = directory_aabb.size.y;
         f32 total_height = main_list_return_value.count * quad_height;
         scroll_bar_add(
@@ -2095,7 +2095,7 @@ int main(int argc, char** argv)
                                     FTIC_MOUSE_BUTTON_2))
         {
             right_clicked = true;
-            drop_down_menu.position = v3_v2(application.mouse_position);
+            drop_down_menu.position = application.mouse_position;
             drop_down_menu.position.x += 18.0f;
             drop_down_menu.x = 0.0f;
         }

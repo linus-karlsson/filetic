@@ -1,6 +1,6 @@
 #include "opengl_util.h"
 
-internal AABB set_up_verticies(VertexArray* vertex_array, V3 position, V2 size,
+internal AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size,
                                V4 color, f32 texture_index,
                                TextureCoordinates texture_coordinates)
 {
@@ -22,12 +22,12 @@ internal AABB set_up_verticies(VertexArray* vertex_array, V3 position, V2 size,
     array_push(vertex_array, vertex);
 
     AABB out;
-    out.min = v2_v3(position);
+    out.min = position;
     out.size = size;
     return out;
 }
 
-AABB quad_co(VertexArray* vertex_array, V3 position, V2 size, V4 color,
+AABB quad_co(VertexArray* vertex_array, V2 position, V2 size, V4 color,
              V4 texture_coordinates, f32 texture_index)
 {
     TextureCoordinates _tex_coords = {
@@ -40,7 +40,7 @@ AABB quad_co(VertexArray* vertex_array, V3 position, V2 size, V4 color,
                             _tex_coords);
 }
 
-AABB quad(VertexArray* vertex_array, V3 position, V2 size, V4 color,
+AABB quad(VertexArray* vertex_array, V2 position, V2 size, V4 color,
           f32 texture_index)
 {
     TextureCoordinates texture_coordinates = { v2d(), v2f(0.0f, 1.0f),
@@ -62,7 +62,7 @@ void generate_indicies(IndexArray* array, u32 offset, u32 indices_count)
     }
 }
 
-internal AABB quad_gradiant_internal(VertexArray* vertex_array, V3 position,
+internal AABB quad_gradiant_internal(VertexArray* vertex_array, V2 position,
                                      V2 size, V4 corner_colors[4],
                                      f32 texture_index)
 {
@@ -90,13 +90,13 @@ internal AABB quad_gradiant_internal(VertexArray* vertex_array, V3 position,
     array_push(vertex_array, vertex);
 
     AABB out = {
-        .min = v2_v3(position),
+        .min = position,
         .size = size,
     };
     return out;
 }
 
-AABB quad_gradiant_l_r(VertexArray* vertex_array, V3 position, V2 size,
+AABB quad_gradiant_l_r(VertexArray* vertex_array, V2 position, V2 size,
                        V4 left_color, V4 right_color, f32 texture_index)
 {
     V4 corner_colors[] = { left_color, left_color, right_color, right_color };
@@ -104,7 +104,7 @@ AABB quad_gradiant_l_r(VertexArray* vertex_array, V3 position, V2 size,
                                   texture_index);
 }
 
-AABB quad_gradiant_t_b(VertexArray* vertex_array, V3 position, V2 size,
+AABB quad_gradiant_t_b(VertexArray* vertex_array, V2 position, V2 size,
                        V4 top_color, V4 bottom_color, f32 texture_index)
 {
     V4 corner_colors[] = { top_color, bottom_color, bottom_color, top_color};
@@ -112,7 +112,7 @@ AABB quad_gradiant_t_b(VertexArray* vertex_array, V3 position, V2 size,
                                   texture_index);
 }
 
-AABB quad_gradiant_tl_br(VertexArray* vertex_array, V3 position, V2 size,
+AABB quad_gradiant_tl_br(VertexArray* vertex_array, V2 position, V2 size,
                          V4 top_color, V4 bottom_color, f32 texture_index)
 {
     V4 half_color = v4_lerp(top_color, bottom_color, 0.5f);
@@ -122,7 +122,7 @@ AABB quad_gradiant_tl_br(VertexArray* vertex_array, V3 position, V2 size,
 }
 
 AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
-                          V3 top_left, V2 size, V4 border_color_top_left,
+                          V2 top_left, V2 size, V4 border_color_top_left,
                           V4 border_color_bottom_right, f32 thickness,
                           f32 tex_index)
 {
@@ -136,7 +136,7 @@ AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
 
     quad_gradiant_l_r(
         vertex_array,
-        v3f(top_left.x, top_left.y + v_size.y - thickness, top_left.z), h_size,
+        v2f(top_left.x, top_left.y + v_size.y - thickness), h_size,
         border_color_top_right, border_color_bottom_right, tex_index);
 
     quad_gradiant_t_b(vertex_array, top_left, v_size, border_color_top_left,
@@ -144,7 +144,7 @@ AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
 
     quad_gradiant_t_b(
         vertex_array,
-        v3f(top_left.x + h_size.x - thickness, top_left.y, top_left.z), v_size,
+        v2f(top_left.x + h_size.x - thickness, top_left.y), v_size,
         border_color_top_right, border_color_bottom_right, tex_index);
 
     if (num_indices)
@@ -152,12 +152,12 @@ AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
         *num_indices += 4;
     }
     AABB out = { 0 };
-    out.min = v2_v3(top_left);
+    out.min = top_left;
     out.size = size;
     return out;
 }
 
-AABB quad_border(VertexArray* vertex_array, u32* num_indices, V3 top_left,
+AABB quad_border(VertexArray* vertex_array, u32* num_indices, V2 top_left,
                  V2 size, V4 border_color, f32 thickness, f32 tex_index)
 {
     V2 h_size = v2f(size.x, thickness);
@@ -166,13 +166,13 @@ AABB quad_border(VertexArray* vertex_array, u32* num_indices, V3 top_left,
     quad(vertex_array, top_left, h_size, border_color, tex_index);
 
     quad(vertex_array,
-         v3f(top_left.x, top_left.y + v_size.y - thickness, top_left.z), h_size,
+         v2f(top_left.x, top_left.y + v_size.y - thickness), h_size,
          border_color, tex_index);
 
     quad(vertex_array, top_left, v_size, border_color, tex_index);
 
     quad(vertex_array,
-         v3f(top_left.x + h_size.x - thickness, top_left.y, top_left.z), v_size,
+         v2f(top_left.x + h_size.x - thickness, top_left.y), v_size,
          border_color, tex_index);
 
     if (num_indices)
@@ -180,7 +180,7 @@ AABB quad_border(VertexArray* vertex_array, u32* num_indices, V3 top_left,
         *num_indices += 4;
     }
     AABB out = { 0 };
-    out.min = v2_v3(top_left);
+    out.min = top_left;
     out.size = size;
     return out;
 }

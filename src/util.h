@@ -5,7 +5,7 @@
 typedef struct Vertex
 {
     V4 color;
-    V3 position;
+    V2 position;
     V2 texture_coordinates;
     f32 texture_index;
 } Vertex;
