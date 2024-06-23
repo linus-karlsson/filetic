@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define PI 3.141592653589f
+
 #define array_create(array, array_capacity)                                    \
     do                                                                         \
     {                                                                          \

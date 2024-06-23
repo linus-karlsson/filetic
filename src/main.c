@@ -66,7 +66,45 @@ global const V4 secondary_color = {
 
 global const f32 border_width = 2.0f;
 
-global const f32 PI = 3.141592653589f;
+#define icon_1_co(width, height)                                               \
+    {                                                                          \
+        .x = 0.0f / width,                                                     \
+        .y = 0.0f / height,                                                    \
+        .z = 128.0f / width,                                                   \
+        .w = 128.0f / height,                                                  \
+    };
+
+global const V4 file_icon_co = icon_1_co(512.0f, 128.0f);
+global const V4 arrow_back_icon_co = icon_1_co(384.0f, 128.0f);
+
+#define icon_2_co(width, height)                                               \
+    {                                                                          \
+        .x = 128.0f / width,                                                   \
+        .y = 0.0f / height,                                                    \
+        .z = 256.0f / width,                                                   \
+        .w = 128.0f / height,                                                  \
+    };
+global const V4 folder_icon_co = icon_2_co(512.0f, 128.0f);
+global const V4 arrow_up_icon_co = icon_2_co(384.0f, 128.0f);
+
+#define icon_3_co(width, height)                                               \
+    {                                                                          \
+        .x = 256.0f / width,                                                   \
+        .y = 0.0f / height,                                                    \
+        .z = 384.0f / width,                                                   \
+        .w = 128.0f / height,                                                  \
+    };
+global const V4 pdf_icon_co = icon_3_co(512.0f, 128.0f);
+global const V4 arrow_right_icon_co = icon_3_co(384.0f, 128.0f);
+
+#define icon_4_co(width, height)                                               \
+    {                                                                          \
+        .x = 384.0f / width,                                                   \
+        .y = 0.0f / height,                                                    \
+        .z = 512.0f / width,                                                   \
+        .w = 128.0f / height,                                                  \
+    };
+global const V4 png_icon_co = icon_4_co(512.0f, 128.0f);
 
 typedef struct SafeFileArray
 {
@@ -297,6 +335,23 @@ f32 ease_out_elastic(const f32 x)
     const f32 c4 = (2.0f * PI) / 3.0f;
 
     return powf(2.0f, -10.0f * x) * sinf((x * 10.0f - 0.75f) * c4) + 1.0f;
+}
+
+internal const char* get_file_extension(const char* path, const u32 path_length)
+{
+    for (i32 i = path_length - 1; i >= 0; --i)
+    {
+        char current_char = path[i];
+        if (current_char == '\\' || current_char == '/')
+        {
+            return NULL;
+        }
+        else if (current_char == '.')
+        {
+            return path + i;
+        }
+    }
+    return NULL;
 }
 
 void parse_all_subdirectories(const char* start_directory, const u32 length)
@@ -608,9 +663,10 @@ b8 directory_item(b8 hit, i32 index, V2 starting_position,
                   const f32 padding_top, f32 width, const f32 height,
                   const FontTTF* font, const Event* mouse_button_event,
                   const V2 mouse_position, const f32 icon_index,
-                  const b8 check_colission, const f64 pulse_x,
-                  DirectoryItem* item, SelectedItemValues* selected_item_values,
-                  i32* hit_index, RenderingProperties* render)
+                  V4 texture_coordinates, const b8 check_colission,
+                  const f64 pulse_x, DirectoryItem* item,
+                  SelectedItemValues* selected_item_values, i32* hit_index,
+                  RenderingProperties* render)
 {
     AABB aabb = { .min = starting_position, .size = v2f(width, height) };
 
@@ -666,18 +722,31 @@ b8 directory_item(b8 hit, i32 index, V2 starting_position,
     // Backdrop
     quad_gradiant_l_r(&render->vertices, aabb.min, aabb.size, color,
                       clear_color, 0.0f);
-    render->index_count += 1;
-
-    quad(&render->vertices, aabb.min, v2f(aabb.size.x, 1.0f), border_color,
-         0.0f);
     render->index_count++;
 
+    quad_gradiant_l_r(&render->vertices, aabb.min, v2f(aabb.size.x, 1.0f),
+                      border_color, high_light_color, 0.0f);
+    render->index_count++;
+
+    if (v4_equal(texture_coordinates, file_icon_co))
+    {
+        const char* extension =
+            get_file_extension(item->name, (u32)strlen(item->name));
+        if (!strcmp(extension, ".png"))
+        {
+            texture_coordinates = png_icon_co;
+        }
+        else if (!strcmp(extension, ".pdf"))
+        {
+            texture_coordinates = pdf_icon_co;
+        }
+    }
     // Icon
-    aabb = quad_gradiant_tl_br(
-        &render->vertices,
-        v2f(starting_position.x + 5.0f, starting_position.y + 3.0f),
-        v2f(20.0f, 20.0f), secondary_color, v4i(1.0f), icon_index);
-    render->index_count += 1;
+    aabb =
+        quad_co(&render->vertices,
+                v2f(starting_position.x + 5.0f, starting_position.y + 3.0f),
+                v2f(20.0f, 20.0f), v4i(1.0f), texture_coordinates, icon_index);
+    render->index_count++;
 
     V2 text_position = v2_s_add(starting_position, padding_top);
 
@@ -780,8 +849,9 @@ typedef struct DirectoryItemListReturnValue
 DirectoryItemListReturnValue
 item_list(const ApplicationContext* application,
           const DirectoryItemArray* items, const f32 icon_index,
-          const b8 check_collision, V2 starting_position, const f32 item_width,
-          const f32 item_height, const f32 padding, const f64 pulse_x,
+          const V4 texture_coordinates, const b8 check_collision,
+          V2 starting_position, const f32 item_width, const f32 item_height,
+          const f32 padding, const f64 pulse_x,
           SelectedItemValues* selected_item_values, RenderingProperties* render)
 {
     double x, y;
@@ -796,12 +866,13 @@ item_list(const ApplicationContext* application,
         if (item_in_view(starting_position.y, item_height,
                          application->dimensions.y))
         {
-            hit = directory_item(
-                hit, i, starting_position,
-                application->font.pixel_height + padding, item_width,
-                item_height, &application->font, application->mouse_button,
-                mouse_position, icon_index, check_collision, pulse_x,
-                &items->data[i], selected_item_values, &hit_index, render);
+            hit = directory_item(hit, i, starting_position,
+                                 application->font.pixel_height + padding,
+                                 item_width, item_height, &application->font,
+                                 application->mouse_button, mouse_position,
+                                 icon_index, texture_coordinates,
+                                 check_collision, pulse_x, &items->data[i],
+                                 selected_item_values, &hit_index, render);
         }
         starting_position.y += item_height;
     }
@@ -822,7 +893,7 @@ folder_item_list(const ApplicationContext* application,
                  RenderingProperties* render, DirectoryArray* directory_history)
 {
     DirectoryItemListReturnValue list_return =
-        item_list(application, folders, 3.0f, check_collision,
+        item_list(application, folders, 2.0f, folder_icon_co, check_collision,
                   starting_position, item_width, item_height, padding, pulse_x,
                   selected_item_values, render);
 
@@ -839,8 +910,8 @@ DirectoryItemListReturnValue files_item_list(
     SelectedItemValues* selected_item_values, RenderingProperties* render)
 {
     DirectoryItemListReturnValue list_return =
-        item_list(application, files, 2.0f, check_collision, starting_position,
-                  item_width, item_height, padding, pulse_x,
+        item_list(application, files, 2.0f, file_icon_co, check_collision,
+                  starting_position, item_width, item_height, padding, pulse_x,
                   selected_item_values, render);
 
     check_and_open_file(application->mouse_button, list_return.hit, files->data,
@@ -999,11 +1070,37 @@ u32 load_icon_as_only_red(const char* file_path)
     return icon_texture;
 }
 
+u32 load_icon_as_white(const char* file_path)
+{
+    TextureProperties texture_properties = { 0 };
+    texture_load(file_path, &texture_properties);
+    const u32 size = texture_properties.height * texture_properties.width;
+    const u32 size_in_bytes = size * 4;
+    for (u32 i = 0; i < size_in_bytes; i += 4)
+    {
+        texture_properties.bytes[i] = UINT8_MAX;
+        texture_properties.bytes[i + 1] = UINT8_MAX;
+        texture_properties.bytes[i + 2] = UINT8_MAX;
+    }
+    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    free(texture_properties.bytes);
+    return icon_texture;
+}
+
+u32 load_icon(const char* file_path)
+{
+    TextureProperties texture_properties = { 0 };
+    texture_load(file_path, &texture_properties);
+    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    free(texture_properties.bytes);
+    return icon_texture;
+}
+
 AABB ui_add_border(RenderingProperties* render, V2 position, V2 size)
 {
     AABB border_aabb =
         quad(&render->vertices, position, size, border_color, 0.0f);
-    ++render->index_count;
+    render->index_count++;
     return border_aabb;
 }
 
@@ -1098,23 +1195,6 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
     }
 }
 
-const char* get_file_extension(const char* path, const u32 path_length)
-{
-    for (i32 i = path_length - 1; i >= 0; --i)
-    {
-        char current_char = path[i];
-        if (current_char == '\\' || current_char == '/')
-        {
-            return NULL;
-        }
-        else if (current_char == '.')
-        {
-            return path + i;
-        }
-    }
-    return NULL;
-}
-
 void paste_in_directory(DirectoryPage* current_directory)
 {
     CharPtrArray pasted_paths = { 0 };
@@ -1167,7 +1247,7 @@ u8* application_init(ApplicationContext* application)
 
     // Puts the red channel in the alpha.
     u8* font_bitmap = (u8*)malloc(bitmap_size * 4 * sizeof(u8));
-    memset(font_bitmap, 1, bitmap_size * 4 * sizeof(u8));
+    memset(font_bitmap, UINT8_MAX, bitmap_size * 4 * sizeof(u8));
     for (u32 i = 0, j = 3; i < bitmap_size; ++i, j += 4)
     {
         font_bitmap[j] = font_bitmap_temp[i];
@@ -1225,7 +1305,7 @@ void rendering_properties_array_init(const u32 index_buffer_id,
         .height = height_atlas,
         .bytes = font_bitmap,
     };
-    u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RED);
+    u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
     free(texture_properties.bytes);
 
     VertexBufferLayout vertex_buffer_layout = { 0 };
@@ -1243,15 +1323,12 @@ void rendering_properties_array_init(const u32 index_buffer_id,
     texture_properties.height = 1;
     u8 pixels[4] = { UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX };
     texture_properties.bytes = pixels;
-    u32 default_texture_red =
-        texture_create(&texture_properties, GL_RGBA8, GL_RED);
     u32 default_texture =
         texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
 
-    u32 file_icon_texture = load_icon_as_only_red("res/icons/files.png");
-    u32 folder_icon_texture = load_icon_as_only_red("res/icons/folder.png");
-    u32 close_icon_texture = load_icon_as_only_red("res/icons/close.png");
-    u32 arrow_icon_texture = load_icon_as_only_red("res/icons/arrow.png");
+    u32 file_icon_texture = load_icon("res/icons/icon_sheet.png");
+    u32 arrow_icon_texture =
+        load_icon_as_white("res/icons/arrow_sprite_sheet.png");
 
     u32 main_shader = shader_create("./res/shaders/vertex.glsl",
                                     "./res/shaders/fragment.glsl");
@@ -1264,24 +1341,17 @@ void rendering_properties_array_init(const u32 index_buffer_id,
     RenderingPropertiesArray rendering_properties = { 0 };
     array_create(&rendering_properties, 2);
 
-    u32 main_texturess[] = { default_texture_red, font_texture,
-                             file_icon_texture,   folder_icon_texture,
-                             close_icon_texture,  arrow_icon_texture };
-
-    u32* main_textures =
-        (u32*)calloc(static_array_size(main_texturess), sizeof(u32));
-    main_textures[0] = default_texture_red;
+    const u32 main_texture_count = 4;
+    u32* main_textures = (u32*)calloc(main_texture_count, sizeof(u32));
+    main_textures[0] = default_texture;
     main_textures[1] = font_texture;
     main_textures[2] = file_icon_texture;
-    main_textures[3] = folder_icon_texture;
-    main_textures[4] = close_icon_texture;
-    main_textures[5] = arrow_icon_texture;
+    main_textures[3] = arrow_icon_texture;
 
     array_push(&rendering_properties,
                rendering_properties_init(main_shader, main_textures,
-                                         static_array_size(main_texturess),
-                                         index_buffer_id, &vertex_buffer_layout,
-                                         100 * 4));
+                                         main_texture_count, index_buffer_id,
+                                         &vertex_buffer_layout, 100 * 4));
 
     u32* preview_textures = (u32*)calloc(2, sizeof(u32));
     preview_textures[0] = default_texture;
@@ -1740,10 +1810,31 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
     }
 }
 
-char* file_to_listen_to;
-
-void listen_to_directory_change(void* data)
+b8 add_arrow_button(V2 position, const AABB* button_aabb,
+                    const V4 texture_coordinates, const b8 extra_condition,
+                    const V2 mouse_position, const V4 icon_color,
+                    RenderingProperties* render)
 {
+    V4 button_color = clear_color;
+
+    b8 collision = false;
+    if (extra_condition && collision_point_in_aabb(mouse_position, button_aabb))
+    {
+        button_color = high_light_color;
+        collision = true;
+    }
+
+    quad(&render->vertices, position, button_aabb->size, button_color, 0.0f);
+    render->index_count++;
+
+    position.x += 9.0f;
+    position.y += 10.0f;
+
+    quad_co(&render->vertices, position, v2i(20.0f), icon_color,
+            texture_coordinates, 3.0f);
+    render->index_count++;
+
+    return extra_condition && collision;
 }
 
 int main(int argc, char** argv)
@@ -1898,7 +1989,7 @@ int main(int argc, char** argv)
             quad_gradiant_t_b(&main_render->vertices, starting_position,
                               v2f(border_width, application.dimensions.y),
                               secondary_color, border_color, 0.0f);
-        ++main_render->index_count;
+        main_render->index_count++;
 
         V2 search_bar_position = v2f(application.dimensions.x * 0.6f, 10.0f);
 
@@ -1996,7 +2087,7 @@ int main(int argc, char** argv)
             v2f(directory_aabb.min.x + directory_aabb.size.x, 0.0f),
             v2f(border_width, application.dimensions.y), secondary_color,
             border_color, 0.0f);
-        ++main_render->index_count;
+        main_render->index_count++;
 
         AABB side_under_border_aabb = {
             .min = v2f(right_border_aabb.min.x,
@@ -2022,19 +2113,20 @@ int main(int argc, char** argv)
         quad_gradiant_l_r(&main_render->vertices, side_under_border_aabb.min,
                           side_under_border_aabb.size,
                           side_under_border_start_color, border_color, 0.0f);
-        ++main_render->index_count;
-
-        V2 back_button_position = v2f(10.0f, 10.0f);
+        main_render->index_count++;
 
         AABB button_aabb = {
-            .min = back_button_position,
+            .min = v2i(10.0f),
             .size = v2i(search_page.search_bar_aabb.size.y),
         };
 
-        V4 button_color = clear_color;
+        const V4 back_icon_color =
+            application.directory_history.size == 1 ? border_color : v4ic(1.0f);
 
-        if (check_colission && application.directory_history.size > 1 &&
-            collision_point_in_aabb(application.mouse_position, &button_aabb))
+        if (add_arrow_button(
+                button_aabb.min, &button_aabb, arrow_back_icon_co,
+                check_colission && application.directory_history.size > 1,
+                application.mouse_position, back_icon_color, main_render))
         {
             const MouseButtonEvent* event =
                 &application.mouse_button->mouse_button_event;
@@ -2051,25 +2143,24 @@ int main(int argc, char** argv)
                 reset_selected_items(&selected_item_values);
                 reload_directory(current);
             }
-            else
-            {
-                button_color = high_light_color;
-            }
             main_list_return_value.hit = true;
         }
-        quad(&main_render->vertices, back_button_position, button_aabb.size,
-             button_color, 0.0f);
-        main_render->index_count++;
+        button_aabb.min.x += button_aabb.size.x;
 
-        back_button_position.x += 9.0f;
-        back_button_position.y += 10.0f;
+        if (add_arrow_button(button_aabb.min, &button_aabb, arrow_right_icon_co,
+                             check_colission, application.mouse_position,
+                             v4i(1.0f), main_render))
+        {
+        }
+        button_aabb.min.x += button_aabb.size.x;
 
-        const V4 back_icon_color =
-            application.directory_history.size == 1 ? border_color : v4ic(1.0f);
+        if (add_arrow_button(button_aabb.min, &button_aabb, arrow_up_icon_co,
+                             check_colission, application.mouse_position,
+                             v4i(1.0f), main_render))
+        {
+        }
 
-        quad(&main_render->vertices, back_button_position, v2i(20.0f),
-             back_icon_color, 5.0f);
-        main_render->index_count++;
+        //////
 
         V2 back_button_border_position =
             v2f(0.0f, side_under_border_aabb.min.y);
@@ -2077,7 +2168,7 @@ int main(int argc, char** argv)
         quad_gradiant_l_r(&main_render->vertices, back_button_border_position,
                           v2f(rect.min.x, border_width), secondary_color,
                           side_under_border_start_color, 0.0f);
-        ++main_render->index_count;
+        main_render->index_count++;
 
         V2 scroll_bar_position =
             v2f(right_border_aabb.min.x, directory_aabb.min.y);

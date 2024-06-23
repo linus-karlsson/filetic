@@ -1,4 +1,5 @@
 #include "opengl_util.h"
+#include <math.h>
 
 internal AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size,
                                V4 color, f32 texture_index,
@@ -124,7 +125,7 @@ AABB quad_gradiant_tl_br(VertexArray* vertex_array, V2 position, V2 size,
 AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
                           V2 top_left, V2 size, V4 border_color_top_left,
                           V4 border_color_bottom_right, f32 thickness,
-                          f32 tex_index)
+                          f32 texture_index)
 {
     V2 h_size = v2f(size.x, thickness);
     V2 v_size = v2f(thickness, size.y);
@@ -132,20 +133,20 @@ AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
     V4 border_color_top_right =
         v4_lerp(border_color_top_left, border_color_bottom_right, 0.5f);
     quad_gradiant_l_r(vertex_array, top_left, h_size, border_color_top_left,
-                      border_color_top_right, tex_index);
+                      border_color_top_right, texture_index);
 
     quad_gradiant_l_r(
         vertex_array,
         v2f(top_left.x, top_left.y + v_size.y - thickness), h_size,
-        border_color_top_right, border_color_bottom_right, tex_index);
+        border_color_top_right, border_color_bottom_right, texture_index);
 
     quad_gradiant_t_b(vertex_array, top_left, v_size, border_color_top_left,
-                      border_color_top_right, tex_index);
+                      border_color_top_right, texture_index);
 
     quad_gradiant_t_b(
         vertex_array,
         v2f(top_left.x + h_size.x - thickness, top_left.y), v_size,
-        border_color_top_right, border_color_bottom_right, tex_index);
+        border_color_top_right, border_color_bottom_right, texture_index);
 
     if (num_indices)
     {
@@ -158,22 +159,22 @@ AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
 }
 
 AABB quad_border(VertexArray* vertex_array, u32* num_indices, V2 top_left,
-                 V2 size, V4 border_color, f32 thickness, f32 tex_index)
+                 V2 size, V4 border_color, f32 thickness, f32 texture_index)
 {
     V2 h_size = v2f(size.x, thickness);
     V2 v_size = v2f(thickness, size.y);
 
-    quad(vertex_array, top_left, h_size, border_color, tex_index);
+    quad(vertex_array, top_left, h_size, border_color, texture_index);
 
     quad(vertex_array,
          v2f(top_left.x, top_left.y + v_size.y - thickness), h_size,
-         border_color, tex_index);
+         border_color, texture_index);
 
-    quad(vertex_array, top_left, v_size, border_color, tex_index);
+    quad(vertex_array, top_left, v_size, border_color, texture_index);
 
     quad(vertex_array,
          v2f(top_left.x + h_size.x - thickness, top_left.y), v_size,
-         border_color, tex_index);
+         border_color, texture_index);
 
     if (num_indices)
     {
