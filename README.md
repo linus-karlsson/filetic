@@ -12,7 +12,7 @@ A lightweight file management application designed to provide basic file operati
 ## Features (to be implemented)
 
 - **File Browsing**: Navigate through directories and view file contents.
-- **File Operations**: Perform basic file operations such as create, read, update, delete, and rename.
+- **File Operations**: Perform basic file operations such as copy, paste, read, delete, and rename.
 - **Search Functionality**: Quickly find files and directories based on name.
 - **Lightweight**: Minimal dependencies and low memory usage.
 
