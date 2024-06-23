@@ -27,7 +27,6 @@ typedef struct EventContextInternal
 
     double lastClickTime;
     int lastButton;
-
 } EventContextInternal;
 
 EventContextInternal event_context = { .lastButton = -1 };

@@ -48,6 +48,11 @@ void window_set_on_key_stroke_event(FTicWindow* window, OnKeyStrokeCallback call
     glfwSetCharCallback((GLFWwindow*)window, callback);
 }
 
+void window_get_mouse_position(FTicWindow* window, double* x, double* y)
+{
+    glfwGetCursorPos((GLFWwindow*)window, x, y);
+}
+
 int window_should_close(FTicWindow* window)
 {
     return glfwWindowShouldClose((GLFWwindow*)window);

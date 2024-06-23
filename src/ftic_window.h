@@ -14,6 +14,8 @@ void window_set_on_mouse_move_event(FTicWindow* window, OnMouseMovedCallback cal
 void window_set_on_mouse_wheel_event(FTicWindow* window, OnMouseWheelCallback callback);
 void window_set_on_key_stroke_event(FTicWindow* window, OnKeyStrokeCallback callback);
 
+void window_get_mouse_position(FTicWindow* window, double* x, double* y);
+
 int window_should_close(FTicWindow* window);
 void window_poll_event();
 void window_swap(FTicWindow* window);

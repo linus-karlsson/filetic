@@ -133,7 +133,6 @@ typedef struct ApplicationContext
     DirectoryArray directory_history;
 
     Event* key_event;
-    Event* mouse_move;
     Event* mouse_button;
     Event* mouse_wheel;
 
@@ -571,10 +570,10 @@ void swap_strings(char* first, char* second)
     memcpy(second, temp, length);
 }
 
-b8 directory_item(b8 hit, i32 index, const V3 starting_position,
-                  const f32 padding_top, const f32 height, const f32 width,
+b8 directory_item(b8 hit, i32 index, V3 starting_position,
+                  const f32 padding_top, f32 width, const f32 height,
                   const FontTTF* font, const Event* mouse_button_event,
-                  const Event* mouse_move_event, const f32 icon_index,
+                  const V2 mouse_position, const f32 icon_index,
                   const b8 check_colission, DirectoryItem* item,
                   SelectedItemValues* selected_item_values, i32* hit_index,
                   RenderingProperties* render)
@@ -586,8 +585,6 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
     b8 selected = check_if_selected ? true : false;
 
     b8 this_hit = false;
-    V2 mouse_position = v2f(mouse_move_event->mouse_move_event.position_x,
-                            mouse_move_event->mouse_move_event.position_y);
     if (check_colission && collision_point_in_aabb(mouse_position, &aabb))
     {
         if (!hit)
@@ -619,6 +616,11 @@ b8 directory_item(b8 hit, i32 index, const V3 starting_position,
     quad(&render->vertices, starting_position, aabb.size, color, 0.0f);
     render->index_count += 1;
 
+    if (this_hit || selected)
+    {
+        starting_position.x += 8.0f;
+        width -= 8.0f;
+    }
     // Icon
     aabb =
         quad(&render->vertices,
@@ -732,6 +734,10 @@ item_list(const ApplicationContext* application,
           const f32 item_height, const f32 padding,
           SelectedItemValues* selected_item_values, RenderingProperties* render)
 {
+    double x, y;
+    window_get_mouse_position(application->window, &x, &y);
+    V2 mouse_position = v2f((f32)x, (f32)y);
+
     const f32 starting_y = starting_position.y;
     b8 hit = false;
     i32 hit_index = -1;
@@ -740,12 +746,12 @@ item_list(const ApplicationContext* application,
         if (item_in_view(starting_position.y, item_height,
                          application->dimensions.y))
         {
-            hit = directory_item(
-                hit, i, starting_position,
-                application->font.pixel_height + padding, item_height,
-                item_width, &application->font, application->mouse_button,
-                application->mouse_move, icon_index, check_collision,
-                &items->data[i], selected_item_values, &hit_index, render);
+            hit = directory_item(hit, i, starting_position,
+                                 application->font.pixel_height + padding,
+                                 item_width, item_height, &application->font,
+                                 application->mouse_button, mouse_position,
+                                 icon_index, check_collision, &items->data[i],
+                                 selected_item_values, &hit_index, render);
         }
         starting_position.y += item_height;
     }
@@ -877,7 +883,6 @@ void set_scroll_offset(const u32 item_count, const f32 item_height,
 {
     const f32 total_height = item_count * item_height;
     const f32 y_offset = mouse_wheel_event->mouse_wheel_event.y_offset * 100.0f;
-    log_f32("Y: ", y_offset);
     *offset += y_offset;
     *offset = clampf32_high(*offset, 0.0f);
 
@@ -924,6 +929,12 @@ b8 is_ctrl_and_key_pressed(const Event* event, i32 key)
 {
     return event->activated && event->key_event.action == 1 &&
            event->key_event.ctrl_pressed && event->key_event.key == key;
+}
+
+b8 is_key_clicked(const Event* event, i32 key)
+{
+    return event->activated && event->key_event.action == 0 &&
+           event->key_event.key == key;
 }
 
 u32 load_icon_as_only_red(const char* file_path)
@@ -1072,7 +1083,8 @@ void paste_in_directory(DirectoryPage* current_directory)
 
 b8 is_mouse_button_clicked(const Event* event, i32 button)
 {
-    return event->activated && event->mouse_button_event.action == 0 &&
+    return event->activated &&
+           event->mouse_button_event.action == FTIC_RELEASE &&
            event->mouse_button_event.button == button;
 }
 
@@ -1095,13 +1107,12 @@ u8* application_init(ApplicationContext* application)
     application->font = (FontTTF){ 0 };
     const i32 width_atlas = 512;
     const i32 height_atlas = 512;
-    const f32 pixel_height = 20;
+    const f32 pixel_height = 16;
     u8* font_bitmap = (u8*)calloc(width_atlas * height_atlas, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
                    "res/fonts/arial.ttf", font_bitmap, &application->font);
 
     application->key_event = event_subscribe(KEY);
-    application->mouse_move = event_subscribe(MOUSE_MOVE);
     application->mouse_button = event_subscribe(MOUSE_BUTTON);
     application->mouse_wheel = event_subscribe(MOUSE_WHEEL);
 
@@ -1225,9 +1236,9 @@ void application_begin_frame(ApplicationContext* application)
     int width, height;
     window_get_size(application->window, &width, &height);
     application->dimensions = v2f((f32)width, (f32)height);
-    application->mouse_position =
-        v2f(application->mouse_move->mouse_move_event.position_x,
-            application->mouse_move->mouse_move_event.position_y);
+    double x, y;
+    window_get_mouse_position(application->window, &x, &y);
+    application->mouse_position = v2f((f32)x, (f32)y);
 
     glViewport(0, 0, width, height);
     glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
@@ -1736,6 +1747,11 @@ int main(int argc, char** argv)
     DirectoryItemArray quick_access_folders = { 0 };
     array_create(&quick_access_folders, 10);
 
+    b8 parent_directory_clicked = false;
+    f64 parent_directory_clicked_time = 0.4f;
+    CharArray parent_directory = { 0 };
+    array_create(&parent_directory, 100);
+
     enable_gldebugging();
     glEnable(GL_BLEND);
     glEnable(GL_SCISSOR_TEST);
@@ -1861,6 +1877,28 @@ int main(int argc, char** argv)
 
         const f32 back_drop_height =
             parent_directory_path_position.y + application.font.pixel_height;
+
+        const AABB parent_directory_path_aabb = {
+            .min = v2f(parent_directory_path_position.x, 0.0f),
+            .size = v2f(width + 10.0f, back_drop_height),
+        };
+
+        if (is_mouse_button_clicked(application.mouse_button,
+                                    FTIC_MOUSE_BUTTON_LEFT) &&
+            collision_point_in_aabb(application.mouse_position,
+                                    &parent_directory_path_aabb))
+        {
+            parent_directory.size = 0;
+            const char* path = current_directory(&application.directory_history)
+                                   ->directory.parent;
+            const u32 parent_length = (u32)strlen(path);
+            for (u32 i = 0; i < parent_length; ++i)
+            {
+                array_push(&parent_directory, path[i]);
+            }
+            parent_directory_clicked = true;
+        }
+
         quad(&main_render->vertices,
              v3f(parent_directory_path_position.x, 0.0f, 0.0f),
              v2f(width + 10.0f, back_drop_height), high_light_color, 0.0f);
@@ -1868,11 +1906,26 @@ int main(int argc, char** argv)
 
         parent_directory_path_position.x += 10.0f;
 
-        main_render->index_count += text_generation(
-            application.font.chars,
-            current_directory(&application.directory_history)->directory.parent,
-            1.0f, parent_directory_path_position, scale,
-            application.font.pixel_height, NULL, NULL, &main_render->vertices);
+        if (parent_directory_clicked)
+        {
+            render_input(&application.font, parent_directory.data,
+                         parent_directory.size, scale,
+                         parent_directory_path_position,
+                         parent_directory_path_position.y -
+                             application.font.pixel_height,
+                         true, application.delta_time,
+                         &parent_directory_clicked_time, main_render);
+        }
+        else
+        {
+            main_render->index_count += text_generation(
+                application.font.chars,
+                current_directory(&application.directory_history)
+                    ->directory.parent,
+                1.0f, parent_directory_path_position, scale,
+                application.font.pixel_height, NULL, NULL,
+                &main_render->vertices);
+        }
 
         AABB right_border_aabb = quad_gradiant_t_b(
             &main_render->vertices,
