@@ -25,11 +25,14 @@ typedef struct EventContextInternal
 
     CharArray key_buffer;
 
-    double lastClickTime;
-    int lastButton;
+    V2 position;
+
+    double last_click_time;
+    int last_button;
+    V2 last_position;
 } EventContextInternal;
 
-EventContextInternal event_context = { .lastButton = -1 };
+EventContextInternal event_context = { .last_button = -1 };
 
 internal void on_key_event(void* window, int key, int scancode, int action,
                            int mods)
@@ -50,6 +53,7 @@ internal void on_key_event(void* window, int key, int scancode, int action,
 
 internal void on_mouse_move_event(void* window, double x_pos, double y_pos)
 {
+    event_context.position = v2f((f32)x_pos, (f32)y_pos);
     for (u32 i = 0; i < event_context.events.size; ++i)
     {
         Event* event = event_context.events.data + i;
@@ -66,10 +70,11 @@ internal void on_mouse_button_event(void* window, int button, int action,
                                     int mods)
 {
     const f64 time = window_get_time();
-    const f64 time_since_last = time - event_context.lastClickTime;
+    const f64 time_since_last = time - event_context.last_click_time;
     const b8 double_clicked = (action == FTIC_PRESS) &&
-                              (button == event_context.lastButton) &&
-                              (time_since_last <= DOUBLE_CLICK_THRESHOLD);
+                              (button == event_context.last_button) &&
+                              (time_since_last <= DOUBLE_CLICK_THRESHOLD) &&
+                              v2_equal(event_context.last_position, event_context.position);
     for (u32 i = 0; i < event_context.events.size; ++i)
     {
         Event* event = event_context.events.data + i;
@@ -81,8 +86,9 @@ internal void on_mouse_button_event(void* window, int button, int action,
             event->activated = true;
         }
     }
-    event_context.lastClickTime = time;
-    event_context.lastButton = button;
+    event_context.last_click_time = time;
+    event_context.last_button = button;
+    event_context.last_position = event_context.position;
 }
 
 internal void on_mouse_wheel_event(void* window, double x_offset,
@@ -133,6 +139,7 @@ void event_poll()
         memset(event_context.key_buffer.data, 0, event_context.key_buffer.size);
         event_context.key_buffer.size = 0;
     }
+
     window_poll_event();
 }
 

@@ -27,17 +27,43 @@
 #define DELETE_OPTION_INDEX 2
 #define PROPERTIES_OPTION_INDEX 3
 
-global const V4 clear_color = { .r = 0.1f, .g = 0.1f, .b = 0.1f, .a = 1.0f };
+global const V4 clear_color = {
+    .r = 0.1f,
+    .g = 0.1f,
+    .b = 0.1f,
+    .a = 1.0f,
+};
 global const V4 high_light_color = {
-    .r = 0.2f, .g = 0.2f, .b = 0.2f, .a = 1.0f
+    .r = 0.2f,
+    .g = 0.2f,
+    .b = 0.2f,
+    .a = 1.0f,
 };
 global const V4 border_color = {
-    .r = 0.35f, .g = 0.35f, .b = 0.35f, .a = 1.0f
+    .r = 0.35f,
+    .g = 0.35f,
+    .b = 0.35f,
+    .a = 1.0f,
 };
 global const V4 lighter_color = {
-    .r = 0.55f, .g = 0.55f, .b = 0.55f, .a = 1.0f
+    .r = 0.55f,
+    .g = 0.55f,
+    .b = 0.55f,
+    .a = 1.0f,
 };
-global const V4 bright_color = { .r = 0.7f, .g = 0.7f, .b = 0.7f, .a = 1.0f };
+global const V4 bright_color = {
+    .r = 0.7f,
+    .g = 0.7f,
+    .b = 0.7f,
+    .a = 1.0f,
+};
+global const V4 secondary_color = {
+    .r = 0.0f,
+    .g = 0.59f,
+    .b = 1.0f,
+    .a = 1.0f,
+};
+
 global const f32 border_width = 2.0f;
 
 global const f32 PI = 3.141592653589f;
@@ -62,6 +88,12 @@ typedef struct U32Array
     u32* data;
 } U32Array;
 
+typedef struct DirectoryItemList
+{
+    DirectoryItemArray* items;
+    f64 pulse_x;
+} DirectoryItemList;
+
 // TODO(Linus): find a better way to do this
 typedef struct SelectedItemValues
 {
@@ -85,6 +117,7 @@ typedef struct DirectoryPage
 {
     f32 offset;
     f32 scroll_offset;
+    f64 pulse_x;
     Directory directory;
 } DirectoryPage;
 
@@ -154,6 +187,7 @@ typedef struct SearchPage
     f32 offset;
     f32 scroll_offset;
     f64 search_blinking_time;
+    f64 result_pulse_x;
 
     AABB search_bar_aabb;
     AABB search_result_aabb;
@@ -574,9 +608,9 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position,
                   const f32 padding_top, f32 width, const f32 height,
                   const FontTTF* font, const Event* mouse_button_event,
                   const V2 mouse_position, const f32 icon_index,
-                  const b8 check_colission, DirectoryItem* item,
-                  SelectedItemValues* selected_item_values, i32* hit_index,
-                  RenderingProperties* render)
+                  const b8 check_colission, const f64 pulse_x,
+                  DirectoryItem* item, SelectedItemValues* selected_item_values,
+                  i32* hit_index, RenderingProperties* render)
 {
     AABB aabb = { .min = v2_v3(starting_position), .size = v2f(width, height) };
 
@@ -611,10 +645,29 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position,
             }
         }
     }
-    const V4 color = (this_hit || selected) ? border_color : clear_color;
+
+    V4 color = clear_color;
+    V4 left_side_color = clear_color;
+    if (this_hit || selected)
+    {
+        const V4 end_color = {
+            .r = 0.3f,
+            .g = 0.3f,
+            .b = 0.3f,
+            .a = 1.0f,
+        };
+        color =
+            v4_lerp(border_color, end_color, ((f32)sin(pulse_x) + 1.0f) / 2.0f);
+    }
+
     // Backdrop
-    quad(&render->vertices, starting_position, aabb.size, color, 0.0f);
+    quad_gradiant_l_r(&render->vertices, starting_position, aabb.size, color,
+                      clear_color, 0.0f);
     render->index_count += 1;
+
+    quad(&render->vertices, starting_position, v2f(aabb.size.x, 1.0f),
+         border_color, 0.0f);
+    render->index_count++;
 
     if (this_hit || selected)
     {
@@ -622,10 +675,10 @@ b8 directory_item(b8 hit, i32 index, V3 starting_position,
         width -= 8.0f;
     }
     // Icon
-    aabb =
-        quad(&render->vertices,
-             v3f(starting_position.x + 5.0f, starting_position.y + 3.0f, 0.0f),
-             v2f(20.0f, 20.0f), v4i(1.0f), icon_index);
+    aabb = quad_gradiant_tl_br(
+        &render->vertices,
+        v3f(starting_position.x + 5.0f, starting_position.y + 3.0f, 0.0f),
+        v2f(20.0f, 20.0f), secondary_color, v4i(1.0f), icon_index);
     render->index_count += 1;
 
     V3 text_position =
@@ -731,7 +784,7 @@ DirectoryItemListReturnValue
 item_list(const ApplicationContext* application,
           const DirectoryItemArray* items, const f32 icon_index,
           const b8 check_collision, V3 starting_position, const f32 item_width,
-          const f32 item_height, const f32 padding,
+          const f32 item_height, const f32 padding, const f64 pulse_x,
           SelectedItemValues* selected_item_values, RenderingProperties* render)
 {
     double x, y;
@@ -746,12 +799,12 @@ item_list(const ApplicationContext* application,
         if (item_in_view(starting_position.y, item_height,
                          application->dimensions.y))
         {
-            hit = directory_item(hit, i, starting_position,
-                                 application->font.pixel_height + padding,
-                                 item_width, item_height, &application->font,
-                                 application->mouse_button, mouse_position,
-                                 icon_index, check_collision, &items->data[i],
-                                 selected_item_values, &hit_index, render);
+            hit = directory_item(
+                hit, i, starting_position,
+                application->font.pixel_height + padding, item_width,
+                item_height, &application->font, application->mouse_button,
+                mouse_position, icon_index, check_collision, pulse_x,
+                &items->data[i], selected_item_values, &hit_index, render);
         }
         starting_position.y += item_height;
     }
@@ -767,13 +820,14 @@ DirectoryItemListReturnValue
 folder_item_list(const ApplicationContext* application,
                  const DirectoryItemArray* folders, const b8 check_collision,
                  V3 starting_position, const f32 item_width,
-                 const f32 item_height, const f32 padding,
+                 const f32 item_height, const f32 padding, const f64 pulse_x,
                  SelectedItemValues* selected_item_values,
                  RenderingProperties* render, DirectoryArray* directory_history)
 {
-    DirectoryItemListReturnValue list_return = item_list(
-        application, folders, 3.0f, check_collision, starting_position,
-        item_width, item_height, padding, selected_item_values, render);
+    DirectoryItemListReturnValue list_return =
+        item_list(application, folders, 3.0f, check_collision,
+                  starting_position, item_width, item_height, padding, pulse_x,
+                  selected_item_values, render);
 
     check_and_open_folder(application->mouse_button, list_return.hit,
                           list_return.hit_index, folders->data,
@@ -784,12 +838,13 @@ folder_item_list(const ApplicationContext* application,
 DirectoryItemListReturnValue files_item_list(
     const ApplicationContext* application, const DirectoryItemArray* files,
     const b8 check_collision, V3 starting_position, const f32 item_width,
-    const f32 item_height, const f32 padding,
+    const f32 item_height, const f32 padding, const f64 pulse_x,
     SelectedItemValues* selected_item_values, RenderingProperties* render)
 {
-    DirectoryItemListReturnValue list_return = item_list(
-        application, files, 2.0f, check_collision, starting_position,
-        item_width, item_height, padding, selected_item_values, render);
+    DirectoryItemListReturnValue list_return =
+        item_list(application, files, 2.0f, check_collision, starting_position,
+                  item_width, item_height, padding, pulse_x,
+                  selected_item_values, render);
 
     check_and_open_file(application->mouse_button, list_return.hit, files->data,
                         list_return.hit_index);
@@ -801,20 +856,20 @@ DirectoryItemListReturnValue directory_item_list(
     const ApplicationContext* application,
     const DirectoryItemArray* sub_directories, const DirectoryItemArray* files,
     const b8 check_collision, V3 starting_position, const f32 item_width,
-    const f32 item_height, const f32 padding,
+    const f32 item_height, const f32 padding, const f64 pulse_x,
     SelectedItemValues* selected_item_values, RenderingProperties* render,
     DirectoryArray* directory_history)
 {
-    DirectoryItemListReturnValue folder_list_return =
-        folder_item_list(application, sub_directories, check_collision,
-                         starting_position, item_width, item_height, padding,
-                         selected_item_values, render, directory_history);
+    DirectoryItemListReturnValue folder_list_return = folder_item_list(
+        application, sub_directories, check_collision, starting_position,
+        item_width, item_height, padding, pulse_x, selected_item_values, render,
+        directory_history);
 
     starting_position.y += folder_list_return.total_height;
 
     DirectoryItemListReturnValue files_list_return = files_item_list(
         application, files, check_collision, starting_position, item_width,
-        item_height, padding, selected_item_values, render);
+        item_height, padding, pulse_x, selected_item_values, render);
 
     return (DirectoryItemListReturnValue){
         .count = folder_list_return.count + files_list_return.count,
@@ -1377,11 +1432,14 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
         platform_mutex_lock(&page->search_result_file_array.mutex);
         platform_mutex_lock(&page->search_result_folder_array.mutex);
 
+        page->result_pulse_x += application->delta_time * 6.0f;
+
         search_list_return_value = directory_item_list(
             application, &page->search_result_folder_array.array,
             &page->search_result_file_array.array, check_colission,
             search_result_position, search_result_width, quad_height,
-            padding_top, selected_item_values, page->render, directory_history);
+            padding_top, page->result_pulse_x, selected_item_values,
+            page->render, directory_history);
 
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
         platform_mutex_unlock(&page->search_result_file_array.mutex);
@@ -1438,8 +1496,8 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
 
     quad_border_gradiant(&page->render->vertices, &page->render->index_count,
                          v3_v2(page->search_bar_aabb.min),
-                         page->search_bar_aabb.size, bright_color, border_color,
-                         border_width, 0.0f);
+                         page->search_bar_aabb.size, secondary_color,
+                         border_color, border_width, 0.0f);
 
     const V3 scroll_bar_position =
         v3f(application->dimensions.width,
@@ -1755,6 +1813,7 @@ int main(int argc, char** argv)
     enable_gldebugging();
     glEnable(GL_BLEND);
     glEnable(GL_SCISSOR_TEST);
+    glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (!window_should_close(application.window))
     {
@@ -1835,7 +1894,7 @@ int main(int argc, char** argv)
         AABB rect =
             quad_gradiant_t_b(&main_render->vertices, starting_position,
                               v2f(border_width, application.dimensions.y),
-                              bright_color, border_color, 0.0f);
+                              secondary_color, border_color, 0.0f);
         ++main_render->index_count;
 
         V3 search_bar_position =
@@ -1864,16 +1923,20 @@ int main(int argc, char** argv)
         const f32 quad_height =
             scale * application.font.pixel_height + padding_top * 5.0f;
 
-        DirectoryItemListReturnValue main_list_return_value =
-            directory_item_list(
-                &application,
-                &current_directory(&application.directory_history)
-                     ->directory.sub_directories,
-                &current_directory(&application.directory_history)
-                     ->directory.files,
-                check_colission, text_starting_position, width - 10.0f,
-                quad_height, padding_top, &selected_item_values, main_render,
-                &application.directory_history);
+        DirectoryItemListReturnValue main_list_return_value;
+        {
+            DirectoryPage* current =
+                current_directory(&application.directory_history);
+            current->pulse_x += application.delta_time * 6.0f;
+
+            main_list_return_value =
+                directory_item_list(
+                    &application, &current->directory.sub_directories,
+                    &current->directory.files, check_colission,
+                    text_starting_position, width - 10.0f, quad_height,
+                    padding_top, current->pulse_x, &selected_item_values,
+                    main_render, &application.directory_history);
+        }
 
         const f32 back_drop_height =
             parent_directory_path_position.y + application.font.pixel_height;
@@ -1930,7 +1993,7 @@ int main(int argc, char** argv)
         AABB right_border_aabb = quad_gradiant_t_b(
             &main_render->vertices,
             v3f(directory_aabb.min.x + directory_aabb.size.x, 0.0f, 0.0f),
-            v2f(border_width, application.dimensions.y), bright_color,
+            v2f(border_width, application.dimensions.y), secondary_color,
             border_color, 0.0f);
         ++main_render->index_count;
 
@@ -1943,7 +2006,7 @@ int main(int argc, char** argv)
         };
 
         V4 side_under_border_start_color =
-            v4_lerp(bright_color, border_color,
+            v4_lerp(secondary_color, border_color,
                     side_under_border_aabb.min.y / right_border_aabb.size.y);
 
         // Search bar
@@ -2012,7 +2075,7 @@ int main(int argc, char** argv)
             v3f(0.0f, side_under_border_aabb.min.y, 0.0f);
 
         quad_gradiant_l_r(&main_render->vertices, back_button_border_position,
-                          v2f(rect.min.x, border_width), bright_color,
+                          v2f(rect.min.x, border_width), secondary_color,
                           side_under_border_start_color, 0.0f);
         ++main_render->index_count;
 

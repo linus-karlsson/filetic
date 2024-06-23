@@ -12,6 +12,8 @@ FTicWindow* window_init(const char* title, int width, int height)
         ftic_assert(false);
     }
 
+    glfwWindowHint(GLFW_SAMPLES, 4);
+
     GLFWwindow* window = glfwCreateWindow(width, height, "FileTic", NULL, NULL);
 
     if (!window)

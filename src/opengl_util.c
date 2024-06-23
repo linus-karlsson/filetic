@@ -62,8 +62,9 @@ void generate_indicies(IndexArray* array, u32 offset, u32 indices_count)
     }
 }
 
-AABB quad_gradiant_l_r(VertexArray* vertex_array, V3 position, V2 size,
-                       V4 left_color, V4 right_color, f32 texture_index)
+internal AABB quad_gradiant_internal(VertexArray* vertex_array, V3 position,
+                                     V2 size, V4 corner_colors[4],
+                                     f32 texture_index)
 {
     TextureCoordinates texture_coordinates = { v2d(), v2f(0.0f, 1.0f),
                                                v2f(1.0f, 1.0f),
@@ -71,19 +72,21 @@ AABB quad_gradiant_l_r(VertexArray* vertex_array, V3 position, V2 size,
     Vertex vertex = {
         .position = position,
         .texture_coordinates = texture_coordinates.coordinates[0],
-        .color = left_color,
+        .color = corner_colors[0],
         .texture_index = texture_index,
     };
     array_push(vertex_array, vertex);
     vertex.position.y += size.y;
     vertex.texture_coordinates = texture_coordinates.coordinates[1];
+    vertex.color = corner_colors[1];
     array_push(vertex_array, vertex);
     vertex.position.x += size.x;
     vertex.texture_coordinates = texture_coordinates.coordinates[2];
-    vertex.color = right_color;
+    vertex.color = corner_colors[2];
     array_push(vertex_array, vertex);
     vertex.position.y -= size.y;
     vertex.texture_coordinates = texture_coordinates.coordinates[3];
+    vertex.color = corner_colors[3];
     array_push(vertex_array, vertex);
 
     AABB out = {
@@ -93,37 +96,29 @@ AABB quad_gradiant_l_r(VertexArray* vertex_array, V3 position, V2 size,
     return out;
 }
 
+AABB quad_gradiant_l_r(VertexArray* vertex_array, V3 position, V2 size,
+                       V4 left_color, V4 right_color, f32 texture_index)
+{
+    V4 corner_colors[] = { left_color, left_color, right_color, right_color };
+    return quad_gradiant_internal(vertex_array, position, size, corner_colors,
+                                  texture_index);
+}
+
 AABB quad_gradiant_t_b(VertexArray* vertex_array, V3 position, V2 size,
                        V4 top_color, V4 bottom_color, f32 texture_index)
 {
-    TextureCoordinates texture_coordinates = { v2d(), v2f(0.0f, 1.0f),
-                                               v2f(1.0f, 1.0f),
-                                               v2f(1.0f, 0.0f) };
-    Vertex vertex = {
-        .position = position,
-        .texture_coordinates = texture_coordinates.coordinates[0],
-        .color = top_color,
-        .texture_index = texture_index,
-    };
-    array_push(vertex_array, vertex);
-    vertex.position.y += size.y;
-    vertex.texture_coordinates = texture_coordinates.coordinates[1];
-    vertex.color = bottom_color;
-    array_push(vertex_array, vertex);
-    vertex.position.x += size.x;
-    vertex.texture_coordinates = texture_coordinates.coordinates[2];
-    vertex.color = bottom_color;
-    array_push(vertex_array, vertex);
-    vertex.position.y -= size.y;
-    vertex.texture_coordinates = texture_coordinates.coordinates[3];
-    vertex.color = top_color;
-    array_push(vertex_array, vertex);
+    V4 corner_colors[] = { top_color, bottom_color, bottom_color, top_color};
+    return quad_gradiant_internal(vertex_array, position, size, corner_colors,
+                                  texture_index);
+}
 
-    AABB out = {
-        .min = v2_v3(position),
-        .size = size,
-    };
-    return out;
+AABB quad_gradiant_tl_br(VertexArray* vertex_array, V3 position, V2 size,
+                         V4 top_color, V4 bottom_color, f32 texture_index)
+{
+    V4 half_color = v4_lerp(top_color, bottom_color, 0.5f);
+    V4 corner_colors[] = { top_color, half_color, bottom_color, half_color};
+    return quad_gradiant_internal(vertex_array, position, size, corner_colors,
+                                  texture_index);
 }
 
 AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
