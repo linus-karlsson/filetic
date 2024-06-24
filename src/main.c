@@ -730,10 +730,6 @@ b8 directory_item(b8 hit, i32 index, V2 starting_position,
                       clear_color, 0.0f);
     render->index_count++;
 
-    quad_gradiant_l_r(&render->vertices, aabb.min, v2f(aabb.size.x, 1.0f),
-                      border_color, high_light_color, 0.0f);
-    render->index_count++;
-
     if (v4_equal(texture_coordinates, file_icon_co))
     {
         const char* extension =
@@ -907,6 +903,15 @@ item_list(const ApplicationContext* application,
                                  icon_index, texture_coordinates,
                                  check_collision, pulse_x, &items->data[i],
                                  selected_item_values, &hit_index, render);
+
+#if 0
+            quad_gradiant_l_r(&render->vertices,
+                              v2f(starting_position.x,
+                                  starting_position.y + item_height - 1.0f),
+                              v2f(item_width, 1.0f), border_color,
+                              high_light_color, 0.0f);
+            render->index_count++;
+#endif
         }
         starting_position.y += item_height;
     }
@@ -1454,6 +1459,11 @@ void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
                 *array_back(&page->search_buffer) = 0;
                 --page->search_buffer.size;
             }
+            else
+            {
+                array_push(&page->search_buffer, '\0');
+                page->search_buffer.size--;
+            }
         }
     }
     if (key_buffer->size || reload_search_result)
@@ -1910,20 +1920,24 @@ b8 can_go_up_one_directory(char* parent)
     return false;
 }
 
+u32 get_path_length(const char* path, u32 path_length)
+{
+    for (i32 i = path_length - 1; i >= 0; --i)
+    {
+        const char current_char = path[i];
+        if (current_char == '\\' || current_char == '/')
+        {
+            return i;
+        }
+    }
+    return path_length;
+}
+
 void go_up_one_directory(DirectoryHistory* directory_history)
 {
     DirectoryPage* current = current_directory(directory_history);
     char* parent = current->directory.parent;
-    u32 parent_length = (u32)strlen(parent);
-    for (i32 i = parent_length - 1; i >= 0; --i)
-    {
-        const char current_char = parent[i];
-        if (current_char == '\\' || current_char == '/')
-        {
-            parent_length = i;
-            break;
-        }
-    }
+    u32 parent_length = get_path_length(parent, (u32)strlen(parent));
     go_to_directory(parent, parent_length, directory_history);
 }
 
@@ -2193,52 +2207,6 @@ int main(int argc, char** argv)
 
         parent_directory_path_position.x += 10.0f;
 
-        if (parent_directory_clicked)
-        {
-            erase_char(application.key_event, &parent_directory);
-            const CharArray* key_buffer = event_get_key_buffer();
-            for (u32 i = 0; i < key_buffer->size; ++i)
-            {
-                char current_char = key_buffer->data[i];
-                if (closed_interval(0, (current_char - 32), 96))
-                {
-                    array_push(&parent_directory, current_char);
-                }
-            }
-            render_input(&application.font, parent_directory.data,
-                         parent_directory.size, scale,
-                         parent_directory_path_position,
-                         parent_directory_path_position.y -
-                             application.font.pixel_height,
-                         true, application.delta_time,
-                         &parent_directory_clicked_time, main_render);
-            if (is_key_clicked(application.key_event, FTIC_KEY_ENTER))
-            {
-                // Add extra space for "/*\0" at the end
-                array_push(&parent_directory, '\0');
-                array_push(&parent_directory, '\0');
-                array_push(&parent_directory, '\0');
-                parent_directory.size -= 3;
-
-                if (!go_to_directory(parent_directory.data,
-                                     parent_directory.size,
-                                     &application.directory_history))
-                {
-                    log_message("h", 1);
-                }
-            }
-        }
-        else
-        {
-            main_render->index_count += text_generation(
-                application.font.chars,
-                current_directory(&application.directory_history)
-                    ->directory.parent,
-                1.0f, parent_directory_path_position, scale,
-                application.font.pixel_height, NULL, NULL,
-                &main_render->vertices);
-        }
-
         AABB right_border_aabb = quad_gradiant_t_b(
             &main_render->vertices,
             v2f(directory_aabb.min.x + directory_aabb.size.x, 0.0f),
@@ -2360,6 +2328,88 @@ int main(int argc, char** argv)
         else
         {
             // platform_change_cursor(application.platform, FTIC_NORMAL_CURSOR);
+        }
+
+        if (parent_directory_clicked)
+        {
+            b8 reload_results =
+                erase_char(application.key_event, &parent_directory);
+            const CharArray* key_buffer = event_get_key_buffer();
+            for (u32 i = 0; i < key_buffer->size; ++i)
+            {
+                char current_char = key_buffer->data[i];
+                if (closed_interval(0, (current_char - 32), 96))
+                {
+                    array_push(&parent_directory, current_char);
+                    array_push(&parent_directory, '\0');
+                    array_push(&parent_directory, '\0');
+                    array_push(&parent_directory, '\0');
+                    parent_directory.size -= 3;
+                }
+            }
+            reload_results |= key_buffer->size > 0;
+
+            if (reload_results)
+            {
+                DirectoryPage* current =
+                    current_directory(&application.directory_history);
+
+                char* path = parent_directory.data;
+                u32 current_directory_len =
+                    get_path_length(path, parent_directory.size);
+
+                Directory directory = { 0 };
+                char saved_chars[3];
+                saved_chars[0] = path[current_directory_len];
+                path[current_directory_len] = '\0';
+                if (platform_directory_exists(path))
+                {
+                    path[current_directory_len++] = '\\';
+                    saved_chars[1] = path[current_directory_len];
+                    path[current_directory_len++] = '*';
+                    saved_chars[2] = path[current_directory_len];
+                    path[current_directory_len] = '\0';
+                    directory =
+                        platform_get_directory(path, current_directory_len);
+                    path[current_directory_len--] = saved_chars[2];
+                    path[current_directory_len--] = saved_chars[1];
+                }
+                path[current_directory_len] = saved_chars[0];
+
+                log_message(" ", 1);
+                for (u32 i = 0; i < directory.sub_directories.size; ++i)
+                {
+                    log_message(directory.sub_directories.data[i].name,
+                                strlen(directory.sub_directories.data[i].name));
+                }
+                log_message(" ", 1);
+            }
+
+            render_input(&application.font, parent_directory.data,
+                         parent_directory.size, scale,
+                         parent_directory_path_position,
+                         parent_directory_path_position.y -
+                             application.font.pixel_height,
+                         true, application.delta_time,
+                         &parent_directory_clicked_time, main_render);
+            if (is_key_clicked(application.key_event, FTIC_KEY_ENTER))
+            {
+                if (!go_to_directory(parent_directory.data,
+                                     parent_directory.size,
+                                     &application.directory_history))
+                {
+                }
+            }
+        }
+        else
+        {
+            main_render->index_count += text_generation(
+                application.font.chars,
+                current_directory(&application.directory_history)
+                    ->directory.parent,
+                1.0f, parent_directory_path_position, scale,
+                application.font.pixel_height, NULL, NULL,
+                &main_render->vertices);
         }
 
         if (preview_render->texture_count > 1)
