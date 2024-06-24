@@ -2236,9 +2236,10 @@ int main(int argc, char** argv)
                      application.key_event->key_event.action == 1 &&
                      application.key_event->key_event.key == FTIC_KEY_ESCAPE)
             {
-                platform_delete_files(&selected_item_values.paths);
-                reload_directory(
-                    current_directory(&application.directory_history));
+                // TODO: Not get called when you press escape in a drop down for example
+                //platform_delete_files(&selected_item_values.paths);
+                //reload_directory(
+                 //   current_directory(&application.directory_history));
             }
             else if (check_collision &&
                      !application.key_event->key_event.ctrl_pressed &&
