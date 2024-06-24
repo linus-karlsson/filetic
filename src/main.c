@@ -247,6 +247,7 @@ typedef struct SearchPage
     u32 running_id;
     u32 last_running_id;
 
+    i32 search_bar_cursor_index;
     b8 search_bar_hit;
 } SearchPage;
 
@@ -1643,11 +1644,8 @@ void application_end_frame(ApplicationContext* application)
     application->last_time = now;
 }
 
-void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
-                                  const FontTTF* font,
-                                  const b8 reload_search_result,
-                                  DirectoryHistory* directory_history,
-                                  ThreadTaskQueue* thread_task_queue)
+void add_from_key_buffer(const FontTTF* font, const f32 width, i32* input_index,
+                         CharArray* buffer)
 {
     const CharArray* key_buffer = event_get_key_buffer();
     for (u32 i = 0; i < key_buffer->size; ++i)
@@ -1655,22 +1653,37 @@ void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
         char current_char = key_buffer->data[i];
         if (closed_interval(0, (current_char - 32), 96))
         {
-            array_push(&page->search_buffer, current_char);
+            array_push(buffer, current_char);
             f32 x_advance =
-                text_x_advance(font->chars, page->search_buffer.data,
-                               page->search_buffer.size, 1.0f);
-            if (x_advance >= search_bar_width)
+                text_x_advance(font->chars, buffer->data, buffer->size, 1.0f);
+            buffer->size--;
+            if (x_advance >= width)
             {
-                *array_back(&page->search_buffer) = 0;
-                --page->search_buffer.size;
+                return;
             }
-            else
+            array_push(buffer, '\0');
+            for (i32 j = buffer->size - 1; j > *input_index; --j)
             {
-                array_push(&page->search_buffer, '\0');
-                page->search_buffer.size--;
+                buffer->data[j] = buffer->data[j - 1];
             }
+            buffer->data[(*input_index)++] = current_char;
+            array_push(buffer, '\0');
+            array_push(buffer, '\0');
+            array_push(buffer, '\0');
+            buffer->size -= 3;
         }
     }
+}
+
+void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
+                                  const FontTTF* font,
+                                  const b8 reload_search_result,
+                                  DirectoryHistory* directory_history,
+                                  ThreadTaskQueue* thread_task_queue)
+{
+    add_from_key_buffer(font, search_bar_width, &page->search_bar_cursor_index,
+                        &page->search_buffer);
+    const CharArray* key_buffer = event_get_key_buffer();
     if (key_buffer->size || reload_search_result)
     {
         search_page_clear_search_result(page);
@@ -1717,7 +1730,7 @@ b8 erase_char(const Event* key_event, i32* cursor_index, CharArray* buffer)
          key_event->key_event.action == FTIC_REPEAT) &&
         key_event->key_event.key == FTIC_KEY_BACKSPACE)
     {
-        if (buffer->size)
+        if ((*cursor_index) > 0)
         {
             (*cursor_index)--;
             for (u32 i = *cursor_index; i < buffer->size; ++i)
@@ -1809,7 +1822,8 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
     if (page->search_bar_hit)
     {
         b8 reload_search_result =
-            erase_char(application->key_event, NULL, &page->search_buffer);
+            erase_char(application->key_event, &page->search_bar_cursor_index,
+                       &page->search_buffer);
         search_page_parse_key_buffer(
             page, search_bar_width - (search_bar_input_text_padding * 2),
             &application->font, reload_search_result, directory_history,
@@ -1823,11 +1837,12 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
     page->render->index_count++;
 
     // Search bar
-    render_input(&application->font, page->search_buffer.data,
-                 page->search_buffer.size, scale, search_input_position,
-                 search_bar_position.y + 10.0f, page->search_bar_hit,
-                 application->key_event, -1, application->delta_time,
-                 &page->search_blinking_time, NULL, page->render);
+    page->search_bar_cursor_index = render_input(
+        &application->font, page->search_buffer.data, page->search_buffer.size,
+        scale, search_input_position, search_bar_position.y + 10.0f,
+        page->search_bar_hit, application->key_event,
+        page->search_bar_cursor_index, application->delta_time,
+        &page->search_blinking_time, NULL, page->render);
 
     quad_border_gradiant(&page->render->vertices, &page->render->index_count,
                          page->search_bar_aabb.min, page->search_bar_aabb.size,
@@ -2669,24 +2684,10 @@ int main(int argc, char** argv)
                 suggestions.tab_index = -1;
             }
             reload_results |= backspace_pressed;
+            add_from_key_buffer(&application.font,
+                                parent_directory_path_aabb.size.x, &input_index,
+                                &parent_directory);
             const CharArray* key_buffer = event_get_key_buffer();
-            for (u32 i = 0; i < key_buffer->size; ++i)
-            {
-                char current_char = key_buffer->data[i];
-                if (closed_interval(0, (current_char - 32), 96))
-                {
-                    array_push(&parent_directory, '\0');
-                    for(i32 j = parent_directory.size - 1; j > input_index; --j)
-                    {
-                        parent_directory.data[j] = parent_directory.data[j - 1];
-                    }
-                    parent_directory.data[input_index++] = current_char;
-                    array_push(&parent_directory, '\0');
-                    array_push(&parent_directory, '\0');
-                    array_push(&parent_directory, '\0');
-                    parent_directory.size -= 3;
-                }
-            }
             reload_results |= key_buffer->size > 0;
 
             if (reload_results)
