@@ -196,12 +196,23 @@ typedef struct ScrollBar
     b8 dragging;
 } ScrollBar;
 
+typedef struct DirectoryHistory
+{
+    u32 current_index;
+    DirectoryArray history;
+} DirectoryHistory;
+
+DirectoryPage* current_directory(DirectoryHistory* history)
+{
+    return history->history.data + history->current_index;
+}
+
 typedef struct ApplicationContext
 {
     GLFWwindow* window;
     FontTTF font;
 
-    DirectoryArray directory_history;
+    DirectoryHistory directory_history;
 
     Event* key_event;
     Event* mouse_button;
@@ -214,11 +225,6 @@ typedef struct ApplicationContext
     f64 delta_time;
     MVP mvp;
 } ApplicationContext;
-
-DirectoryPage* current_directory(DirectoryArray* history)
-{
-    return array_back(history);
-}
 
 typedef struct SearchPage
 {
@@ -813,7 +819,7 @@ void check_and_open_file(const Event* mouse_button_event, const b8 hit,
 void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
                            const i32 index,
                            const DirectoryItem* current_folders,
-                           DirectoryArray* directory_history)
+                           DirectoryHistory* directory_history)
 {
     if (mouse_button_event->mouse_button_event.double_clicked &&
         mouse_button_event->mouse_button_event.button == FTIC_MOUSE_BUTTON_1)
@@ -831,7 +837,15 @@ void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
             path[length++] = '*';
             DirectoryPage new_page = { 0 };
             new_page.directory = platform_get_directory(path, length);
-            array_push(directory_history, new_page);
+            for (i32 i = directory_history->history.size - 1;
+                 i >= (i32)directory_history->current_index + 1; --i)
+            {
+                platform_reset_directory(
+                    &directory_history->history.data[i].directory);
+            }
+            directory_history->history.size =
+                ++directory_history->current_index;
+            array_push(&directory_history->history, new_page); // size + 1
             path[length - 2] = '\0';
             path[length - 1] = '\0';
         }
@@ -884,13 +898,12 @@ item_list(const ApplicationContext* application,
     };
 }
 
-DirectoryItemListReturnValue
-folder_item_list(const ApplicationContext* application,
-                 const DirectoryItemArray* folders, const b8 check_collision,
-                 V2 starting_position, const f32 item_width,
-                 const f32 item_height, const f32 padding, const f64 pulse_x,
-                 SelectedItemValues* selected_item_values,
-                 RenderingProperties* render, DirectoryArray* directory_history)
+DirectoryItemListReturnValue folder_item_list(
+    const ApplicationContext* application, const DirectoryItemArray* folders,
+    const b8 check_collision, V2 starting_position, const f32 item_width,
+    const f32 item_height, const f32 padding, const f64 pulse_x,
+    SelectedItemValues* selected_item_values, RenderingProperties* render,
+    DirectoryHistory* directory_history)
 {
     DirectoryItemListReturnValue list_return =
         item_list(application, folders, 2.0f, folder_icon_co, check_collision,
@@ -926,7 +939,7 @@ DirectoryItemListReturnValue directory_item_list(
     const b8 check_collision, V2 starting_position, const f32 item_width,
     const f32 item_height, const f32 padding, const f64 pulse_x,
     SelectedItemValues* selected_item_values, RenderingProperties* render,
-    DirectoryArray* directory_history)
+    DirectoryHistory* directory_history)
 {
     DirectoryItemListReturnValue folder_list_return = folder_item_list(
         application, sub_directories, check_collision, starting_position,
@@ -1257,13 +1270,13 @@ u8* application_init(ApplicationContext* application)
     application->mouse_button = event_subscribe(MOUSE_BUTTON);
     application->mouse_wheel = event_subscribe(MOUSE_WHEEL);
 
-    application->directory_history = (DirectoryArray){ 0 };
-    array_create(&application->directory_history, 10);
+    application->directory_history = (DirectoryHistory){ 0 };
+    array_create(&application->directory_history.history, 10);
 
     const char* dir = "C:\\*";
     DirectoryPage page = { 0 };
     page.directory = platform_get_directory(dir, (u32)strlen(dir));
-    array_push(&application->directory_history, page);
+    array_push(&application->directory_history.history, page);
 
     application->last_time = platform_get_time();
     application->delta_time = 0.0f;
@@ -1403,7 +1416,7 @@ void application_end_frame(ApplicationContext* application)
 void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
                                   const FontTTF* font,
                                   const b8 reload_search_result,
-                                  DirectoryArray* directory_history,
+                                  DirectoryHistory* directory_history,
                                   ThreadTaskQueue* thread_task_queue)
 {
     const CharArray* key_buffer = event_get_key_buffer();
@@ -1466,7 +1479,7 @@ DirectoryItemListReturnValue
 search_page_update(SearchPage* page, const ApplicationContext* application,
                    const b8 check_colission, const V2 search_bar_position,
                    const f32 search_page_header_start_x,
-                   DirectoryArray* directory_history,
+                   DirectoryHistory* directory_history,
                    ThreadTaskQueue* thread_task_queue,
                    SelectedItemValues* selected_item_values)
 {
@@ -1811,30 +1824,54 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
 }
 
 b8 add_arrow_button(V2 position, const AABB* button_aabb,
-                    const V4 texture_coordinates, const b8 extra_condition,
-                    const V2 mouse_position, const V4 icon_color,
+                    const V4 texture_coordinates, const b8 check_colission,
+                    const b8 extra_condition, const V2 mouse_position,
                     RenderingProperties* render)
 {
-    V4 button_color = clear_color;
+    V4 highlight_button_color = clear_color;
+    V4 button_color = v4ic(1.0f);
 
     b8 collision = false;
-    if (extra_condition && collision_point_in_aabb(mouse_position, button_aabb))
+    if (extra_condition)
     {
-        button_color = high_light_color;
-        collision = true;
+        if (check_colission &&
+            collision_point_in_aabb(mouse_position, button_aabb))
+        {
+            highlight_button_color = high_light_color;
+            collision = true;
+        }
+    }
+    else
+    {
+        button_color = border_color;
     }
 
-    quad(&render->vertices, position, button_aabb->size, button_color, 0.0f);
+    quad(&render->vertices, position, button_aabb->size, highlight_button_color,
+         0.0f);
     render->index_count++;
 
     position.x += 9.0f;
     position.y += 10.0f;
 
-    quad_co(&render->vertices, position, v2i(20.0f), icon_color,
+    quad_co(&render->vertices, position, v2i(20.0f), button_color,
             texture_coordinates, 3.0f);
     render->index_count++;
 
     return extra_condition && collision;
+}
+
+void move_in_history(const Event* mouse_button_event, const i32 index_add,
+                     SelectedItemValues* selected_item_values,
+                     DirectoryHistory* directory_history)
+{
+    if (is_mouse_button_clicked(mouse_button_event, FTIC_MOUSE_BUTTON_LEFT))
+    {
+        directory_history->current_index += index_add;
+        DirectoryPage* current = current_directory(directory_history);
+        current->scroll_offset = 0.0f;
+        reset_selected_items(selected_item_values);
+        reload_directory(current);
+    }
 }
 
 int main(int argc, char** argv)
@@ -2120,47 +2157,38 @@ int main(int argc, char** argv)
             .size = v2i(search_page.search_bar_aabb.size.y),
         };
 
-        const V4 back_icon_color =
-            application.directory_history.size == 1 ? border_color : v4ic(1.0f);
-
-        if (add_arrow_button(
-                button_aabb.min, &button_aabb, arrow_back_icon_co,
-                check_colission && application.directory_history.size > 1,
-                application.mouse_position, back_icon_color, main_render))
+        // TODO: add the mouse_click in this function
+        if (add_arrow_button(button_aabb.min, &button_aabb, arrow_back_icon_co,
+                             check_colission,
+                             application.directory_history.history.size > 1,
+                             application.mouse_position, main_render))
         {
-            const MouseButtonEvent* event =
-                &application.mouse_button->mouse_button_event;
-            if (application.mouse_button->activated && event->action == 0 &&
-                event->button == FTIC_MOUSE_BUTTON_1)
-            {
-                platform_reset_directory(
-                    &current_directory(&application.directory_history)
-                         ->directory);
-                application.directory_history.size -= 1;
-                DirectoryPage* current =
-                    current_directory(&application.directory_history);
-                current->scroll_offset = 0.0f;
-                reset_selected_items(&selected_item_values);
-                reload_directory(current);
-            }
+            move_in_history(application.mouse_button, -1, &selected_item_values,
+                            &application.directory_history);
             main_list_return_value.hit = true;
         }
         button_aabb.min.x += button_aabb.size.x;
 
         if (add_arrow_button(button_aabb.min, &button_aabb, arrow_right_icon_co,
-                             check_colission, application.mouse_position,
-                             v4i(1.0f), main_render))
+                             check_colission,
+                             application.directory_history.history.size >
+                                 application.directory_history.current_index +
+                                     1,
+                             application.mouse_position, main_render))
         {
+            move_in_history(application.mouse_button, 1, &selected_item_values,
+                            &application.directory_history);
+            main_list_return_value.hit = true;
         }
         button_aabb.min.x += button_aabb.size.x;
 
+        /*
         if (add_arrow_button(button_aabb.min, &button_aabb, arrow_up_icon_co,
                              check_colission, application.mouse_position,
                              v4i(1.0f), main_render))
         {
         }
-
-        //////
+        */
 
         V2 back_button_border_position =
             v2f(0.0f, side_under_border_aabb.min.y);
