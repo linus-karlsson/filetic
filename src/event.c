@@ -45,6 +45,7 @@ internal void on_key_event(void* window, int key, int scancode, int action,
             event->key_event.key = key;
             event->key_event.ctrl_pressed = mods & FTIC_MOD_CONTROL;
             event->key_event.alt_pressed = mods & FTIC_MOD_ALT;
+            event->key_event.shift_pressed = mods & FTIC_MOD_SHIFT;
             event->key_event.action = action;
             event->activated = true;
         }

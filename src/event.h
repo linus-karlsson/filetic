@@ -170,6 +170,7 @@ typedef struct KeyEvent
     i32 action;
     b8 ctrl_pressed;
     b8 alt_pressed;
+    b8 shift_pressed;
 } KeyEvent;
 
 typedef struct MouseMoveEvent

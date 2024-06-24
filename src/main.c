@@ -217,6 +217,7 @@ typedef struct ApplicationContext
     Event* key_event;
     Event* mouse_button;
     Event* mouse_wheel;
+    Event* mouse_move;
 
     V2 dimensions;
     V2 mouse_position;
@@ -252,13 +253,13 @@ typedef struct SearchPage
 typedef struct DropDownMenu
 {
     f32 x;
+    i32 tab_index;
     V2 position;
     AABB aabb;
     CharPtrArray options;
     RenderingProperties* render;
     b8 (*menu_options_selection)(u32 index, b8 hit, b8 should_close,
-                                 b8 mouse_button_clicked, V4* text_color,
-                                 void* data);
+                                 b8 item_clicked, V4* text_color, void* data);
 } DropDownMenu;
 
 typedef enum DebugLogLevel
@@ -1100,7 +1101,15 @@ b8 is_ctrl_and_key_pressed(const Event* event, i32 key)
 
 b8 is_key_clicked(const Event* event, i32 key)
 {
-    return event->activated && event->key_event.action == 0 &&
+    return event->activated && event->key_event.action == FTIC_RELEASE &&
+           event->key_event.key == key;
+}
+
+b8 is_key_pressed_repeat(const Event* event, i32 key)
+{
+    return event->activated &&
+           (event->key_event.action == FTIC_PRESS ||
+            event->key_event.action == FTIC_REPEAT) &&
            event->key_event.key == key;
 }
 
@@ -1300,6 +1309,7 @@ u8* application_init(ApplicationContext* application)
     application->key_event = event_subscribe(KEY);
     application->mouse_button = event_subscribe(MOUSE_BUTTON);
     application->mouse_wheel = event_subscribe(MOUSE_WHEEL);
+    application->mouse_move = event_subscribe(MOUSE_MOVE);
 
     application->directory_history = (DirectoryHistory){ 0 };
     array_create(&application->directory_history.history, 10);
@@ -1647,8 +1657,8 @@ typedef struct MainDropDownSelectionData
     const CharPtrArray* selected_paths;
 } MainDropDownSelectionData;
 
-b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
-                            b8 mouse_button_clicked, V4* text_color, void* data)
+b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
+                            V4* text_color, void* data)
 {
     MainDropDownSelectionData* arguments = (MainDropDownSelectionData*)data;
     switch (index)
@@ -1661,7 +1671,7 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
             }
             else
             {
-                if (mouse_button_clicked && hit)
+                if (item_clicked && hit)
                 {
                     platform_copy_to_clipboard(arguments->selected_paths);
                     should_close = true;
@@ -1677,7 +1687,7 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
             }
             else
             {
-                if (mouse_button_clicked && hit)
+                if (item_clicked && hit)
                 {
                     paste_in_directory(arguments->directory);
                     should_close = true;
@@ -1693,7 +1703,7 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
             }
             else
             {
-                if (mouse_button_clicked && hit)
+                if (item_clicked && hit)
                 {
                     platform_delete_files(arguments->selected_paths);
                     reload_directory(arguments->directory);
@@ -1710,7 +1720,7 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
             }
             else
             {
-                if (mouse_button_clicked && hit)
+                if (item_clicked && hit)
                 {
                     platform_show_properties(
                         10, 10, arguments->selected_paths->data[0]);
@@ -1764,8 +1774,28 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
             current_y + border_extra_padding),
         v4i(1.0f), lighter_color, drop_down_border_width, 0.0f);
 
+    b8 item_clicked = false;
+
     b8 mouse_button_clicked =
         is_mouse_button_clicked(application->mouse_button, FTIC_MOUSE_BUTTON_1);
+
+    if (is_key_pressed_repeat(application->key_event, FTIC_KEY_TAB))
+    {
+        if (application->key_event->key_event.shift_pressed)
+        {
+            if (--drop_down_menu->tab_index < 0)
+            {
+                drop_down_menu->tab_index = drop_down_item_count - 1;
+            }
+        }
+        else
+        {
+            drop_down_menu->tab_index++;
+            drop_down_menu->tab_index %= drop_down_item_count;
+        }
+    }
+
+    b8 enter_clicked = is_key_clicked(application->key_event, FTIC_KEY_ENTER);
 
     b8 any_drop_down_item_hit = false;
     b8 should_close = false;
@@ -1778,13 +1808,21 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
             .size = v2f(drop_down_width, drop_down_item_height * precent),
         };
 
-        b8 drop_down_item_hit = false;
+        b8 drop_down_item_hit = drop_down_menu->tab_index == (i32)i;
+        if (drop_down_item_hit) item_clicked = enter_clicked;
         if (collision_point_in_aabb(application->mouse_position,
                                     &drop_down_item_aabb))
         {
-            drop_down_item_hit = true;
-            any_drop_down_item_hit = true;
+            if (drop_down_menu->tab_index == -1 ||
+                application->mouse_move->activated)
+            {
+                drop_down_item_hit = true;
+                drop_down_menu->tab_index = -1;
+                any_drop_down_item_hit = true;
+                item_clicked = mouse_button_clicked;
+            }
         }
+
         const V4 drop_down_color =
             drop_down_item_hit ? border_color : high_light_color;
 
@@ -1799,8 +1837,8 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
 
         V4 text_color = v4i(1.0f);
         should_close = drop_down_menu->menu_options_selection(
-            i, drop_down_item_hit, should_close, mouse_button_clicked,
-            &text_color, option_data);
+            i, drop_down_item_hit, should_close, item_clicked, &text_color,
+            option_data);
 
         drop_down_menu->render->index_count += text_generation_color(
             application->font.chars, drop_down_menu->options.data[i], 1.0f,
@@ -1810,7 +1848,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
 
         promt_item_position.y += drop_down_item_aabb.size.y;
     }
-    return should_close || ((!any_drop_down_item_hit) & mouse_button_clicked);
+    return should_close || ((!any_drop_down_item_hit) && mouse_button_clicked);
 }
 
 void open_preview(V2 image_dimensions, const ApplicationContext* application,
@@ -1838,10 +1876,11 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
     scissor->min.y -= preview_dimensions.y;
     scissor->size = preview_dimensions;
     scissor->size.width += border_width;
+    scissor->size.height += border_width;
 
-    AABB preview_aabb =
-        quad_border(&render->vertices, &render->index_count, preview_position,
-                    preview_dimensions, lighter_color, border_width, 0.0f);
+    AABB preview_aabb = quad_border_gradiant(
+        &render->vertices, &render->index_count, preview_position,
+        preview_dimensions, secondary_color, lighter_color, border_width, 0.0f);
     v2_s_add_equal(&preview_position, border_width);
     v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
 
@@ -2030,10 +2069,10 @@ typedef struct SuggestionSelectionData
     b8 change_directory;
 } SuggestionSelectionData;
 
-b8 suggestion_selection(u32 index, b8 hit, b8 should_close,
-                        b8 mouse_button_clicked, V4* text_color, void* data)
+b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
+                        V4* text_color, void* data)
 {
-    if (hit && mouse_button_clicked)
+    if (hit && item_clicked)
     {
         SuggestionSelectionData* arguments = (SuggestionSelectionData*)data;
         char* path = arguments->items->data[index].path;
@@ -2091,6 +2130,7 @@ int main(int argc, char** argv)
     b8 right_clicked = false;
 
     DropDownMenu drop_down_menu = {
+        .tab_index = -1,
         .menu_options_selection = main_drop_down_selection,
         .render = main_render,
     };
@@ -2119,6 +2159,7 @@ int main(int argc, char** argv)
     CharArray parent_directory = { 0 };
     array_create(&parent_directory, 100);
     DropDownMenu suggestions = {
+        .tab_index = -1,
         .menu_options_selection = suggestion_selection,
         .render = main_render,
     };
