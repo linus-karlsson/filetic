@@ -1772,7 +1772,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
             drop_down_menu->position.y - drop_down_border_width),
         v2f(drop_down_width + border_extra_padding,
             current_y + border_extra_padding),
-        v4i(1.0f), lighter_color, drop_down_border_width, 0.0f);
+        secondary_color, lighter_color, drop_down_border_width, 0.0f);
 
     b8 item_clicked = false;
 
@@ -1848,7 +1848,9 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
 
         promt_item_position.y += drop_down_item_aabb.size.y;
     }
-    return should_close || ((!any_drop_down_item_hit) && mouse_button_clicked);
+    return should_close ||
+           ((!any_drop_down_item_hit) && mouse_button_clicked) ||
+           is_key_clicked(application->key_event, FTIC_KEY_ESCAPE);
 }
 
 void open_preview(V2 image_dimensions, const ApplicationContext* application,
@@ -2474,8 +2476,13 @@ int main(int argc, char** argv)
 
         if (parent_directory_clicked)
         {
-            reload_results |=
+            b8 backspace_pressed =
                 erase_char(application.key_event, &parent_directory);
+            if (backspace_pressed)
+            {
+                suggestions.tab_index = -1;
+            }
+            reload_results |= backspace_pressed;
             const CharArray* key_buffer = event_get_key_buffer();
             for (u32 i = 0; i < key_buffer->size; ++i)
             {
@@ -2549,7 +2556,11 @@ int main(int argc, char** argv)
                         parent_directory_path_position.y + 5.0f);
             }
             suggestion_data.change_directory = false;
-            drop_down_menu_add(&suggestions, &application, &suggestion_data);
+            if (drop_down_menu_add(&suggestions, &application,
+                                   &suggestion_data))
+            {
+                suggestions.options.size = 0;
+            }
 
             render_input(&application.font, parent_directory.data,
                          parent_directory.size, scale,
@@ -2561,12 +2572,26 @@ int main(int argc, char** argv)
             if (suggestion_data.change_directory ||
                 is_key_clicked(application.key_event, FTIC_KEY_ENTER))
             {
+                char* last_char = array_back(&parent_directory);
+                char saved = *last_char;
+                b8 should_restore = *last_char == '\\' || *last_char == '/';
+                if (should_restore)
+                {
+                    *last_char = '\0';
+                    parent_directory.size--;
+                }
                 if (!go_to_directory(parent_directory.data,
                                      parent_directory.size,
                                      &application.directory_history))
                 {
                 }
+                if (should_restore)
+                {
+                    *last_char = saved;
+                    parent_directory.size++;
+                }
                 reload_results = true;
+                suggestions.tab_index = -1;
             }
         }
         else
