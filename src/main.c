@@ -254,7 +254,6 @@ typedef struct DropDownMenu
     f32 x;
     V2 position;
     AABB aabb;
-    u32 item_count;
     CharPtrArray options;
     RenderingProperties* render;
     b8 (*menu_options_selection)(u32 index, b8 hit, b8 should_close,
@@ -329,6 +328,13 @@ void log_f32(const char* message, const f32 value)
 {
     char buffer[100] = { 0 };
     sprintf_s(buffer, 100, "%s%f", message, value);
+    log_message(buffer, strlen(buffer));
+}
+
+void log_u64(const char* message, const u64 value)
+{
+    char buffer[100] = { 0 };
+    sprintf_s(buffer, 100, "%s%llu", message, value);
     log_message(buffer, strlen(buffer));
 }
 
@@ -1722,9 +1728,11 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
 b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
                       const ApplicationContext* application, void* option_data)
 {
+    const u32 drop_down_item_count = drop_down_menu->options.size;
+    if (drop_down_item_count == 0) return true;
+
     drop_down_menu->x += (f32)(application->delta_time * 2.0);
 
-    const u32 drop_down_item_count = drop_down_menu->options.size;
     const f32 drop_down_item_height = 40.0f;
     const f32 end_height = drop_down_item_count * drop_down_item_height;
     const f32 current_y = ease_out_elastic(drop_down_menu->x) * end_height;
@@ -1970,6 +1978,57 @@ b8 button_move_in_history_add(const AABB* button_aabb, const b8 check_collision,
     return result;
 }
 
+void directory_sort_by_size(DirectoryItemArray* array)
+{
+    if (array->size <= 1) return;
+
+    DirectoryItem* output =
+        (DirectoryItem*)calloc(array->size, sizeof(DirectoryItem));
+    u32 count[256] = { 0 };
+
+    for (u32 shift = 0, s = 0; shift < 8; ++shift, s += 8)
+    {
+        memset(count, 0, sizeof(count));
+
+        for (u32 i = 0; i < array->size; ++i)
+        {
+            count[(array->data[i].size >> s) & 0xff]++;
+        }
+
+        for (u32 i = 1; i < 256; ++i)
+        {
+            count[i] += count[i - 1];
+        }
+
+        for (i32 i = array->size - 1; i >= 0; --i)
+        {
+            u32 index = (array->data[i].size >> s) & 0xff;
+            output[--count[index]] = array->data[i];
+        }
+        DirectoryItem* tmp = array->data;
+        array->data = output;
+        output = tmp;
+    }
+    free(output);
+}
+
+void directory_flip_array(DirectoryItemArray* array)
+{
+    const i32 middle = array->size / 2;
+    for (i32 i = 0, j = array->size - 1; i < middle; ++i, --j)
+    {
+        DirectoryItem temp = array->data[i];
+        array->data[i] = array->data[j];
+        array->data[j] = temp;
+    }
+}
+
+b8 suggestion_selection(u32 index, b8 hit, b8 should_close,
+                        b8 mouse_button_clicked, V4* text_color, void* data)
+{
+    return false;
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext application = { 0 };
@@ -2008,7 +2067,6 @@ int main(int argc, char** argv)
     b8 right_clicked = false;
 
     DropDownMenu drop_down_menu = {
-        .position = v2d(),
         .menu_options_selection = main_drop_down_selection,
         .render = main_render,
     };
@@ -2036,6 +2094,11 @@ int main(int argc, char** argv)
     f64 parent_directory_clicked_time = 0.4f;
     CharArray parent_directory = { 0 };
     array_create(&parent_directory, 100);
+    DropDownMenu suggestions = {
+        .menu_options_selection = suggestion_selection,
+        .render = main_render,
+    };
+    array_create(&suggestions.options, 10);
 
     enable_gldebugging();
     glEnable(GL_BLEND);
@@ -2189,6 +2252,10 @@ int main(int argc, char** argv)
                     {
                         array_push(&parent_directory, path[i]);
                     }
+                    array_push(&parent_directory, '\0');
+                    array_push(&parent_directory, '\0');
+                    array_push(&parent_directory, '\0');
+                    parent_directory.size -= 3;
                     parent_directory_clicked = true;
                 }
             }
@@ -2376,14 +2443,33 @@ int main(int argc, char** argv)
                 }
                 path[current_directory_len] = saved_chars[0];
 
-                log_message(" ", 1);
+                // TODO: Make it not case sensitive
                 for (u32 i = 0; i < directory.sub_directories.size; ++i)
                 {
-                    log_message(directory.sub_directories.data[i].name,
-                                strlen(directory.sub_directories.data[i].name));
+                    DirectoryItem* dir_item =
+                        directory.sub_directories.data + i;
+                    dir_item->size =
+                        strspn(dir_item->name, path + current_directory_len);
                 }
-                log_message(" ", 1);
+                directory_sort_by_size(&directory.sub_directories);
+                directory_flip_array(&directory.sub_directories);
+
+                suggestions.options.size = 0;
+                const u32 item_count = min(directory.sub_directories.size, 6);
+                for (u32 i = 0; i < item_count; ++i)
+                {
+                    array_push(&suggestions.options,
+                               directory.sub_directories.data[i].name);
+                }
+                const f32 x_advance = text_x_advance(
+                    application.font.chars, parent_directory.data,
+                    parent_directory.size, scale);
+
+                suggestions.position =
+                    v2f(parent_directory_path_position.x + x_advance,
+                        parent_directory_path_position.y + 5.0f);
             }
+            drop_down_menu_add(&suggestions, &application, NULL);
 
             render_input(&application.font, parent_directory.data,
                          parent_directory.size, scale,
