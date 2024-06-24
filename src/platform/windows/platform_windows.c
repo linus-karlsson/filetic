@@ -481,6 +481,13 @@ internal char* copy_string(const char* string, const u32 string_length)
     return result;
 }
 
+b8 platform_directory_exists(const char* directory_path)
+{
+    DWORD file_attributes = GetFileAttributes(directory_path);
+    return (file_attributes != INVALID_FILE_ATTRIBUTES &&
+            (file_attributes & FILE_ATTRIBUTE_DIRECTORY));
+}
+
 global volatile LONG64 id = 0;
 
 Directory platform_get_directory(const char* directory_path,

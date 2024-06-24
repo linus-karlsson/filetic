@@ -819,28 +819,35 @@ void check_and_open_file(const Event* mouse_button_event, const b8 hit,
     }
 }
 
-void go_to_directory(char* path, u32 length,
-                     DirectoryHistory* directory_history)
+b8 go_to_directory(char* path, u32 length, DirectoryHistory* directory_history)
 {
+    b8 result = false;
     char saved_chars[3];
     saved_chars[0] = path[length];
-    path[length++] = '\\';
-    saved_chars[1] = path[length];
-    path[length++] = '*';
-    saved_chars[2] = path[length];
     path[length] = '\0';
-    DirectoryPage new_page = { 0 };
-    new_page.directory = platform_get_directory(path, length);
-    for (i32 i = directory_history->history.size - 1;
-         i >= (i32)directory_history->current_index + 1; --i)
+    if (platform_directory_exists(path))
     {
-        platform_reset_directory(&directory_history->history.data[i].directory);
+        path[length++] = '\\';
+        saved_chars[1] = path[length];
+        path[length++] = '*';
+        saved_chars[2] = path[length];
+        path[length] = '\0';
+        DirectoryPage new_page = { 0 };
+        new_page.directory = platform_get_directory(path, length);
+        for (i32 i = directory_history->history.size - 1;
+             i >= (i32)directory_history->current_index + 1; --i)
+        {
+            platform_reset_directory(
+                &directory_history->history.data[i].directory);
+        }
+        directory_history->history.size = ++directory_history->current_index;
+        array_push(&directory_history->history, new_page); // size + 1
+        path[length--] = saved_chars[2];
+        path[length--] = saved_chars[1];
+        result = true;
     }
-    directory_history->history.size = ++directory_history->current_index;
-    array_push(&directory_history->history, new_page); // size + 1
-    path[length - 2] = saved_chars[0];
-    path[length - 1] = saved_chars[1];
-    path[length] = saved_chars[2];
+    path[length] = saved_chars[0];
+    return result;
 }
 
 void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
@@ -1488,6 +1495,23 @@ void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
     }
 }
 
+b8 erase_char(const Event* key_event, CharArray* buffer)
+{
+    if (key_event->activated &&
+        (key_event->key_event.action == FTIC_PRESS ||
+         key_event->key_event.action == FTIC_REPEAT) &&
+        key_event->key_event.key == FTIC_KEY_BACKSPACE)
+    {
+        if (buffer->size)
+        {
+            *array_back(buffer) = 0;
+            buffer->size--;
+            return true;
+        }
+    }
+    return false;
+}
+
 DirectoryItemListReturnValue
 search_page_update(SearchPage* page, const ApplicationContext* application,
                    const b8 check_collision, const V2 search_bar_position,
@@ -1564,19 +1588,8 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
 
     if (page->search_bar_hit)
     {
-        b8 reload_search_result = false;
-        if (application->key_event->activated &&
-            (application->key_event->key_event.action == FTIC_PRESS ||
-             application->key_event->key_event.action == FTIC_REPEAT) &&
-            application->key_event->key_event.key == FTIC_KEY_BACKSPACE)
-        {
-            if (page->search_buffer.size)
-            {
-                *array_back(&page->search_buffer) = 0;
-                --page->search_buffer.size;
-                reload_search_result = true;
-            }
-        }
+        b8 reload_search_result =
+            erase_char(application->key_event, &page->search_buffer);
         search_page_parse_key_buffer(
             page, search_bar_width - (search_bar_input_text_padding * 2),
             &application->font, reload_search_result, directory_history,
@@ -1836,7 +1849,7 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
     }
 }
 
-b8 add_arrow_button(V2 position, const AABB* button_aabb,
+b8 button_arrow_add(V2 position, const AABB* button_aabb,
                     const V4 texture_coordinates, const b8 check_collision,
                     const b8 extra_condition, const V2 mouse_position,
                     RenderingProperties* render)
@@ -1914,17 +1927,17 @@ void go_up_one_directory(DirectoryHistory* directory_history)
     go_to_directory(parent, parent_length, directory_history);
 }
 
-b8 move_in_history_button(const AABB* button_aabb, const b8 check_collision,
-                          const b8 extra_condition, const V2 mouse_position,
-                          const Event* mouse_button_event,
-                          const int mouse_button, const i32 history_add,
-                          const V4 icon_co,
-                          SelectedItemValues* selected_item_values,
-                          DirectoryHistory* directory_history,
-                          RenderingProperties* render)
+b8 button_move_in_history_add(const AABB* button_aabb, const b8 check_collision,
+                              const b8 extra_condition, const V2 mouse_position,
+                              const Event* mouse_button_event,
+                              const int mouse_button, const i32 history_add,
+                              const V4 icon_co,
+                              SelectedItemValues* selected_item_values,
+                              DirectoryHistory* directory_history,
+                              RenderingProperties* render)
 {
     b8 result = false;
-    if (add_arrow_button(button_aabb->min, button_aabb, icon_co,
+    if (button_arrow_add(button_aabb->min, button_aabb, icon_co,
                          check_collision, extra_condition, mouse_position,
                          render))
     {
@@ -2145,19 +2158,32 @@ int main(int argc, char** argv)
         };
 
         if (is_mouse_button_clicked(application.mouse_button,
-                                    FTIC_MOUSE_BUTTON_LEFT) &&
-            collision_point_in_aabb(application.mouse_position,
-                                    &parent_directory_path_aabb))
+                                    FTIC_MOUSE_BUTTON_LEFT))
         {
-            parent_directory.size = 0;
-            const char* path = current_directory(&application.directory_history)
-                                   ->directory.parent;
-            const u32 parent_length = (u32)strlen(path);
-            for (u32 i = 0; i < parent_length; ++i)
+            if (collision_point_in_aabb(application.mouse_position,
+                                        &parent_directory_path_aabb))
             {
-                array_push(&parent_directory, path[i]);
+                if (!parent_directory_clicked)
+                {
+                    parent_directory_clicked_time = 0.4f;
+                    parent_directory.size = 0;
+                    const char* path =
+                        current_directory(&application.directory_history)
+                            ->directory.parent;
+                    const u32 parent_length = (u32)strlen(path);
+                    for (u32 i = 0; i < parent_length; ++i)
+                    {
+                        array_push(&parent_directory, path[i]);
+                    }
+                    parent_directory_clicked = true;
+                }
             }
-            parent_directory_clicked = true;
+            else
+            {
+                parent_directory_clicked = false;
+                parent_directory_clicked_time = 0.4f;
+                parent_directory.size = 0;
+            }
         }
 
         quad(&main_render->vertices,
@@ -2169,6 +2195,16 @@ int main(int argc, char** argv)
 
         if (parent_directory_clicked)
         {
+            erase_char(application.key_event, &parent_directory);
+            const CharArray* key_buffer = event_get_key_buffer();
+            for (u32 i = 0; i < key_buffer->size; ++i)
+            {
+                char current_char = key_buffer->data[i];
+                if (closed_interval(0, (current_char - 32), 96))
+                {
+                    array_push(&parent_directory, current_char);
+                }
+            }
             render_input(&application.font, parent_directory.data,
                          parent_directory.size, scale,
                          parent_directory_path_position,
@@ -2176,6 +2212,21 @@ int main(int argc, char** argv)
                              application.font.pixel_height,
                          true, application.delta_time,
                          &parent_directory_clicked_time, main_render);
+            if (is_key_clicked(application.key_event, FTIC_KEY_ENTER))
+            {
+                // Add extra space for "/*\0" at the end
+                array_push(&parent_directory, '\0');
+                array_push(&parent_directory, '\0');
+                array_push(&parent_directory, '\0');
+                parent_directory.size -= 3;
+
+                if (!go_to_directory(parent_directory.data,
+                                     parent_directory.size,
+                                     &application.directory_history))
+                {
+                    log_message("h", 1);
+                }
+            }
         }
         else
         {
@@ -2226,7 +2277,7 @@ int main(int argc, char** argv)
             .size = v2i(search_page.search_bar_aabb.size.y),
         };
 
-        main_list_return_value.hit |= move_in_history_button(
+        main_list_return_value.hit |= button_move_in_history_add(
             &button_aabb, check_collision,
             application.directory_history.history.size > 1,
             application.mouse_position, application.mouse_button,
@@ -2237,7 +2288,7 @@ int main(int argc, char** argv)
 
         b8 extra_condition = application.directory_history.history.size >
                              application.directory_history.current_index + 1;
-        main_list_return_value.hit |= move_in_history_button(
+        main_list_return_value.hit |= button_move_in_history_add(
             &button_aabb, check_collision, extra_condition,
             application.mouse_position, application.mouse_button,
             FTIC_MOUSE_BUTTON_5, 1, arrow_right_icon_co, &selected_item_values,
@@ -2245,7 +2296,7 @@ int main(int argc, char** argv)
 
         button_aabb.min.x += button_aabb.size.x;
 
-        if (add_arrow_button(
+        if (button_arrow_add(
                 button_aabb.min, &button_aabb, arrow_up_icon_co,
                 check_collision,
                 can_go_up_one_directory(
