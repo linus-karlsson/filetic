@@ -292,6 +292,8 @@ typedef struct SuggestionSelectionData
 {
     CharArray* parent_directory;
     DirectoryItemArray* items;
+    i32* cursor_index;
+    i32* tab_index;
     b8 change_directory;
 } SuggestionSelectionData;
 
@@ -1728,7 +1730,9 @@ b8 erase_char(const Event* key_event, i32* cursor_index, CharArray* buffer)
     if (key_event->activated &&
         (key_event->key_event.action == FTIC_PRESS ||
          key_event->key_event.action == FTIC_REPEAT) &&
-        key_event->key_event.key == FTIC_KEY_BACKSPACE)
+        (key_event->key_event.key == FTIC_KEY_BACKSPACE ||
+         (key_event->key_event.ctrl_pressed &&
+          key_event->key_event.key == FTIC_KEY_H)))
     {
         if ((*cursor_index) > 0)
         {
@@ -2270,22 +2274,41 @@ void directory_flip_array(DirectoryItemArray* array)
 b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
                         V4* text_color, void* data)
 {
-    if (hit && item_clicked)
+    if (hit)
     {
         SuggestionSelectionData* arguments = (SuggestionSelectionData*)data;
-        char* path = arguments->items->data[index].path;
-        const u32 path_length = (u32)strlen(path);
-        arguments->parent_directory->size = 0;
-        for (u32 i = 0; i < path_length; ++i)
+        if (item_clicked)
         {
-            array_push(arguments->parent_directory, path[i]);
+            char* path = arguments->items->data[index].path;
+            const u32 path_length = (u32)strlen(path);
+            arguments->parent_directory->size = 0;
+            for (u32 i = 0; i < path_length; ++i)
+            {
+                array_push(arguments->parent_directory, path[i]);
+            }
+            array_push(arguments->parent_directory, '\\');
+            array_push(arguments->parent_directory, '\0');
+            array_push(arguments->parent_directory, '\0');
+            array_push(arguments->parent_directory, '\0');
+            arguments->change_directory = true;
+            arguments->parent_directory->size -= 3;
+            *arguments->cursor_index = arguments->parent_directory->size;
         }
-        array_push(arguments->parent_directory, '\\');
-        array_push(arguments->parent_directory, '\0');
-        array_push(arguments->parent_directory, '\0');
-        array_push(arguments->parent_directory, '\0');
-        arguments->parent_directory->size -= 3;
-        arguments->change_directory = true;
+        else if (*arguments->tab_index >= 0)
+        {
+            char* path = arguments->items->data[index].path;
+            const u32 path_length = (u32)strlen(path);
+            arguments->parent_directory->size = 0;
+            for (u32 i = 0; i < path_length; ++i)
+            {
+                array_push(arguments->parent_directory, path[i]);
+            }
+            array_push(arguments->parent_directory, '\0');
+            array_push(arguments->parent_directory, '\0');
+            array_push(arguments->parent_directory, '\0');
+            arguments->parent_directory->size -= 3;
+            *arguments->cursor_index = arguments->parent_directory->size;
+        }
     }
     return false;
 }
@@ -2354,6 +2377,7 @@ int main(int argc, char** argv)
 
     b8 parent_directory_clicked = false;
     f64 parent_directory_clicked_time = 0.4f;
+    i32 input_index = -1;
     CharArray parent_directory = { 0 };
     array_create(&parent_directory, 100);
     DropDownMenu suggestions = {
@@ -2365,11 +2389,12 @@ int main(int argc, char** argv)
     SuggestionSelectionData suggestion_data = {
         .parent_directory = &parent_directory,
         .items = NULL,
+        .tab_index = &suggestions.tab_index,
+        .cursor_index = &input_index,
     };
     b8 reload_results = false;
     AABBArray parent_directory_aabbs = { 0 };
     array_create(&parent_directory_aabbs, 10);
-    i32 input_index = -1;
 
     enable_gldebugging();
     glEnable(GL_BLEND);
@@ -2716,6 +2741,8 @@ int main(int argc, char** argv)
                         platform_get_directory(path, current_directory_len);
                     path[current_directory_len--] = saved_chars[2];
                     path[current_directory_len--] = saved_chars[1];
+
+                    suggestions.tab_index = -1;
                 }
                 path[current_directory_len] = saved_chars[0];
 
