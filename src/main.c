@@ -2023,9 +2023,33 @@ void directory_flip_array(DirectoryItemArray* array)
     }
 }
 
+typedef struct SuggestionSelectionData
+{
+    CharArray* parent_directory;
+    DirectoryItemArray* items;
+    b8 change_directory;
+} SuggestionSelectionData;
+
 b8 suggestion_selection(u32 index, b8 hit, b8 should_close,
                         b8 mouse_button_clicked, V4* text_color, void* data)
 {
+    if (hit && mouse_button_clicked)
+    {
+        SuggestionSelectionData* arguments = (SuggestionSelectionData*)data;
+        char* path = arguments->items->data[index].path;
+        const u32 path_length = (u32)strlen(path);
+        arguments->parent_directory->size = 0;
+        for (u32 i = 0; i < path_length; ++i)
+        {
+            array_push(arguments->parent_directory, path[i]);
+        }
+        array_push(arguments->parent_directory, '\\');
+        array_push(arguments->parent_directory, '\0');
+        array_push(arguments->parent_directory, '\0');
+        array_push(arguments->parent_directory, '\0');
+        arguments->parent_directory->size -= 3;
+        arguments->change_directory = true;
+    }
     return false;
 }
 
@@ -2099,6 +2123,11 @@ int main(int argc, char** argv)
         .render = main_render,
     };
     array_create(&suggestions.options, 10);
+    SuggestionSelectionData suggestion_data = {
+        .parent_directory = &parent_directory,
+        .items = NULL,
+    };
+    b8 reload_results = false;
 
     enable_gldebugging();
     glEnable(GL_BLEND);
@@ -2114,8 +2143,10 @@ int main(int argc, char** argv)
 
         b8 check_collision = preview_render->texture_count == 1;
         if (check_collision &&
-            collision_point_in_aabb(application.mouse_position,
-                                    &drop_down_menu.aabb))
+            (collision_point_in_aabb(application.mouse_position,
+                                     &drop_down_menu.aabb) ||
+             collision_point_in_aabb(application.mouse_position,
+                                     &suggestions.aabb)))
         {
             check_collision = false;
         }
@@ -2259,8 +2290,11 @@ int main(int argc, char** argv)
                     parent_directory_clicked = true;
                 }
             }
-            else
+            else if (!collision_point_in_aabb(application.mouse_position,
+                                              &suggestions.aabb))
             {
+                suggestions.aabb = (AABB){ 0 };
+                suggestions.x = 0;
                 parent_directory_clicked = false;
                 parent_directory_clicked_time = 0.4f;
                 parent_directory.size = 0;
@@ -2399,7 +2433,7 @@ int main(int argc, char** argv)
 
         if (parent_directory_clicked)
         {
-            b8 reload_results =
+            reload_results |=
                 erase_char(application.key_event, &parent_directory);
             const CharArray* key_buffer = event_get_key_buffer();
             for (u32 i = 0; i < key_buffer->size; ++i)
@@ -2418,6 +2452,8 @@ int main(int argc, char** argv)
 
             if (reload_results)
             {
+                reload_results = false;
+
                 DirectoryPage* current =
                     current_directory(&application.directory_history);
 
@@ -2461,6 +2497,8 @@ int main(int argc, char** argv)
                     array_push(&suggestions.options,
                                directory.sub_directories.data[i].name);
                 }
+                suggestion_data.items = &directory.sub_directories;
+
                 const f32 x_advance = text_x_advance(
                     application.font.chars, parent_directory.data,
                     parent_directory.size, scale);
@@ -2469,7 +2507,8 @@ int main(int argc, char** argv)
                     v2f(parent_directory_path_position.x + x_advance,
                         parent_directory_path_position.y + 5.0f);
             }
-            drop_down_menu_add(&suggestions, &application, NULL);
+            suggestion_data.change_directory = false;
+            drop_down_menu_add(&suggestions, &application, &suggestion_data);
 
             render_input(&application.font, parent_directory.data,
                          parent_directory.size, scale,
@@ -2478,13 +2517,15 @@ int main(int argc, char** argv)
                              application.font.pixel_height,
                          true, application.delta_time,
                          &parent_directory_clicked_time, main_render);
-            if (is_key_clicked(application.key_event, FTIC_KEY_ENTER))
+            if (suggestion_data.change_directory ||
+                is_key_clicked(application.key_event, FTIC_KEY_ENTER))
             {
                 if (!go_to_directory(parent_directory.data,
                                      parent_directory.size,
                                      &application.directory_history))
                 {
                 }
+                reload_results = true;
             }
         }
         else
