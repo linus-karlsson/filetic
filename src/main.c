@@ -159,6 +159,23 @@ typedef struct DirectoryPage
     Directory directory;
 } DirectoryPage;
 
+b8 can_go_up_one_directory(char* parent)
+{
+    for (; *parent; ++parent)
+    {
+        const char current_char = *parent;
+        if (current_char == '\\' || current_char == '/')
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void go_up_one_directory(char* parent, const u32 parent_length)
+{
+}
+
 typedef struct DirectoryArray
 {
     u32 size;
@@ -738,13 +755,16 @@ b8 directory_item(b8 hit, i32 index, V2 starting_position,
     {
         const char* extension =
             get_file_extension(item->name, (u32)strlen(item->name));
-        if (!strcmp(extension, ".png"))
+        if (extension)
         {
-            texture_coordinates = png_icon_co;
-        }
-        else if (!strcmp(extension, ".pdf"))
-        {
-            texture_coordinates = pdf_icon_co;
+            if (!strcmp(extension, ".png"))
+            {
+                texture_coordinates = png_icon_co;
+            }
+            else if (!strcmp(extension, ".pdf"))
+            {
+                texture_coordinates = pdf_icon_co;
+            }
         }
     }
     // Icon
@@ -816,6 +836,30 @@ void check_and_open_file(const Event* mouse_button_event, const b8 hit,
     }
 }
 
+void go_to_directory(char* path, u32 length,
+                     DirectoryHistory* directory_history)
+{
+    char saved_chars[3];
+    saved_chars[0] = path[length];
+    path[length++] = '\\';
+    saved_chars[1] = path[length];
+    path[length++] = '*';
+    saved_chars[2] = path[length];
+    path[length] = '\0';
+    DirectoryPage new_page = { 0 };
+    new_page.directory = platform_get_directory(path, length);
+    for (i32 i = directory_history->history.size - 1;
+         i >= (i32)directory_history->current_index + 1; --i)
+    {
+        platform_reset_directory(&directory_history->history.data[i].directory);
+    }
+    directory_history->history.size = ++directory_history->current_index;
+    array_push(&directory_history->history, new_page); // size + 1
+    path[length - 2] = saved_chars[0];
+    path[length - 1] = saved_chars[1];
+    path[length] = saved_chars[2];
+}
+
 void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
                            const i32 index,
                            const DirectoryItem* current_folders,
@@ -833,21 +877,7 @@ void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
                 return;
             }
             u32 length = (u32)strlen(path);
-            path[length++] = '\\';
-            path[length++] = '*';
-            DirectoryPage new_page = { 0 };
-            new_page.directory = platform_get_directory(path, length);
-            for (i32 i = directory_history->history.size - 1;
-                 i >= (i32)directory_history->current_index + 1; --i)
-            {
-                platform_reset_directory(
-                    &directory_history->history.data[i].directory);
-            }
-            directory_history->history.size =
-                ++directory_history->current_index;
-            array_push(&directory_history->history, new_page); // size + 1
-            path[length - 2] = '\0';
-            path[length - 1] = '\0';
+            go_to_directory(path, length, directory_history);
         }
     }
 }
@@ -2157,7 +2187,6 @@ int main(int argc, char** argv)
             .size = v2i(search_page.search_bar_aabb.size.y),
         };
 
-        // TODO: add the mouse_click in this function
         if (add_arrow_button(button_aabb.min, &button_aabb, arrow_back_icon_co,
                              check_colission,
                              application.directory_history.history.size > 1,
@@ -2182,13 +2211,34 @@ int main(int argc, char** argv)
         }
         button_aabb.min.x += button_aabb.size.x;
 
-        /*
-        if (add_arrow_button(button_aabb.min, &button_aabb, arrow_up_icon_co,
-                             check_colission, application.mouse_position,
-                             v4i(1.0f), main_render))
+        if (add_arrow_button(
+                button_aabb.min, &button_aabb, arrow_up_icon_co,
+                check_colission,
+                can_go_up_one_directory(
+                    current_directory(&application.directory_history)
+                        ->directory.parent),
+                application.mouse_position, main_render))
         {
+            if (is_mouse_button_clicked(application.mouse_button,
+                                        FTIC_MOUSE_BUTTON_LEFT))
+            {
+                DirectoryPage* current =
+                    current_directory(&application.directory_history);
+                char* parent = current->directory.parent;
+                u32 parent_length = (u32)strlen(parent);
+                for (i32 i = parent_length - 1; i >= 0; --i)
+                {
+                    const char current_char = parent[i];
+                    if (current_char == '\\' || current_char == '/')
+                    {
+                        parent_length = i;
+                        break;
+                    }
+                }
+                go_to_directory(parent, parent_length,
+                                &application.directory_history);
+            }
         }
-        */
 
         V2 back_button_border_position =
             v2f(0.0f, side_under_border_aabb.min.y);
