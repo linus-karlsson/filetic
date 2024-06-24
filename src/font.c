@@ -36,7 +36,7 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
 u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
                           float texture_index, V2 pos, f32 scale,
                           f32 line_height, V4 color, u32* new_lines_count,
-                          f32* x_advance, VertexArray* array)
+                          f32* x_advance, AABBArray* aabbs, VertexArray* array)
 {
     u32 count = 0;
     f32 start_x = pos.x;
@@ -57,9 +57,15 @@ u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
 
             V2 size = v2_s_multi(c->dimensions, scale);
             V2 curr_pos = v2_add(pos, v2_s_multi(c->offset, scale));
-            quad_co(array, curr_pos, size, color, c->text_coords,
-                    texture_index);
+            AABB aabb = quad_co(array, curr_pos, size, color, c->text_coords,
+                                texture_index);
 
+            // TODO: do a check for every character is slow. make a seperate
+            // function for the aabbs
+            if (aabbs)
+            {
+                array_push(aabbs, aabb);
+            }
             pos.x += c->x_advance * scale;
             count++;
         }
