@@ -30,6 +30,7 @@ typedef struct EventContextInternal
     double last_click_time;
     int last_button;
     V2 last_position;
+
 } EventContextInternal;
 
 EventContextInternal event_context = { .last_button = -1 };
@@ -72,10 +73,10 @@ internal void on_mouse_button_event(void* window, int button, int action,
 {
     const f64 time = window_get_time();
     const f64 time_since_last = time - event_context.last_click_time;
-    const b8 double_clicked = (action == FTIC_PRESS) &&
-                              (button == event_context.last_button) &&
-                              (time_since_last <= DOUBLE_CLICK_THRESHOLD) &&
-                              v2_equal(event_context.last_position, event_context.position);
+    const b8 double_clicked =
+        (action == FTIC_PRESS) && (button == event_context.last_button) &&
+        (time_since_last <= DOUBLE_CLICK_THRESHOLD) &&
+        v2_equal(event_context.last_position, event_context.position);
     for (u32 i = 0; i < event_context.events.size; ++i)
     {
         Event* event = event_context.events.data + i;

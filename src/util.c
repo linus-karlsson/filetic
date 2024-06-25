@@ -110,3 +110,28 @@ b8 string_compare_case_insensitive(const char* first, const char* second)
     }
     return !(*first || *second);
 }
+
+u32 string_span_case_insensitive(const char* first, const char* second)
+{
+    u32 count = 0;
+    const char* p;
+
+    while (*first)
+    {
+        for (p = second; *p; p++)
+        {
+            if (*first == *p)
+            {
+                break;
+            }
+        }
+        if (*p == '\0')
+        {
+            break;
+        }
+        count++;
+        first++;
+    }
+
+    return count;
+}

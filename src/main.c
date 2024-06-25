@@ -227,6 +227,8 @@ typedef struct ApplicationContext
     f64 last_time;
     f64 delta_time;
     MVP mvp;
+
+    f64 last_moved_time;
 } ApplicationContext;
 
 typedef struct DirectoryTab
@@ -285,7 +287,7 @@ typedef struct DirectoryItemListReturnValue
 {
     u32 count;
     f32 total_height;
-    u32 hit_index;
+    i32 hit_index;
     b8 hit;
 } DirectoryItemListReturnValue;
 
@@ -340,10 +342,9 @@ void rendering_properties_array_clear(
     RenderingPropertiesArray* rendering_properties);
 void format_file_size(u64 size_in_bytes, char* output, size_t output_size);
 void swap_strings(char* first, char* second);
-b8 directory_item(b8 hit, i32 index, V2 starting_position,
-                  const f32 padding_top, f32 width, const f32 height,
-                  const FontTTF* font, const Event* mouse_button_event,
-                  const V2 mouse_position, const f32 icon_index,
+b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
+                  V2 starting_position, const f32 padding_top, f32 width,
+                  const f32 height, const f32 icon_index,
                   V4 texture_coordinates, const b8 check_collision,
                   const f64 pulse_x, DirectoryItem* item,
                   SelectedItemValues* selected_item_values, i32* hit_index,
@@ -419,6 +420,7 @@ void rendering_properties_array_init(const u32 index_buffer_id,
                                      RenderingPropertiesArray* array);
 void application_begin_frame(ApplicationContext* application);
 void application_end_frame(ApplicationContext* application);
+f64 application_get_last_mouse_move_time(const ApplicationContext* appliction);
 void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
                                   const FontTTF* font,
                                   const b8 reload_search_result,
@@ -860,10 +862,33 @@ void swap_strings(char* first, char* second)
     memcpy(second, temp, length);
 }
 
-b8 directory_item(b8 hit, i32 index, V2 starting_position,
-                  const f32 padding_top, f32 width, const f32 height,
-                  const FontTTF* font, const Event* mouse_button_event,
-                  const V2 mouse_position, const f32 icon_index,
+void display_text_and_truncate_if_necissary(const FontTTF* font,
+                                            const V2 position,
+                                            const f32 total_width, char* text,
+                                            RenderingProperties* render)
+{
+    const u32 text_len = (u32)strlen(text);
+    const i32 i = text_check_length_within_boundary(font->chars, text, text_len,
+                                                    1.0f, total_width);
+    const b8 too_long = i >= 3;
+    char saved_name[4] = "...";
+    if (too_long)
+    {
+        i32 j = i - 3;
+        swap_strings(text + j, saved_name); // Truncate
+    }
+    render->index_count += text_generation(font->chars, text, 1.0f, position,
+                                           1.0f, font->pixel_height, NULL, NULL,
+                                           NULL, &render->vertices);
+    if (too_long)
+    {
+        memcpy(text + (i - 3), saved_name, sizeof(saved_name));
+    }
+}
+
+b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
+                  V2 starting_position, const f32 padding_top, f32 width,
+                  const f32 height, const f32 icon_index,
                   V4 texture_coordinates, const b8 check_collision,
                   const f64 pulse_x, DirectoryItem* item,
                   SelectedItemValues* selected_item_values, i32* hit_index,
@@ -876,7 +901,8 @@ b8 directory_item(b8 hit, i32 index, V2 starting_position,
     b8 selected = check_if_selected ? true : false;
 
     b8 this_hit = false;
-    if (check_collision && collision_point_in_aabb(mouse_position, &aabb))
+    if (check_collision &&
+        collision_point_in_aabb(appliction->mouse_position, &aabb))
     {
         if (!hit)
         {
@@ -884,8 +910,9 @@ b8 directory_item(b8 hit, i32 index, V2 starting_position,
             this_hit = true;
             hit = true;
         }
-        const MouseButtonEvent* event = &mouse_button_event->mouse_button_event;
-        if (!check_if_selected && mouse_button_event->activated &&
+        const MouseButtonEvent* event =
+            &appliction->mouse_button->mouse_button_event;
+        if (!check_if_selected && appliction->mouse_button->activated &&
             event->action == FTIC_RELEASE &&
             (event->button == FTIC_MOUSE_BUTTON_1 ||
              event->button == FTIC_MOUSE_BUTTON_2))
@@ -957,33 +984,18 @@ b8 directory_item(b8 hit, i32 index, V2 starting_position,
     {
         char buffer[100] = { 0 };
         format_file_size(item->size, buffer, 100);
-        x_advance =
-            text_x_advance(font->chars, buffer, (u32)strlen(buffer), 1.0f);
+        x_advance = text_x_advance(appliction->font.chars, buffer,
+                                   (u32)strlen(buffer), 1.0f);
         V2 size_text_position = text_position;
         size_text_position.x = starting_position.x + width - x_advance - 5.0f;
         render->index_count += text_generation(
-            font->chars, buffer, 1.0f, size_text_position, 1.0f,
-            font->pixel_height, NULL, NULL, NULL, &render->vertices);
+            appliction->font.chars, buffer, 1.0f, size_text_position, 1.0f,
+            appliction->font.pixel_height, NULL, NULL, NULL, &render->vertices);
     }
-
-    const u32 text_len = (u32)strlen(item->name);
-    const i32 i = text_check_length_within_boundary(
-        font->chars, item->name, text_len, 1.0f,
-        (width - aabb.size.x - padding_top - x_advance - 10.0f));
-    const b8 too_long = i >= 3;
-    char saved_name[4] = "...";
-    if (too_long)
-    {
-        i32 j = i - 3;
-        swap_strings(item->name + j, saved_name); // Truncate
-    }
-    render->index_count += text_generation(
-        font->chars, item->name, 1.0f, text_position, 1.0f, font->pixel_height,
-        NULL, NULL, NULL, &render->vertices);
-    if (too_long)
-    {
-        memcpy(item->name + (i - 3), saved_name, sizeof(saved_name));
-    }
+    display_text_and_truncate_if_necissary(
+        &appliction->font, text_position,
+        (width - aabb.size.x - padding_top - x_advance - 10.0f), item->name,
+        render);
     return hit;
 }
 
@@ -1084,13 +1096,12 @@ item_list(const ApplicationContext* application,
         if (item_in_view(starting_position.y, item_height,
                          application->dimensions.y))
         {
-            hit = directory_item(hit, i, starting_position,
+            hit = directory_item(application, hit, i, starting_position,
                                  application->font.pixel_height + padding,
-                                 item_width, item_height, &application->font,
-                                 application->mouse_button, mouse_position,
-                                 icon_index, texture_coordinates,
-                                 check_collision, pulse_x, &items->data[i],
-                                 selected_item_values, &hit_index, render);
+                                 item_width, item_height, icon_index,
+                                 texture_coordinates, check_collision, pulse_x,
+                                 &items->data[i], selected_item_values,
+                                 &hit_index, render);
 
 #if 0
             quad_gradiant_l_r(&render->vertices,
@@ -1146,6 +1157,18 @@ DirectoryItemListReturnValue files_item_list(
     return list_return;
 }
 
+void display_full_path(const FontTTF* font, const V2 position, const V2 size,
+                       const f32 padding, char* path,
+                       RenderingProperties* render)
+{
+    quad(&render->vertices, position, size, high_light_color, 0.0f);
+    render->index_count++;
+    V2 text_position = v2_s_add(position, padding);
+    text_position.y += font->pixel_height;
+    display_text_and_truncate_if_necissary(font, text_position, size.width,
+                                           path, render);
+}
+
 DirectoryItemListReturnValue directory_item_list(
     const ApplicationContext* application,
     const DirectoryItemArray* sub_directories, const DirectoryItemArray* files,
@@ -1154,16 +1177,35 @@ DirectoryItemListReturnValue directory_item_list(
     SelectedItemValues* selected_item_values, RenderingProperties* render,
     DirectoryHistory* directory_history)
 {
+    b8 should_show_full_path =
+        application_get_last_mouse_move_time(application) >= 1.0f;
+
     DirectoryItemListReturnValue folder_list_return = folder_item_list(
         application, sub_directories, check_collision, starting_position,
         item_width, item_height, padding, pulse_x, selected_item_values, render,
         directory_history);
+
+    if (should_show_full_path && folder_list_return.hit_index > 0)
+    {
+        // TODO: Top item can't be shown.
+        u32 it = folder_list_return.hit_index - 1;
+        V2 position =
+            v2f(starting_position.x, starting_position.y + (item_height * it));
+
+        display_full_path(
+            &application->font, position, v2f(item_width, item_height), padding,
+            sub_directories->data[folder_list_return.hit_index].path, render);
+    }
 
     starting_position.y += folder_list_return.total_height;
 
     DirectoryItemListReturnValue files_list_return = files_item_list(
         application, files, check_collision, starting_position, item_width,
         item_height, padding, pulse_x, selected_item_values, render);
+
+    if (should_show_full_path && files_list_return.hit_index > 0)
+    {
+    }
 
     return (DirectoryItemListReturnValue){
         .count = folder_list_return.count + files_list_return.count,
@@ -1527,6 +1569,8 @@ u8* application_init(ApplicationContext* application)
     application->mvp.view = m4d();
     application->mvp.model = m4d();
 
+    application->last_moved_time = window_get_time();
+
     return font_bitmap;
 }
 
@@ -1626,6 +1670,10 @@ void application_begin_frame(ApplicationContext* application)
     double x, y;
     window_get_mouse_position(application->window, &x, &y);
     application->mouse_position = v2f((f32)x, (f32)y);
+    if (application->mouse_move->activated)
+    {
+        application->last_moved_time = window_get_time();
+    }
 
     glViewport(0, 0, width, height);
     glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
@@ -1654,6 +1702,11 @@ void application_end_frame(ApplicationContext* application)
         application->delta_time = now - application->last_time;
     }
     application->last_time = now;
+}
+
+f64 application_get_last_mouse_move_time(const ApplicationContext* appliction)
+{
+    return window_get_time() - appliction->last_moved_time;
 }
 
 void add_from_key_buffer(const FontTTF* font, const f32 width, i32* input_index,
@@ -2946,8 +2999,8 @@ int main(int argc, char** argv)
                 {
                     DirectoryItem* dir_item =
                         directory.sub_directories.data + i;
-                    dir_item->size =
-                        strspn(dir_item->name, path + current_directory_len);
+                    dir_item->size = string_span_case_insensitive(
+                        dir_item->name, path + current_directory_len);
                 }
                 directory_sort_by_size(&directory.sub_directories);
                 directory_flip_array(&directory.sub_directories);
