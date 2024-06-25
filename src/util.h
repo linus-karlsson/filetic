@@ -45,3 +45,4 @@ void file_buffer_read(FileAttrib* file, char* delims, u32 delim_len, b8 remove_c
 void file_line_read(FileAttrib* file, b8 remove_newline, CharArray* line);
 f32 lerp_f32(const f32 a, const f32 b, const f32 t);
 V4 v4_lerp(V4 v1, V4 v2, f32 t);
+b8 string_compare_case_insensitive(const char* first, const char* second);

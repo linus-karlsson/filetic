@@ -229,6 +229,11 @@ typedef struct ApplicationContext
     MVP mvp;
 } ApplicationContext;
 
+typedef struct DirectoryTab
+{
+    int i;
+} DirectoryTab;
+
 typedef struct SearchPage
 {
     f32 offset;
@@ -1010,7 +1015,9 @@ b8 go_to_directory(char* path, u32 length, DirectoryHistory* directory_history)
     char saved_chars[3];
     saved_chars[0] = path[length];
     path[length] = '\0';
-    if (platform_directory_exists(path))
+    if (!string_compare_case_insensitive(
+            path, current_directory(directory_history)->directory.parent) &&
+        platform_directory_exists(path))
     {
         path[length++] = '\\';
         saved_chars[1] = path[length];
@@ -2243,7 +2250,11 @@ void go_up_one_directory(DirectoryHistory* directory_history)
     DirectoryPage* current = current_directory(directory_history);
     char* parent = current->directory.parent;
     u32 parent_length = get_path_length(parent, (u32)strlen(parent));
-    go_to_directory(parent, parent_length, directory_history);
+
+    char* new_parent = (char*)calloc(parent_length + 1, sizeof(char));
+    memcpy(new_parent, parent, parent_length);
+    go_to_directory(new_parent, parent_length, directory_history);
+    free(new_parent);
 }
 
 b8 button_move_in_history_add(const AABB* button_aabb, const b8 check_collision,
@@ -2801,7 +2812,7 @@ int main(int argc, char** argv)
 
         main_list_return_value.hit |= button_move_in_history_add(
             &button_aabb, check_collision,
-            application.directory_history.history.size > 1,
+            application.directory_history.current_index > 0,
             application.mouse_position, application.mouse_button,
             FTIC_MOUSE_BUTTON_4, -1, arrow_back_icon_co, &selected_item_values,
             &application.directory_history, main_render);
