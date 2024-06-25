@@ -49,7 +49,6 @@ global const V4 border_color = {
     .a = 1.0f,
 };
 
-
 global const V4 lighter_color = {
     .r = 0.55f,
     .g = 0.55f,
@@ -69,7 +68,7 @@ global const V4 secondary_color = {
     .a = 1.0f,
 };
 
-global const f32 border_width = 2.0f;
+global const f32 border_width = 1.0f;
 
 #define icon_1_co(width, height)                                               \
     {                                                                          \
@@ -411,9 +410,8 @@ AABB ui_add_border(RenderingProperties* render, V2 position, V2 size);
 void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
                     const Event* mouse_button, const V2 mouse_position,
                     const f32 dimension_y, const f32 area_y,
-                    const f32 item_height, f32 total_height, 
-                    f32* scroll_offset, f32* offset,
-                    RenderingProperties* render);
+                    const f32 item_height, f32 total_height, f32* scroll_offset,
+                    f32* offset, RenderingProperties* render);
 void paste_in_directory(DirectoryPage* current_directory);
 b8 is_mouse_button_clicked(const Event* event, i32 button);
 u8* application_init(ApplicationContext* application);
@@ -1403,9 +1401,8 @@ AABB ui_add_border(RenderingProperties* render, V2 position, V2 size)
 void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
                     const Event* mouse_button, const V2 mouse_position,
                     const f32 dimension_y, const f32 area_y,
-                    const f32 item_height, f32 total_height, 
-                    f32* scroll_offset, f32* offset,
-                    RenderingProperties* render)
+                    const f32 item_height, f32 total_height, f32* scroll_offset,
+                    f32* offset, RenderingProperties* render)
 {
     const f32 scroll_bar_width = 8.0f;
     position.x -= scroll_bar_width;
@@ -1436,14 +1433,14 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
 
         if (collided || scroll_bar->dragging)
         {
-            quad(&render->vertices, position, scroll_bar_dimensions, v4ic(0.8f),
+            quad(&render->vertices, position, scroll_bar_dimensions, bright_color,
                  0.0f);
             render->index_count++;
         }
         else
         {
             quad_gradiant_t_b(&render->vertices, position,
-                              scroll_bar_dimensions, bright_color, v4ic(0.45f),
+                              scroll_bar_dimensions, lighter_color, v4ic(0.45f),
                               0.0f);
             render->index_count++;
         }
@@ -1913,7 +1910,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
 
     quad_border_gradiant(&page->render->vertices, &page->render->index_count,
                          page->search_bar_aabb.min, page->search_bar_aabb.size,
-                         secondary_color, border_color, border_width, 0.0f);
+                         lighter_color, border_color, border_width, 0.0f);
 
     const V2 scroll_bar_position = v2f(application->dimensions.width,
                                        page->search_result_aabb.min.y - 8.0f);
@@ -2088,7 +2085,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
             drop_down_menu->position.y - drop_down_border_width),
         v2f(drop_down_width + border_extra_padding,
             current_y + border_extra_padding),
-        secondary_color, lighter_color, drop_down_border_width, 0.0f);
+        lighter_color, lighter_color, drop_down_border_width, 0.0f);
 
     b8 item_clicked = false;
 
@@ -2198,7 +2195,7 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
 
     AABB preview_aabb = quad_border_gradiant(
         &render->vertices, &render->index_count, preview_position,
-        preview_dimensions, secondary_color, lighter_color, border_width, 0.0f);
+        preview_dimensions, bright_color, lighter_color, border_width, 0.0f);
     v2_s_add_equal(&preview_position, border_width);
     v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
 
@@ -2473,6 +2470,11 @@ void quick_access_save(DirectoryItemArray* array)
     free(buffer);
 }
 
+f32 middle(const f32 area_size, const f32 object_size)
+{
+    return (area_size * 0.5f) - (object_size * 0.5f);
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext application = { 0 };
@@ -2651,16 +2653,19 @@ int main(int argc, char** argv)
                 current_directory(&application.directory_history));
         }
 
-        AABB rect =
-            quad_gradiant_t_b(&main_render->vertices, starting_position,
-                              v2f(border_width, application.dimensions.y),
-                              secondary_color, border_color, 0.0f);
+        const f32 top_bar_height = 60.0f;
+
+        AABB rect = quad_gradiant_t_b(
+            &main_render->vertices, v2f(starting_position.x, top_bar_height),
+            v2f(border_width, application.dimensions.y - top_bar_height),
+            border_color, high_light_color, 0.0f);
         main_render->index_count++;
 
         AABB right_border_aabb = {
             .min = v2f(application.dimensions.x - search_result_width - 10.0f,
-                       0.0f),
-            .size = v2f(border_width, application.dimensions.y),
+                       top_bar_height),
+            .size =
+                v2f(border_width, application.dimensions.y - top_bar_height),
         };
 
         AABB resize_aabb = rect;
@@ -2728,15 +2733,20 @@ int main(int argc, char** argv)
             }
             check_collision = false;
         }
-        V2 search_bar_position =
-            v2f(application.dimensions.x - search_result_width, 10.0f);
+        V2 search_bar_position = v2f(
+            application.dimensions.x - search_result_width,
+            middle(top_bar_height, search_page.search_bar_aabb.size.height));
+
+        const f32 back_drop_height = 40.0f;
 
         V2 parent_directory_path_position =
-            v2f(rect.min.x + border_width, 30.0f);
+            v2f(rect.min.x + border_width,
+                middle(top_bar_height, back_drop_height));
+
         V2 text_starting_position = parent_directory_path_position;
+        text_starting_position.y = top_bar_height + border_width;
 
         text_starting_position.x += 10.0f;
-        text_starting_position.y += application.font.pixel_height;
 
         const f32 width =
             ((search_bar_position.x - 10.0f) - text_starting_position.x);
@@ -2748,11 +2758,8 @@ int main(int argc, char** argv)
         };
 
         AABB side_under_border_aabb = {
-            .min = v2f(right_border_aabb.min.x,
-                       search_page.search_bar_aabb.min.y +
-                           search_page.search_bar_aabb.size.y + 10.0f),
-            .size = v2f(application.dimensions.x - right_border_aabb.min.x,
-                        border_width),
+            .min = v2f(0.0f, top_bar_height),
+            .size = v2f(application.dimensions.x, border_width),
         };
 
         const f32 scale = 1.0f;
@@ -2784,12 +2791,9 @@ int main(int argc, char** argv)
                 &application.directory_history);
         }
 
-        const f32 back_drop_height =
-            parent_directory_path_position.y + application.font.pixel_height;
-
         const AABB parent_directory_path_aabb = {
-            .min = v2f(parent_directory_path_position.x, 0.0f),
-            .size = v2f(width + 10.0f, back_drop_height),
+            .min = parent_directory_path_position,
+            .size = v2f(width + 2.0f, back_drop_height),
         };
 
         if (is_mouse_button_clicked(application.mouse_button,
@@ -2828,40 +2832,44 @@ int main(int argc, char** argv)
             }
         }
 
-        quad(&main_render->vertices,
-             v2f(parent_directory_path_position.x, 0.0f),
-             v2f(width + 10.0f, back_drop_height), high_light_color, 0.0f);
+        quad(&main_render->vertices, v2d(),
+             v2f(application.dimensions.width, top_bar_height), clear_color,
+             0.0f);
         main_render->index_count++;
 
+        quad_gradiant_l_r(&main_render->vertices,
+                          parent_directory_path_aabb.min,
+                          parent_directory_path_aabb.size, high_light_color,
+                          clear_color, 0.0f);
+        main_render->index_count++;
+
+        quad_border_gradiant(&main_render->vertices, &main_render->index_count,
+                             parent_directory_path_aabb.min,
+                             parent_directory_path_aabb.size, lighter_color,
+                             border_color, border_width, 0.0f);
+
+        parent_directory_path_position.y += application.font.pixel_height;
+        parent_directory_path_position.y +=
+            middle(back_drop_height, application.font.pixel_height) - 3.0f;
         parent_directory_path_position.x += 10.0f;
 
         quad_gradiant_t_b(&main_render->vertices, right_border_aabb.min,
-                          right_border_aabb.size, secondary_color, border_color,
-                          0.0f);
+                          right_border_aabb.size, border_color,
+                          high_light_color, 0.0f);
         main_render->index_count++;
-
-        V4 side_under_border_start_color =
-            v4_lerp(secondary_color, border_color,
-                    side_under_border_aabb.min.y / right_border_aabb.size.y);
-
-        // Search bar
 
         DirectoryItemListReturnValue search_list_return_value =
             search_page_update(&search_page, &application, check_collision,
                                search_bar_position,
-                               side_under_border_aabb.min.x + border_width,
+                               application.dimensions.x - search_bar_width,
                                &application.directory_history,
                                &thread_queue.task_queue, &selected_item_values);
-
-        quad_gradiant_l_r(&main_render->vertices, side_under_border_aabb.min,
-                          side_under_border_aabb.size,
-                          side_under_border_start_color, border_color, 0.0f);
-        main_render->index_count++;
 
         AABB button_aabb = {
             .min = v2i(10.0f),
             .size = v2i(search_page.search_bar_aabb.size.y),
         };
+        button_aabb.min.y = middle(top_bar_height, button_aabb.size.height);
 
         main_list_return_value.hit |= button_move_in_history_add(
             &button_aabb, check_collision,
@@ -2900,9 +2908,9 @@ int main(int argc, char** argv)
         V2 back_button_border_position =
             v2f(0.0f, side_under_border_aabb.min.y);
 
-        quad_gradiant_l_r(&main_render->vertices, back_button_border_position,
-                          v2f(rect.min.x, border_width), secondary_color,
-                          side_under_border_start_color, 0.0f);
+        quad_gradiant_l_r(&main_render->vertices, side_under_border_aabb.min,
+                          side_under_border_aabb.size, border_color,
+                          high_light_color, 0.0f);
         main_render->index_count++;
 
         V2 scroll_bar_position =
