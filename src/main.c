@@ -2277,24 +2277,7 @@ b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
     if (hit)
     {
         SuggestionSelectionData* arguments = (SuggestionSelectionData*)data;
-        if (item_clicked)
-        {
-            char* path = arguments->items->data[index].path;
-            const u32 path_length = (u32)strlen(path);
-            arguments->parent_directory->size = 0;
-            for (u32 i = 0; i < path_length; ++i)
-            {
-                array_push(arguments->parent_directory, path[i]);
-            }
-            array_push(arguments->parent_directory, '\\');
-            array_push(arguments->parent_directory, '\0');
-            array_push(arguments->parent_directory, '\0');
-            array_push(arguments->parent_directory, '\0');
-            arguments->change_directory = true;
-            arguments->parent_directory->size -= 3;
-            *arguments->cursor_index = arguments->parent_directory->size;
-        }
-        else if (*arguments->tab_index >= 0)
+        if (item_clicked || *arguments->tab_index >= 0)
         {
             char* path = arguments->items->data[index].path;
             const u32 path_length = (u32)strlen(path);
@@ -2308,9 +2291,11 @@ b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
             array_push(arguments->parent_directory, '\0');
             arguments->parent_directory->size -= 3;
             *arguments->cursor_index = arguments->parent_directory->size;
+            arguments->change_directory = item_clicked;
+            return item_clicked;
         }
     }
-    return false;
+    return should_close;
 }
 
 int main(int argc, char** argv)
@@ -2392,7 +2377,6 @@ int main(int argc, char** argv)
         .tab_index = &suggestions.tab_index,
         .cursor_index = &input_index,
     };
-    b8 reload_results = false;
     AABBArray parent_directory_aabbs = { 0 };
     array_create(&parent_directory_aabbs, 10);
 
@@ -2708,7 +2692,7 @@ int main(int argc, char** argv)
             {
                 suggestions.tab_index = -1;
             }
-            reload_results |= backspace_pressed;
+            b8 reload_results = backspace_pressed;
             add_from_key_buffer(&application.font,
                                 parent_directory_path_aabb.size.x, &input_index,
                                 &parent_directory);
@@ -2717,7 +2701,6 @@ int main(int argc, char** argv)
 
             if (reload_results)
             {
-                reload_results = false;
 
                 DirectoryPage* current =
                     current_directory(&application.directory_history);
@@ -2778,7 +2761,6 @@ int main(int argc, char** argv)
             if (drop_down_menu_add(&suggestions, &application,
                                    &suggestion_data))
             {
-                suggestions.options.size = 0;
             }
 
             input_index = render_input(
@@ -2811,8 +2793,8 @@ int main(int argc, char** argv)
                     parent_directory.size++;
                 }
                 input_index = parent_directory.size;
-                reload_results = true;
                 suggestions.tab_index = -1;
+                suggestions.options.size = 0;
             }
         }
         else
