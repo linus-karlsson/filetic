@@ -2,17 +2,60 @@
 #include "logging.h"
 #include <stdio.h>
 
-FileAttrib read_file(const char* file_path)
+b8 file_end_of_file(const FileAttrib* file)
+{
+    return file->current_pos >= file->size;
+}
+
+internal b8 is_delim(char character, char* delims, u32 delim_len)
+{
+    for (u32 i = 0; i < delim_len; i++)
+    {
+        if (delims[i] == character)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void file_buffer_read(FileAttrib* file, char* delims, u32 delim_len,
+                      b8 remove_character, CharArray* buffer)
+{
+    u32 count = 0;
+    while (!file_end_of_file(file) &&
+           !is_delim(file->buffer[file->current_pos], delims, delim_len))
+    {
+        array_push(buffer, file->buffer[file->current_pos++]);
+    }
+    if (is_delim(file->buffer[file->current_pos], delims, delim_len))
+    {
+        if (!remove_character)
+        {
+            array_push(buffer, file->buffer[file->current_pos]);
+        }
+        file->current_pos++;
+    }
+    array_push(buffer, '\0');
+    buffer->size--;
+}
+
+void file_line_read(FileAttrib* file, b8 remove_newline, CharArray* line)
+{
+    file_buffer_read(file, "\n", 1, remove_newline, line);
+}
+
+FileAttrib file_read(const char* file_path)
 {
     FILE* file = fopen(file_path, "rb");
 
+    FileAttrib file_attrib = { 0 };
     if (!file)
     {
         log_file_error(file_path);
-        ftic_assert(false);
+        return file_attrib;
     }
 
-    FileAttrib file_attrib = { 0 };
     fseek(file, 0, SEEK_END);
     file_attrib.size = (u64)ftell(file);
     rewind(file);
@@ -23,10 +66,24 @@ FileAttrib read_file(const char* file_path)
         file_attrib.size)
     {
         log_last_error();
-        ftic_assert(false);
+        free(file_attrib.buffer);
+        file_attrib = (FileAttrib){ 0 };
+        fclose(file);
     }
     fclose(file);
     return file_attrib;
+}
+
+void file_write(const char* file_path, const char* content, u32 size)
+{
+    FILE* file = fopen(file_path, "w");
+
+    if (file == NULL)
+    {
+        log_file_error(file_path);
+    }
+    fwrite(content, 1, (size_t)size, file);
+    fclose(file);
 }
 
 f32 lerp_f32(const f32 a, const f32 b, const f32 t)

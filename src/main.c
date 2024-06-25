@@ -21,6 +21,7 @@
 #include "shader.h"
 #include "event.h"
 #include "hash.h"
+#include "util.h"
 
 #define COPY_OPTION_INDEX 0
 #define PASTE_OPTION_INDEX 1
@@ -2298,6 +2299,68 @@ b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
     return should_close;
 }
 
+void quick_access_load(DirectoryItemArray* array)
+{
+    FileAttrib file = file_read("saved/quick_access.txt");
+    if (!file.buffer)
+    {
+        return;
+    }
+    CharArray line = { 0 };
+    array_create(&line, 500);
+
+    while (!file_end_of_file(&file))
+    {
+        file_line_read(&file, true, &line);
+        if (*array_back(&line) == '\r')
+        {
+            *array_back(&line) = '\0';
+            line.size--;
+        }
+        if (line.size && platform_directory_exists(line.data))
+        {
+            char* path = (char*)calloc(line.size + 1, sizeof(char));
+            memcpy(path, line.data, line.size);
+            DirectoryItem item = {
+                .path = path,
+                .name = path + get_path_length(path, line.size) + 1,
+            };
+            array_push(array, item);
+        }
+        line.size = 0;
+    }
+    free(line.data);
+}
+
+void quick_access_save(DirectoryItemArray* array)
+{
+    if (!array->size) return;
+
+    u32 buffer_size = 0;
+    u32* path_lengths = (u32*)calloc(array->size, sizeof(u32));
+    for (u32 i = 0; i < array->size; ++i)
+    {
+        path_lengths[i] = (u32)strlen(array->data[i].path);
+        buffer_size += path_lengths[i];
+        buffer_size++;
+    }
+
+    char* buffer = (char*)calloc(buffer_size, sizeof(char));
+    u32 buffer_offset = 0;
+    for (u32 i = 0; i < array->size; ++i)
+    {
+        memcpy(buffer + buffer_offset, array->data[i].path, path_lengths[i]);
+        buffer_offset += path_lengths[i];
+        buffer[buffer_offset++] = '\n';
+    }
+    buffer[--buffer_offset] = '\0';
+
+    file_write("saved/quick_access.txt", buffer, buffer_offset);
+
+    free(path_lengths);
+    free(buffer);
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext application = { 0 };
@@ -2359,6 +2422,8 @@ int main(int argc, char** argv)
 
     DirectoryItemArray quick_access_folders = { 0 };
     array_create(&quick_access_folders, 10);
+    quick_access_load(&quick_access_folders);
+    f64 quick_access_pulse_x = 0.0f;
 
     b8 parent_directory_clicked = false;
     f64 parent_directory_clicked_time = 0.4f;
@@ -2488,13 +2553,34 @@ int main(int argc, char** argv)
             .size =
                 v2f(width, application.dimensions.y - text_starting_position.y),
         };
-        text_starting_position.y +=
-            current_directory(&application.directory_history)->scroll_offset;
+
+        AABB right_border_aabb = {
+            .min = v2f(directory_aabb.min.x + directory_aabb.size.x, 0.0f),
+            .size = v2f(border_width, application.dimensions.y),
+        };
+
+        AABB side_under_border_aabb = {
+            .min = v2f(right_border_aabb.min.x,
+                       search_page.search_bar_aabb.min.y +
+                           search_page.search_bar_aabb.size.y + 10.0f),
+            .size = v2f(application.dimensions.x - right_border_aabb.min.x,
+                        border_width),
+        };
 
         const f32 scale = 1.0f;
         const f32 padding_top = 2.0f;
         const f32 quad_height =
             scale * application.font.pixel_height + padding_top * 5.0f;
+
+        quick_access_pulse_x += application.delta_time * 6.0f;
+        folder_item_list(&application, &quick_access_folders, check_collision,
+                         v2f(10.0f, side_under_border_aabb.min.y + 10.0f),
+                         rect.min.x - 10.0f, quad_height,
+                         padding_top, quick_access_pulse_x,
+                         &selected_item_values, main_render, &application.directory_history);
+
+        text_starting_position.y +=
+            current_directory(&application.directory_history)->scroll_offset;
 
         DirectoryItemListReturnValue main_list_return_value;
         {
@@ -2561,20 +2647,10 @@ int main(int argc, char** argv)
 
         parent_directory_path_position.x += 10.0f;
 
-        AABB right_border_aabb = quad_gradiant_t_b(
-            &main_render->vertices,
-            v2f(directory_aabb.min.x + directory_aabb.size.x, 0.0f),
-            v2f(border_width, application.dimensions.y), secondary_color,
-            border_color, 0.0f);
+        quad_gradiant_t_b(&main_render->vertices, right_border_aabb.min,
+                          right_border_aabb.size, secondary_color, border_color,
+                          0.0f);
         main_render->index_count++;
-
-        AABB side_under_border_aabb = {
-            .min = v2f(right_border_aabb.min.x,
-                       search_page.search_bar_aabb.min.y +
-                           search_page.search_bar_aabb.size.y + 10.0f),
-            .size = v2f(application.dimensions.x - right_border_aabb.min.x,
-                        border_width),
-        };
 
         V4 side_under_border_start_color =
             v4_lerp(secondary_color, border_color,
@@ -2864,6 +2940,9 @@ int main(int argc, char** argv)
         application_end_frame(&application);
     }
     memset(running_callbacks, 0, sizeof(running_callbacks));
+
+    quick_access_save(&quick_access_folders);
+
     for (u32 i = 0; i < rendering_properties.size; ++i)
     {
         RenderingProperties* rp = rendering_properties.data + i;

@@ -50,8 +50,8 @@ u32 shader_compile(u32 type, const u8* source)
 
 u32 shader_create(const char* vertex_file_path, const char* fragment_file_path)
 {
-    FileAttrib vertex_file = read_file(vertex_file_path);
-    FileAttrib fragment_file = read_file(fragment_file_path);
+    FileAttrib vertex_file = file_read(vertex_file_path);
+    FileAttrib fragment_file = file_read(fragment_file_path);
     u32 vertex_shader = shader_compile(GL_VERTEX_SHADER, vertex_file.buffer);
     u32 fragemnt_shader =
         shader_compile(GL_FRAGMENT_SHADER, fragment_file.buffer);

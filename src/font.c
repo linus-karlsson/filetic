@@ -6,7 +6,7 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
                     u32 glyph_count, u32 glyph_offset,
                     const char* font_file_path, u8* bitmap, FontTTF* font_out)
 {
-    FileAttrib file = read_file(font_file_path);
+    FileAttrib file = file_read(font_file_path);
     stbtt_bakedchar* data =
         (stbtt_bakedchar*)calloc(glyph_count, sizeof(stbtt_bakedchar));
     stbtt_BakeFontBitmap(file.buffer, 0, pixel_height, bitmap, width_atlas,
