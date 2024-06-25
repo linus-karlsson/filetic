@@ -4,3 +4,5 @@ C:\Users\linus\Images
 C:\Program Files
 C:\Users
 C:\Windows
+C:\Users\linus\Documents
+C:\Users\linus

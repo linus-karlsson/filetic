@@ -411,7 +411,7 @@ AABB ui_add_border(RenderingProperties* render, V2 position, V2 size);
 void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
                     const Event* mouse_button, const V2 mouse_position,
                     const f32 dimension_y, const f32 area_y,
-                    const f32 total_height, const f32 item_height,
+                    const f32 item_height, f32 total_height, 
                     f32* scroll_offset, f32* offset,
                     RenderingProperties* render);
 void paste_in_directory(DirectoryPage* current_directory);
@@ -1403,7 +1403,7 @@ AABB ui_add_border(RenderingProperties* render, V2 position, V2 size)
 void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
                     const Event* mouse_button, const V2 mouse_position,
                     const f32 dimension_y, const f32 area_y,
-                    const f32 total_height, const f32 item_height,
+                    const f32 item_height, f32 total_height, 
                     f32* scroll_offset, f32* offset,
                     RenderingProperties* render)
 {
@@ -1414,11 +1414,12 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
          high_light_color, 0.0f);
     render->index_count++;
 
+    total_height += item_height;
     if (area_y < total_height)
     {
         const f32 initial_y = position.y;
         const f32 high = 0.0f;
-        const f32 low = area_y - (total_height + item_height);
+        const f32 low = area_y - total_height;
         const f32 p = (*scroll_offset - low) / (high - low);
         const V2 scroll_bar_dimensions =
             v2f(scroll_bar_width, area_y * (area_y / total_height));
