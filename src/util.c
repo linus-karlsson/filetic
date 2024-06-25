@@ -120,7 +120,7 @@ u32 string_span_case_insensitive(const char* first, const char* second)
     {
         for (p = second; *p; p++)
         {
-            if (*first == *p)
+            if (tolower((unsigned char)*first) == tolower((unsigned char)*p))
             {
                 break;
             }

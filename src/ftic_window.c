@@ -78,6 +78,11 @@ int window_should_close(FTicWindow* window)
     return glfwWindowShouldClose((GLFWwindow*)window);
 }
 
+void window_wait_event()
+{
+    glfwWaitEvents();
+}
+
 void window_poll_event()
 {
     glfwPollEvents();

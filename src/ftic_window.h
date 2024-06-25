@@ -27,6 +27,7 @@ void window_get_mouse_position(FTicWindow* window, double* x, double* y);
 void window_set_cursor(FTicWindow* window, int cursor);
 
 int window_should_close(FTicWindow* window);
+void window_wait_event();
 void window_poll_event();
 void window_swap(FTicWindow* window);
 void window_get_size(FTicWindow* window, int* width, int* height);

@@ -31,6 +31,8 @@ typedef struct EventContextInternal
     int last_button;
     V2 last_position;
 
+    f64 last_event_time;
+
 } EventContextInternal;
 
 EventContextInternal event_context = { .last_button = -1 };
@@ -51,11 +53,11 @@ internal void on_key_event(void* window, int key, int scancode, int action,
             event->activated = true;
         }
     }
+    event_context.last_event_time = window_get_time();
 }
 
 internal void on_mouse_move_event(void* window, double x_pos, double y_pos)
 {
-    event_context.position = v2f((f32)x_pos, (f32)y_pos);
     for (u32 i = 0; i < event_context.events.size; ++i)
     {
         Event* event = event_context.events.data + i;
@@ -66,6 +68,8 @@ internal void on_mouse_move_event(void* window, double x_pos, double y_pos)
             event->activated = true;
         }
     }
+    event_context.last_event_time = window_get_time();
+    event_context.position = v2f((f32)x_pos, (f32)y_pos);
 }
 
 internal void on_mouse_button_event(void* window, int button, int action,
@@ -91,6 +95,7 @@ internal void on_mouse_button_event(void* window, int button, int action,
     event_context.last_click_time = time;
     event_context.last_button = button;
     event_context.last_position = event_context.position;
+    event_context.last_event_time = time;
 }
 
 internal void on_mouse_wheel_event(void* window, double x_offset,
@@ -106,6 +111,7 @@ internal void on_mouse_wheel_event(void* window, double x_offset,
             event->activated = true;
         }
     }
+    event_context.last_event_time = window_get_time();
 }
 
 internal void on_key_stroke_event(void* window, unsigned int codepoint)
@@ -123,6 +129,8 @@ void event_init(FTicWindow* window)
     window_set_on_mouse_move_event(window, on_mouse_move_event);
     window_set_on_mouse_wheel_event(window, on_mouse_wheel_event);
     window_set_on_key_stroke_event(window, on_key_stroke_event);
+
+    event_context.last_event_time = window_get_time();
 }
 
 void event_poll()
@@ -142,7 +150,18 @@ void event_poll()
         event_context.key_buffer.size = 0;
     }
 
+#if 0
+    if (window_get_time() - event_context.last_event_time >= 5.0f)
+    {
+        window_wait_event();
+    }
+    else
+    {
+        window_poll_event();
+    }
+#else
     window_poll_event();
+#endif
 }
 
 Event* event_subscribe(EventType type)

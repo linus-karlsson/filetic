@@ -41,12 +41,15 @@ global const V4 high_light_color = {
     .b = 0.2f,
     .a = 1.0f,
 };
+
 global const V4 border_color = {
     .r = 0.35f,
     .g = 0.35f,
     .b = 0.35f,
     .a = 1.0f,
 };
+
+
 global const V4 lighter_color = {
     .r = 0.55f,
     .g = 0.55f,
@@ -934,14 +937,10 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
     V4 left_side_color = clear_color;
     if (this_hit || selected)
     {
-        const V4 end_color = {
-            .r = 0.3f,
-            .g = 0.3f,
-            .b = 0.3f,
-            .a = 1.0f,
-        };
-        color =
-            v4_lerp(border_color, end_color, ((f32)sin(pulse_x) + 1.0f) / 2.0f);
+        // TODO: Checks selected 3 times
+        const V4 end_color = selected ? v4ic(0.45f) : v4ic(0.3f);
+        color = v4_lerp(selected ? v4ic(0.5f) : border_color, end_color,
+                        ((f32)sin(pulse_x) + 1.0f) / 2.0f);
 
         starting_position.x += 8.0f;
         width -= 6.0f;
