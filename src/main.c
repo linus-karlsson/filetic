@@ -2496,8 +2496,12 @@ int main(int argc, char** argv)
     array_create(&parent_directory_aabbs, 10);
 
     V2 starting_position = v2f(150.0f, 0.0f);
-    b8 quick_access_resize_dragging = false;
-    f32 quick_access_resize_offset = 0.0f;
+    const f32 search_bar_width = 250.0f;
+    f32 search_result_width = search_bar_width + 10.0f;
+
+    i32 side_resize = -1;
+    b8 resize_dragging = false;
+    f32 resize_offset = 0.0f;
 
     enable_gldebugging();
     glEnable(GL_BLEND);
@@ -2589,38 +2593,79 @@ int main(int argc, char** argv)
                               secondary_color, border_color, 0.0f);
         main_render->index_count++;
 
+        AABB right_border_aabb = {
+            .min = v2f(application.dimensions.x - search_result_width - 10.0f,
+                       0.0f),
+            .size = v2f(border_width, application.dimensions.y),
+        };
+
         AABB resize_aabb = rect;
         resize_aabb.min.x -= 2.0f;
         resize_aabb.size.x += 4.0f;
-        if (collision_point_in_aabb(application.mouse_position, &resize_aabb))
+
+        b8 left_side_resize =
+            collision_point_in_aabb(application.mouse_position, &resize_aabb);
+
+        resize_aabb = right_border_aabb;
+        resize_aabb.min.x -= 2.0f;
+        resize_aabb.size.x += 4.0f;
+        b8 right_side_resize =
+            collision_point_in_aabb(application.mouse_position, &resize_aabb);
+
+        if (left_side_resize || right_side_resize)
         {
             window_set_cursor(application.window, FTIC_RESIZE_H_CURSOR);
             if (application.mouse_button->activated)
             {
-                quick_access_resize_offset =
-                    rect.min.x - application.mouse_position.x;
-                quick_access_resize_dragging = true;
+                if (left_side_resize)
+                {
+                    resize_offset = rect.min.x - application.mouse_position.x;
+                    side_resize = 0;
+                }
+                else
+                {
+                    resize_offset =
+                        right_border_aabb.min.x - application.mouse_position.x;
+                    side_resize = 1;
+                }
+                resize_dragging = true;
             }
         }
-        else if (!quick_access_resize_dragging)
+        else if (!resize_dragging)
         {
             window_set_cursor(application.window, FTIC_NORMAL_CURSOR);
         }
         if (application.mouse_button->mouse_button_event.action == FTIC_RELEASE)
         {
-            quick_access_resize_dragging = false;
+            resize_dragging = false;
         }
-        if (quick_access_resize_dragging)
+        if (resize_dragging)
         {
-            starting_position.x =
-                application.mouse_position.x + quick_access_resize_offset;
+            if (side_resize == 0)
+            {
+                starting_position.x =
+                    application.mouse_position.x + resize_offset;
 
-            starting_position.x = max(150.0f, starting_position.x);
-
+                starting_position.x = max(150.0f, starting_position.x);
+                starting_position.x =
+                    min(right_border_aabb.min.x - 200.0f, starting_position.x);
+            }
+            else
+            {
+                search_result_width = application.dimensions.x -
+                                      application.mouse_position.x +
+                                      resize_offset;
+                search_result_width -= 10.0f;
+                search_result_width =
+                    max(search_bar_width + 10.0f, search_result_width);
+                search_result_width =
+                    min(application.dimensions.x - rect.min.x - 200.0f,
+                        search_result_width);
+            }
             check_collision = false;
         }
-
-        V2 search_bar_position = v2f(application.dimensions.x * 0.6f, 10.0f);
+        V2 search_bar_position =
+            v2f(application.dimensions.x - search_result_width, 10.0f);
 
         V2 parent_directory_path_position =
             v2f(rect.min.x + border_width, 30.0f);
@@ -2636,11 +2681,6 @@ int main(int argc, char** argv)
             .min = text_starting_position,
             .size =
                 v2f(width, application.dimensions.y - text_starting_position.y),
-        };
-
-        AABB right_border_aabb = {
-            .min = v2f(directory_aabb.min.x + directory_aabb.size.x, 0.0f),
-            .size = v2f(border_width, application.dimensions.y),
         };
 
         AABB side_under_border_aabb = {
