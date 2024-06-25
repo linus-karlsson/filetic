@@ -431,7 +431,6 @@ b8 erase_char(const Event* key_event, i32* cursor_index, CharArray* buffer);
 DirectoryItemListReturnValue
 search_page_update(SearchPage* page, const ApplicationContext* application,
                    const b8 check_collision, const V2 search_bar_position,
-                   const f32 search_page_header_start_x,
                    DirectoryHistory* directory_history,
                    ThreadTaskQueue* thread_task_queue,
                    SelectedItemValues* selected_item_values);
@@ -1433,8 +1432,8 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
 
         if (collided || scroll_bar->dragging)
         {
-            quad(&render->vertices, position, scroll_bar_dimensions, bright_color,
-                 0.0f);
+            quad(&render->vertices, position, scroll_bar_dimensions,
+                 bright_color, 0.0f);
             render->index_count++;
         }
         else
@@ -1809,18 +1808,88 @@ b8 erase_char(const Event* key_event, i32* cursor_index, CharArray* buffer)
     return false;
 }
 
+void search_page_top_bar_update(SearchPage* page,
+                                const ApplicationContext* application,
+                                const b8 check_collision,
+                                const V2 search_bar_position,
+                                const u32 item_count,
+                                DirectoryHistory* directory_history,
+                                ThreadTaskQueue* thread_task_queue)
+{
+    const f32 search_bar_input_text_padding = 10.0f;
+    const f32 scale = 1.0f;
+    const f32 padding_top = 2.0f;
+    const f32 quad_height =
+        scale * application->font.pixel_height + padding_top * 5.0f;
+
+    V2 search_result_position = search_bar_position;
+    search_result_position.y += page->search_bar_aabb.size.y + 20.0f;
+    const f32 search_page_header_size_y = search_result_position.y;
+
+    if (application->mouse_button->activated)
+    {
+        if (check_collision &&
+            collision_point_in_aabb(application->mouse_position,
+                                    &page->search_bar_aabb))
+        {
+            page->search_bar_hit = true;
+        }
+        else
+        {
+            page->search_bar_hit = false;
+            page->search_blinking_time = 0.4f;
+        }
+    }
+
+    if (page->search_bar_hit)
+    {
+        b8 reload_search_result =
+            erase_char(application->key_event, &page->search_bar_cursor_index,
+                       &page->search_buffer);
+        search_page_parse_key_buffer(page,
+                                     page->search_bar_aabb.size.width -
+                                         (search_bar_input_text_padding * 2),
+                                     &application->font, reload_search_result,
+                                     directory_history, thread_task_queue);
+    }
+
+    V2 search_input_position = page->search_bar_aabb.min;
+    search_input_position.x += search_bar_input_text_padding;
+    search_input_position.y += scale * application->font.pixel_height + 8.0f;
+
+    // Search bar
+    page->search_bar_cursor_index = render_input(
+        &application->font, page->search_buffer.data, page->search_buffer.size,
+        scale, search_input_position, search_bar_position.y + 10.0f,
+        page->search_bar_hit, application->key_event,
+        page->search_bar_cursor_index, application->delta_time,
+        &page->search_blinking_time, NULL, page->render);
+
+    quad_border_gradiant(&page->render->vertices, &page->render->index_count,
+                         page->search_bar_aabb.min, page->search_bar_aabb.size,
+                         lighter_color, border_color, border_width, 0.0f);
+
+    const V2 scroll_bar_position = v2f(application->dimensions.width,
+                                       page->search_result_aabb.min.y - 8.0f);
+    const f32 area_y = page->search_result_aabb.size.y + 8.0f;
+    const f32 total_height = item_count * quad_height;
+    scroll_bar_add(&page->scroll_bar, scroll_bar_position,
+                   application->mouse_button, application->mouse_position,
+                   application->dimensions.y, area_y, total_height, quad_height,
+                   &page->scroll_offset, &page->offset, page->render);
+}
+
 DirectoryItemListReturnValue
 search_page_update(SearchPage* page, const ApplicationContext* application,
                    const b8 check_collision, const V2 search_bar_position,
-                   const f32 search_page_header_start_x,
                    DirectoryHistory* directory_history,
                    ThreadTaskQueue* thread_task_queue,
                    SelectedItemValues* selected_item_values)
 {
     const f32 search_bar_width = 250.0f;
-    const f32 search_bar_input_text_padding = 10.0f;
     page->search_bar_aabb = (AABB){
-        .min = search_bar_position,
+        .min = v2f(application->dimensions.width - (search_bar_width + 10.0f),
+                   search_bar_position.y),
         .size = v2f(search_bar_width, 40.0f),
     };
 
@@ -1828,10 +1897,6 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
     const f32 padding_top = 2.0f;
     const f32 quad_height =
         scale * application->font.pixel_height + padding_top * 5.0f;
-
-    V2 search_input_position = search_bar_position;
-    search_input_position.x += search_bar_input_text_padding;
-    search_input_position.y += scale * application->font.pixel_height + 8.0f;
 
     V2 search_result_position = search_bar_position;
     search_result_position.y += page->search_bar_aabb.size.y + 20.0f;
@@ -1867,59 +1932,6 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
         platform_mutex_unlock(&page->search_result_file_array.mutex);
     }
-
-    if (application->mouse_button->activated)
-    {
-        if (check_collision &&
-            collision_point_in_aabb(application->mouse_position,
-                                    &page->search_bar_aabb))
-        {
-            page->search_bar_hit = true;
-        }
-        else
-        {
-            page->search_bar_hit = false;
-            page->search_blinking_time = 0.4f;
-        }
-    }
-
-    if (page->search_bar_hit)
-    {
-        b8 reload_search_result =
-            erase_char(application->key_event, &page->search_bar_cursor_index,
-                       &page->search_buffer);
-        search_page_parse_key_buffer(
-            page, search_bar_width - (search_bar_input_text_padding * 2),
-            &application->font, reload_search_result, directory_history,
-            thread_task_queue);
-    }
-
-    quad(&page->render->vertices, v2f(search_page_header_start_x, 0.0f),
-         v2f(application->dimensions.x - search_page_header_start_x,
-             search_page_header_size_y),
-         clear_color, 0.0f);
-    page->render->index_count++;
-
-    // Search bar
-    page->search_bar_cursor_index = render_input(
-        &application->font, page->search_buffer.data, page->search_buffer.size,
-        scale, search_input_position, search_bar_position.y + 10.0f,
-        page->search_bar_hit, application->key_event,
-        page->search_bar_cursor_index, application->delta_time,
-        &page->search_blinking_time, NULL, page->render);
-
-    quad_border_gradiant(&page->render->vertices, &page->render->index_count,
-                         page->search_bar_aabb.min, page->search_bar_aabb.size,
-                         lighter_color, border_color, border_width, 0.0f);
-
-    const V2 scroll_bar_position = v2f(application->dimensions.width,
-                                       page->search_result_aabb.min.y - 8.0f);
-    const f32 area_y = page->search_result_aabb.size.y + 8.0f;
-    const f32 total_height = search_list_return_value.count * quad_height;
-    scroll_bar_add(&page->scroll_bar, scroll_bar_position,
-                   application->mouse_button, application->mouse_position,
-                   application->dimensions.y, area_y, total_height, quad_height,
-                   &page->scroll_offset, &page->offset, page->render);
 
     return search_list_return_value;
 }
@@ -2725,8 +2737,7 @@ int main(int argc, char** argv)
                                       application.mouse_position.x +
                                       resize_offset;
                 search_result_width -= 10.0f;
-                search_result_width =
-                    max(search_bar_width + 10.0f, search_result_width);
+                search_result_width = max(150.0f, search_result_width);
                 search_result_width =
                     min(application.dimensions.x - rect.min.x - 200.0f,
                         search_result_width);
@@ -2740,13 +2751,11 @@ int main(int argc, char** argv)
         const f32 back_drop_height = 40.0f;
 
         V2 parent_directory_path_position =
-            v2f(rect.min.x + border_width,
-                middle(top_bar_height, back_drop_height));
+            v2f(150.0f, middle(top_bar_height, back_drop_height));
 
-        V2 text_starting_position = parent_directory_path_position;
+        V2 text_starting_position;
+        text_starting_position.x = rect.min.x + border_width + 10.0f;
         text_starting_position.y = top_bar_height + border_width;
-
-        text_starting_position.x += 10.0f;
 
         const f32 width =
             ((search_bar_position.x - 10.0f) - text_starting_position.x);
@@ -2756,6 +2765,7 @@ int main(int argc, char** argv)
             .size =
                 v2f(width, application.dimensions.y - text_starting_position.y),
         };
+        text_starting_position.y += 8.0f;
 
         AABB side_under_border_aabb = {
             .min = v2f(0.0f, top_bar_height),
@@ -2769,7 +2779,7 @@ int main(int argc, char** argv)
 
         quick_access_pulse_x += application.delta_time * 6.0f;
         folder_item_list(&application, &quick_access_folders, check_collision,
-                         v2f(10.0f, side_under_border_aabb.min.y + 10.0f),
+                         v2f(10.0f, side_under_border_aabb.min.y + 8.0f),
                          rect.min.x - 10.0f, quad_height, padding_top,
                          quick_access_pulse_x, &selected_item_values,
                          main_render, &application.directory_history);
@@ -2791,10 +2801,12 @@ int main(int argc, char** argv)
                 &application.directory_history);
         }
 
-        const AABB parent_directory_path_aabb = {
-            .min = parent_directory_path_position,
-            .size = v2f(width + 2.0f, back_drop_height),
-        };
+        AABB parent_directory_path_aabb = { 0 };
+        parent_directory_path_aabb.min = parent_directory_path_position;
+        parent_directory_path_aabb.size =
+            v2f(search_page.search_bar_aabb.min.x -
+                    parent_directory_path_aabb.min.x - 10.0f,
+                back_drop_height);
 
         if (is_mouse_button_clicked(application.mouse_button,
                                     FTIC_MOUSE_BUTTON_LEFT))
@@ -2832,10 +2844,21 @@ int main(int argc, char** argv)
             }
         }
 
+        DirectoryItemListReturnValue search_list_return_value =
+            search_page_update(&search_page, &application, check_collision,
+                               search_bar_position,
+                               &application.directory_history,
+                               &thread_queue.task_queue, &selected_item_values);
+
         quad(&main_render->vertices, v2d(),
              v2f(application.dimensions.width, top_bar_height), clear_color,
              0.0f);
         main_render->index_count++;
+
+        search_page_top_bar_update(
+            &search_page, &application, check_collision, search_bar_position,
+            search_list_return_value.count, &application.directory_history,
+            &thread_queue.task_queue);
 
         quad_gradiant_l_r(&main_render->vertices,
                           parent_directory_path_aabb.min,
@@ -2858,12 +2881,6 @@ int main(int argc, char** argv)
                           high_light_color, 0.0f);
         main_render->index_count++;
 
-        DirectoryItemListReturnValue search_list_return_value =
-            search_page_update(&search_page, &application, check_collision,
-                               search_bar_position,
-                               application.dimensions.x - search_bar_width,
-                               &application.directory_history,
-                               &thread_queue.task_queue, &selected_item_values);
 
         AABB button_aabb = {
             .min = v2i(10.0f),
