@@ -1,3 +1,6 @@
 C:\Users\linus\dev
 C:\Users\linus\dev\filetic
 C:\Users\linus\Images
+C:\Program Files
+C:\Users
+C:\Windows

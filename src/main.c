@@ -26,7 +26,8 @@
 #define COPY_OPTION_INDEX 0
 #define PASTE_OPTION_INDEX 1
 #define DELETE_OPTION_INDEX 2
-#define PROPERTIES_OPTION_INDEX 3
+#define ADD_TO_QUICK_OPTION_INDEX 3
+#define PROPERTIES_OPTION_INDEX 4
 
 global const V4 clear_color = {
     .r = 0.1f,
@@ -286,6 +287,7 @@ typedef struct DirectoryItemListReturnValue
 typedef struct MainDropDownSelectionData
 {
     DirectoryPage* directory;
+    DirectoryItemArray* quick_access;
     const CharPtrArray* selected_paths;
 } MainDropDownSelectionData;
 
@@ -1403,7 +1405,7 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
             scroll_bar->mouse_pointer_offset =
                 scroll_bar_aabb.min.y - mouse_position.y;
         }
-        if (mouse_button->mouse_button_event.action == 0)
+        if (mouse_button->mouse_button_event.action == FTIC_RELEASE)
         {
             scroll_bar->dragging = false;
         }
@@ -1920,6 +1922,52 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
             }
             break;
         }
+        case ADD_TO_QUICK_OPTION_INDEX:
+        {
+            if (arguments->selected_paths->size == 0)
+            {
+                *text_color = lighter_color;
+            }
+            else
+            {
+                if (item_clicked && hit)
+                {
+                    for (u32 i = 0; i < arguments->selected_paths->size; ++i)
+                    {
+                        char* path_temp = arguments->selected_paths->data[i];
+                        if (!platform_directory_exists(path_temp))
+                        {
+                            continue;
+                        }
+                        b8 exist = false;
+                        for (u32 j = 0; j < arguments->quick_access->size; ++j)
+                        {
+                            if (!strcmp(path_temp,
+                                        arguments->quick_access->data[j].path))
+                            {
+                                exist = true;
+                                break;
+                            }
+                        }
+                        if (!exist)
+                        {
+                            const u32 length = (u32)strlen(path_temp);
+                            char* path =
+                                (char*)calloc(length + 1, sizeof(char));
+                            memcpy(path, path_temp, length);
+                            DirectoryItem item = {
+                                .path = path,
+                                .name =
+                                    path + get_path_length(path, length) + 1,
+                            };
+                            array_push(arguments->quick_access, item);
+                        }
+                    }
+                    should_close = true;
+                }
+            }
+            break;
+        }
         case PROPERTIES_OPTION_INDEX:
         {
             if (arguments->selected_paths->size == 0)
@@ -2407,12 +2455,14 @@ int main(int argc, char** argv)
         [COPY_OPTION_INDEX] = "Copy",
         [PASTE_OPTION_INDEX] = "Paste",
         [DELETE_OPTION_INDEX] = "Delete",
+        [ADD_TO_QUICK_OPTION_INDEX] = "Add to quick",
         [PROPERTIES_OPTION_INDEX] = "Properties",
     };
     array_create(&drop_down_menu.options, static_array_size(options));
     array_push(&drop_down_menu.options, options[COPY_OPTION_INDEX]);
     array_push(&drop_down_menu.options, options[PASTE_OPTION_INDEX]);
     array_push(&drop_down_menu.options, options[DELETE_OPTION_INDEX]);
+    array_push(&drop_down_menu.options, options[ADD_TO_QUICK_OPTION_INDEX]);
     array_push(&drop_down_menu.options, options[PROPERTIES_OPTION_INDEX]);
 
     V2 image_dimensions = v2d();
@@ -2444,6 +2494,10 @@ int main(int argc, char** argv)
     };
     AABBArray parent_directory_aabbs = { 0 };
     array_create(&parent_directory_aabbs, 10);
+
+    V2 starting_position = v2f(150.0f, 0.0f);
+    b8 quick_access_resize_dragging = false;
+    f32 quick_access_resize_offset = 0.0f;
 
     enable_gldebugging();
     glEnable(GL_BLEND);
@@ -2529,12 +2583,42 @@ int main(int argc, char** argv)
                 current_directory(&application.directory_history));
         }
 
-        V2 starting_position = v2f(150.0f, 0.0f);
         AABB rect =
             quad_gradiant_t_b(&main_render->vertices, starting_position,
                               v2f(border_width, application.dimensions.y),
                               secondary_color, border_color, 0.0f);
         main_render->index_count++;
+
+        AABB resize_aabb = rect;
+        resize_aabb.min.x -= 2.0f;
+        resize_aabb.size.x += 4.0f;
+        if (collision_point_in_aabb(application.mouse_position, &resize_aabb))
+        {
+            window_set_cursor(application.window, FTIC_RESIZE_H_CURSOR);
+            if (application.mouse_button->activated)
+            {
+                quick_access_resize_offset =
+                    rect.min.x - application.mouse_position.x;
+                quick_access_resize_dragging = true;
+            }
+        }
+        else if (!quick_access_resize_dragging)
+        {
+            window_set_cursor(application.window, FTIC_NORMAL_CURSOR);
+        }
+        if (application.mouse_button->mouse_button_event.action == FTIC_RELEASE)
+        {
+            quick_access_resize_dragging = false;
+        }
+        if (quick_access_resize_dragging)
+        {
+            starting_position.x =
+                application.mouse_position.x + quick_access_resize_offset;
+
+            starting_position.x = max(150.0f, starting_position.x);
+
+            check_collision = false;
+        }
 
         V2 search_bar_position = v2f(application.dimensions.x * 0.6f, 10.0f);
 
@@ -2575,9 +2659,9 @@ int main(int argc, char** argv)
         quick_access_pulse_x += application.delta_time * 6.0f;
         folder_item_list(&application, &quick_access_folders, check_collision,
                          v2f(10.0f, side_under_border_aabb.min.y + 10.0f),
-                         rect.min.x - 10.0f, quad_height,
-                         padding_top, quick_access_pulse_x,
-                         &selected_item_values, main_render, &application.directory_history);
+                         rect.min.x - 10.0f, quad_height, padding_top,
+                         quick_access_pulse_x, &selected_item_values,
+                         main_render, &application.directory_history);
 
         text_starting_position.y +=
             current_directory(&application.directory_history)->scroll_offset;
@@ -2740,6 +2824,7 @@ int main(int argc, char** argv)
         if (right_clicked)
         {
             MainDropDownSelectionData data = {
+                .quick_access = &quick_access_folders,
                 .directory = current_directory(&application.directory_history),
                 .selected_paths = &selected_item_values.paths,
             };

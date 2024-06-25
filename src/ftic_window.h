@@ -1,5 +1,13 @@
 #pragma once
 
+#define FTIC_NORMAL_CURSOR 0
+#define FTIC_HAND_CURSOR 1
+#define FTIC_RESIZE_H_CURSOR 2
+#define FTIC_RESIZE_V_CURSOR 3
+#define FTIC_MOVE_CURSOR 4
+
+#define TOTAL_CURSORS 5
+
 typedef void FTicWindow;
 typedef void (*OnKeyCallback)(void* window, int key, int scancode, int action, int mods);
 typedef void (*OnButtonCallback)(void* window, int button, int action, int mods);
@@ -15,6 +23,8 @@ void window_set_on_mouse_wheel_event(FTicWindow* window, OnMouseWheelCallback ca
 void window_set_on_key_stroke_event(FTicWindow* window, OnKeyStrokeCallback callback);
 
 void window_get_mouse_position(FTicWindow* window, double* x, double* y);
+
+void window_set_cursor(FTicWindow* window, int cursor);
 
 int window_should_close(FTicWindow* window);
 void window_poll_event();

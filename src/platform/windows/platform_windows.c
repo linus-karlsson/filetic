@@ -8,6 +8,16 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define FTIC_NORMAL_CURSOR 0
+#define FTIC_HAND_CURSOR 1
+#define FTIC_RESIZE_H_CURSOR 2
+#define FTIC_RESIZE_V_CURSOR 3
+#define FTIC_RESIZE_NW_CURSOR 4
+#define FTIC_MOVE_CURSOR 5
+#define FTIC_HIDDEN_CURSOR 6
+
+#define TOTAL_CURSORS 7
+
 typedef struct Callbacks
 {
     OnKeyPressedCallback on_key_pressed;

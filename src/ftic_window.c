@@ -4,6 +4,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+global GLFWcursor* cursors[TOTAL_CURSORS] = { 0 };
+
 FTicWindow* window_init(const char* title, int width, int height)
 {
     if (!glfwInit())
@@ -15,6 +17,12 @@ FTicWindow* window_init(const char* title, int width, int height)
     glfwWindowHint(GLFW_SAMPLES, 4);
 
     GLFWwindow* window = glfwCreateWindow(width, height, "FileTic", NULL, NULL);
+
+    cursors[FTIC_HAND_CURSOR] = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+    cursors[FTIC_RESIZE_H_CURSOR] = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+    cursors[FTIC_RESIZE_V_CURSOR] = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+    cursors[FTIC_RESIZE_V_CURSOR] = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+    cursors[FTIC_MOVE_CURSOR] = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 
     if (!window)
     {
@@ -32,20 +40,25 @@ void window_set_on_key_event(FTicWindow* window, OnKeyCallback callback)
     glfwSetKeyCallback((GLFWwindow*)window, callback);
 }
 
-void window_set_on_button_event(FTicWindow* window, OnButtonCallback callback){
+void window_set_on_button_event(FTicWindow* window, OnButtonCallback callback)
+{
     glfwSetMouseButtonCallback((GLFWwindow*)window, callback);
 }
 
-void window_set_on_mouse_move_event(FTicWindow* window, OnMouseMovedCallback callback){
+void window_set_on_mouse_move_event(FTicWindow* window,
+                                    OnMouseMovedCallback callback)
+{
     glfwSetCursorPosCallback((GLFWwindow*)window, callback);
 }
 
-void window_set_on_mouse_wheel_event(FTicWindow* window, OnMouseWheelCallback callback)
+void window_set_on_mouse_wheel_event(FTicWindow* window,
+                                     OnMouseWheelCallback callback)
 {
     glfwSetScrollCallback((GLFWwindow*)window, callback);
 }
 
-void window_set_on_key_stroke_event(FTicWindow* window, OnKeyStrokeCallback callback)
+void window_set_on_key_stroke_event(FTicWindow* window,
+                                    OnKeyStrokeCallback callback)
 {
     glfwSetCharCallback((GLFWwindow*)window, callback);
 }
@@ -53,6 +66,11 @@ void window_set_on_key_stroke_event(FTicWindow* window, OnKeyStrokeCallback call
 void window_get_mouse_position(FTicWindow* window, double* x, double* y)
 {
     glfwGetCursorPos((GLFWwindow*)window, x, y);
+}
+
+void window_set_cursor(FTicWindow* window, int cursor)
+{
+    glfwSetCursor((GLFWwindow*)window, cursors[cursor]);
 }
 
 int window_should_close(FTicWindow* window)
@@ -77,5 +95,5 @@ void window_get_size(FTicWindow* window, int* width, int* height)
 
 f64 window_get_time()
 {
-   return glfwGetTime();    
+    return glfwGetTime();
 }
