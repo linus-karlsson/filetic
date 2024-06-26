@@ -1149,6 +1149,7 @@ DirectoryItemListReturnValue directory_item_list(
         item_width, item_height, padding, pulse_x, selected_item_values, render,
         directory_history);
 
+    /*
     if (should_show_full_path && folder_list_return.hit_index > 0)
     {
         // TODO: Top item can't be shown.
@@ -1160,6 +1161,7 @@ DirectoryItemListReturnValue directory_item_list(
             &application->font, position, v2f(item_width, item_height), padding,
             sub_directories->data[folder_list_return.hit_index].path, render);
     }
+    */
 
     starting_position.y += folder_list_return.total_height;
 
@@ -1851,9 +1853,8 @@ void search_page_top_bar_update(SearchPage* page,
     search_input_position.x += search_bar_input_text_padding;
     search_input_position.y += scale * application->font.pixel_height + 8.0f;
 
-    quad_shadow(&page->render->vertices, page->search_bar_aabb.min,
-                page->search_bar_aabb.size, high_light_color, 0.0f);
-    page->render->index_count++;
+    quad(&page->render->vertices, page->search_bar_aabb.min,
+         page->search_bar_aabb.size, high_light_color, 0.0f);
     page->render->index_count++;
 
     // Search bar
@@ -1865,8 +1866,8 @@ void search_page_top_bar_update(SearchPage* page,
         &page->search_blinking_time, NULL, page->render);
 
     quad_border_rounded(&page->render->vertices, &page->render->index_count,
-                         page->search_bar_aabb.min, page->search_bar_aabb.size,
-                         lighter_color, border_width, 0.4f, 3, 0.0f);
+                        page->search_bar_aabb.min, page->search_bar_aabb.size,
+                        border_color, border_width, 0.4f, 3, 0.0f);
 
     const V2 scroll_bar_position = v2f(application->dimensions.width,
                                        page->search_result_aabb.min.y - 8.0f);
@@ -2675,6 +2676,7 @@ int main(int argc, char** argv)
         }
 
         const f32 top_bar_height = 60.0f;
+        const f32 tab_height = 40.0f;
 
         AABB rect = quad_gradiant_t_b(
             &main_render->vertices, v2f(starting_position.x, top_bar_height),
@@ -2765,6 +2767,7 @@ int main(int argc, char** argv)
         V2 text_starting_position;
         text_starting_position.x = rect.min.x + border_width + 10.0f;
         text_starting_position.y = top_bar_height + border_width;
+        text_starting_position.y += tab_height * (application.tabs.size > 1);
 
         const f32 width =
             ((search_bar_position.x - 10.0f) - text_starting_position.x);
@@ -2868,14 +2871,13 @@ int main(int argc, char** argv)
             search_list_return_value.count, &tab->directory_history,
             &thread_queue.task_queue);
 
-        quad_shadow(&main_render->vertices, parent_directory_path_aabb.min,
-                    parent_directory_path_aabb.size, high_light_color, 0.0f);
-        main_render->index_count++;
+        quad(&main_render->vertices, parent_directory_path_aabb.min,
+             parent_directory_path_aabb.size, high_light_color, 0.0f);
         main_render->index_count++;
 
         quad_border_rounded(&main_render->vertices, &main_render->index_count,
                             parent_directory_path_aabb.min,
-                            parent_directory_path_aabb.size, lighter_color,
+                            parent_directory_path_aabb.size, border_color,
                             border_width, 0.4f, 3, 0.0f);
 
         parent_directory_path_position.y += application.font.pixel_height;
@@ -2967,6 +2969,54 @@ int main(int argc, char** argv)
         else
         {
             drop_down_menu.aabb = (AABB){ 0 };
+        }
+
+        const u32 tab_count = application.tabs.size;
+        if (tab_count > 1)
+        {
+            V2 tab_position =
+                v2f(rect.min.x + border_width, top_bar_height + border_width);
+
+            const f32 area_width = right_border_aabb.min.x - tab_position.x;
+            const f32 max_tab_width = 200.0f;
+            const f32 padding = 5.0f;
+            const f32 tab_width =
+                min(max_tab_width,
+                    (area_width - (padding * tab_count)) / tab_count);
+
+            quad(&main_render->vertices, tab_position,
+                 v2f(area_width, tab_height), clear_color, 0.0f);
+            main_render->index_count++;
+
+            for (u32 i = 0; i < tab_count; ++i)
+            {
+                AABB tab_aabb = {
+                    .min = tab_position,
+                    .size = v2f(tab_width, tab_height),
+                };
+
+                V4 tab_color = high_light_color;
+                if (collision_point_in_aabb(application.mouse_position,
+                                            &tab_aabb))
+                {
+                    tab_color = border_color;
+                    if (is_mouse_button_clicked(application.mouse_button,
+                                                FTIC_MOUSE_BUTTON_LEFT))
+                    {
+                        application.tab_index = i;
+                    }
+                }
+
+                if (application.tab_index == i)
+                {
+                    tab_color = lighter_color;
+                }
+
+                quad(&main_render->vertices, tab_aabb.min, tab_aabb.size,
+                     tab_color, 0.0f);
+                main_render->index_count++;
+                tab_position.x += tab_width + padding;
+            }
         }
 
         if (main_list_return_value.hit || search_list_return_value.hit)
