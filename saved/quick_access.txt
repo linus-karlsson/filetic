@@ -6,3 +6,4 @@ C:\Users
 C:\Windows
 C:\Users\linus\Documents
 C:\Users\linus
+C:\VulkanSDK

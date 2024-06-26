@@ -1857,6 +1857,11 @@ void search_page_top_bar_update(SearchPage* page,
     search_input_position.x += search_bar_input_text_padding;
     search_input_position.y += scale * application->font.pixel_height + 8.0f;
 
+    quad_shadow(&page->render->vertices, page->search_bar_aabb.min,
+         page->search_bar_aabb.size, high_light_color, 0.0f);
+    page->render->index_count++;
+    page->render->index_count++;
+
     // Search bar
     page->search_bar_cursor_index = render_input(
         &application->font, page->search_buffer.data, page->search_buffer.size,
@@ -2238,16 +2243,13 @@ b8 button_arrow_add(V2 position, const AABB* button_aabb,
                     const b8 extra_condition, const V2 mouse_position,
                     RenderingProperties* render)
 {
-    V4 highlight_button_color = clear_color;
     V4 button_color = v4ic(1.0f);
-
     b8 collision = false;
     if (extra_condition)
     {
         if (check_collision &&
             collision_point_in_aabb(mouse_position, button_aabb))
         {
-            highlight_button_color = high_light_color;
             collision = true;
         }
     }
@@ -2256,9 +2258,12 @@ b8 button_arrow_add(V2 position, const AABB* button_aabb,
         button_color = border_color;
     }
 
-    quad(&render->vertices, position, button_aabb->size, highlight_button_color,
-         0.0f);
-    render->index_count++;
+    if (collision)
+    {
+        quad(&render->vertices, position, button_aabb->size, high_light_color,
+             0.0f);
+        render->index_count++;
+    }
 
     position.x += 9.0f;
     position.y += 10.0f;
@@ -2850,9 +2855,9 @@ int main(int argc, char** argv)
                                &application.directory_history,
                                &thread_queue.task_queue, &selected_item_values);
 
-        quad(&main_render->vertices, v2d(),
-             v2f(application.dimensions.width, top_bar_height), clear_color,
-             0.0f);
+        quad_gradiant_t_b(&main_render->vertices, v2d(),
+                          v2f(application.dimensions.width, top_bar_height),
+                          v4ic(0.16f), v4ic(0.14f), 0.0f);
         main_render->index_count++;
 
         search_page_top_bar_update(
@@ -2860,10 +2865,9 @@ int main(int argc, char** argv)
             search_list_return_value.count, &application.directory_history,
             &thread_queue.task_queue);
 
-        quad_gradiant_l_r(&main_render->vertices,
-                          parent_directory_path_aabb.min,
-                          parent_directory_path_aabb.size, high_light_color,
-                          clear_color, 0.0f);
+        quad_shadow(&main_render->vertices, parent_directory_path_aabb.min,
+                    parent_directory_path_aabb.size, high_light_color, 0.0f);
+        main_render->index_count++;
         main_render->index_count++;
 
         quad_border_gradiant(&main_render->vertices, &main_render->index_count,
@@ -2880,7 +2884,6 @@ int main(int argc, char** argv)
                           right_border_aabb.size, border_color,
                           high_light_color, 0.0f);
         main_render->index_count++;
-
 
         AABB button_aabb = {
             .min = v2i(10.0f),
