@@ -2026,8 +2026,7 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
                             memcpy(path, path_temp, length);
                             DirectoryItem item = {
                                 .path = path,
-                                .name =
-                                    path + get_path_length(path, length) + 1,
+                                .name = path + get_path_length(path, length),
                             };
                             array_push(arguments->quick_access, item);
                         }
@@ -2301,17 +2300,17 @@ u32 get_path_length(const char* path, u32 path_length)
         const char current_char = path[i];
         if (current_char == '\\' || current_char == '/')
         {
-            return i;
+            return i + 1;
         }
     }
-    return path_length;
+    return 0;
 }
 
 void go_up_one_directory(DirectoryHistory* directory_history)
 {
     DirectoryPage* current = current_directory(directory_history);
     char* parent = current->directory.parent;
-    u32 parent_length = get_path_length(parent, (u32)strlen(parent));
+    u32 parent_length = get_path_length(parent, (u32)strlen(parent)) - 1;
 
     char* new_parent = (char*)calloc(parent_length + 1, sizeof(char));
     memcpy(new_parent, parent, parent_length);
@@ -2444,7 +2443,7 @@ void quick_access_load(DirectoryItemArray* array)
             memcpy(path, line.data, line.size);
             DirectoryItem item = {
                 .path = path,
-                .name = path + get_path_length(path, line.size) + 1,
+                .name = path + get_path_length(path, line.size),
             };
             array_push(array, item);
         }
@@ -2790,11 +2789,13 @@ int main(int argc, char** argv)
             scale * application.font.pixel_height + padding_top * 5.0f;
 
         quick_access_pulse_x += application.delta_time * 6.0f;
-        folder_item_list(&application, &quick_access_folders, check_collision,
-                         v2f(10.0f, side_under_border_aabb.min.y + 8.0f),
-                         rect.min.x - 10.0f, quad_height, padding_top,
-                         quick_access_pulse_x, &tab->selected_item_values,
-                         main_render, &tab->directory_history);
+        DirectoryItemListReturnValue quick_access_list_return_value =
+            folder_item_list(&application, &quick_access_folders,
+                             check_collision,
+                             v2f(10.0f, side_under_border_aabb.min.y + 8.0f),
+                             rect.min.x - 10.0f, quad_height, padding_top,
+                             quick_access_pulse_x, &tab->selected_item_values,
+                             main_render, &tab->directory_history);
 
         text_starting_position.y +=
             current_directory(&tab->directory_history)->scroll_offset;
@@ -2999,7 +3000,7 @@ int main(int argc, char** argv)
                 if (collision_point_in_aabb(application.mouse_position,
                                             &tab_aabb))
                 {
-                    tab_color = border_color;
+                    tab_color = v4ic(0.3f);
                     if (is_mouse_button_clicked(application.mouse_button,
                                                 FTIC_MOUSE_BUTTON_LEFT))
                     {
@@ -3009,24 +3010,35 @@ int main(int argc, char** argv)
 
                 if (application.tab_index == i)
                 {
-                    tab_color = lighter_color;
+                    tab_color = v4ic(0.4f);
                 }
 
                 quad(&main_render->vertices, tab_aabb.min, tab_aabb.size,
                      tab_color, 0.0f);
                 main_render->index_count++;
+
+                char* parent = current_directory(
+                                   &application.tabs.data[i].directory_history)
+                                   ->directory.parent;
+                main_render->index_count += text_generation(
+                    application.font.chars,
+                    parent + get_path_length(parent, (u32)strlen(parent)), 1.0f,
+                    v2f(tab_position.x + 10.0f,
+                        tab_position.y + application.font.pixel_height + 9.0f),
+                    scale, application.font.pixel_height, NULL, NULL, NULL,
+                    &main_render->vertices);
+
                 tab_position.x += tab_width + padding;
             }
         }
 
-        if (main_list_return_value.hit || search_list_return_value.hit)
+        /*
+        if (quick_access_list_return_value.hit || main_list_return_value.hit ||
+            search_list_return_value.hit)
         {
-            // platform_change_cursor(application.platform, FTIC_HAND_CURSOR);
+            window_set_cursor(application.window, FTIC_HAND_CURSOR);
         }
-        else
-        {
-            // platform_change_cursor(application.platform, FTIC_NORMAL_CURSOR);
-        }
+        */
 
         if (parent_directory_clicked)
         {
@@ -3051,7 +3063,7 @@ int main(int argc, char** argv)
 
                 char* path = parent_directory.data;
                 u32 current_directory_len =
-                    get_path_length(path, parent_directory.size);
+                    get_path_length(path, parent_directory.size) - 1;
 
                 Directory directory = { 0 };
                 char saved_chars[3];
