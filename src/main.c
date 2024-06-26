@@ -2675,12 +2675,12 @@ int main(int argc, char** argv)
         }
 
         const f32 top_bar_height = 60.0f;
-        const f32 tab_height = 40.0f;
+        const f32 tab_height = 45.0f;
 
-        AABB rect = quad_gradiant_t_b(
+        AABB rect = quad(
             &main_render->vertices, v2f(starting_position.x, top_bar_height),
             v2f(border_width, application.dimensions.y - top_bar_height),
-            border_color, high_light_color, 0.0f);
+            border_color, 0.0f);
         main_render->index_count++;
 
         AABB right_border_aabb = {
@@ -2886,9 +2886,8 @@ int main(int argc, char** argv)
             middle(back_drop_height, application.font.pixel_height) - 3.0f;
         parent_directory_path_position.x += 10.0f;
 
-        quad_gradiant_t_b(&main_render->vertices, right_border_aabb.min,
-                          right_border_aabb.size, border_color,
-                          high_light_color, 0.0f);
+        quad(&main_render->vertices, right_border_aabb.min,
+             right_border_aabb.size, border_color, 0.0f);
         main_render->index_count++;
 
         AABB button_aabb = {
@@ -2933,9 +2932,8 @@ int main(int argc, char** argv)
         V2 back_button_border_position =
             v2f(0.0f, side_under_border_aabb.min.y);
 
-        quad_gradiant_l_r(&main_render->vertices, side_under_border_aabb.min,
-                          side_under_border_aabb.size, border_color,
-                          high_light_color, 0.0f);
+        quad(&main_render->vertices, side_under_border_aabb.min,
+             side_under_border_aabb.size, border_color, 0.0f);
         main_render->index_count++;
 
         V2 scroll_bar_position =
@@ -2983,17 +2981,25 @@ int main(int argc, char** argv)
             const f32 padding = 5.0f;
             const f32 tab_width =
                 min(max_tab_width,
-                    (area_width - (padding * tab_count)) / tab_count);
+                    ((area_width - 5.0f) - (padding * tab_count)) / tab_count);
 
             quad(&main_render->vertices, tab_position,
                  v2f(area_width, tab_height), clear_color, 0.0f);
             main_render->index_count++;
 
+            quad(&main_render->vertices,
+                 v2f(tab_position.x, tab_position.y + tab_height),
+                 v2f(area_width, border_width), border_color, 0.0f);
+            main_render->index_count++;
+
+            tab_position.y += 5.0f;
+            tab_position.x += 5.0f;
+
             for (u32 i = 0; i < tab_count; ++i)
             {
                 AABB tab_aabb = {
                     .min = tab_position,
-                    .size = v2f(tab_width, tab_height),
+                    .size = v2f(tab_width, tab_height - 5.0f),
                 };
 
                 V4 tab_color = high_light_color;
@@ -3016,6 +3022,10 @@ int main(int argc, char** argv)
                 quad(&main_render->vertices, tab_aabb.min, tab_aabb.size,
                      tab_color, 0.0f);
                 main_render->index_count++;
+                quad_border_rounded(&main_render->vertices,
+                                    &main_render->index_count, tab_aabb.min,
+                                    tab_aabb.size, lighter_color, border_width,
+                                    0.4f, 3, 0.0f);
 
                 char* parent = current_directory(
                                    &application.tabs.data[i].directory_history)
