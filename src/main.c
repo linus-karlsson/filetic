@@ -1864,9 +1864,9 @@ void search_page_top_bar_update(SearchPage* page,
         page->search_bar_cursor_index, application->delta_time,
         &page->search_blinking_time, NULL, page->render);
 
-    quad_border_gradiant(&page->render->vertices, &page->render->index_count,
+    quad_border_rounded(&page->render->vertices, &page->render->index_count,
                          page->search_bar_aabb.min, page->search_bar_aabb.size,
-                         lighter_color, border_color, border_width, 0.0f);
+                         lighter_color, border_width, 0.4f, 3, 0.0f);
 
     const V2 scroll_bar_position = v2f(application->dimensions.width,
                                        page->search_result_aabb.min.y - 8.0f);
@@ -2873,10 +2873,10 @@ int main(int argc, char** argv)
         main_render->index_count++;
         main_render->index_count++;
 
-        quad_border_gradiant(&main_render->vertices, &main_render->index_count,
-                             parent_directory_path_aabb.min,
-                             parent_directory_path_aabb.size, lighter_color,
-                             border_color, border_width, 0.0f);
+        quad_border_rounded(&main_render->vertices, &main_render->index_count,
+                            parent_directory_path_aabb.min,
+                            parent_directory_path_aabb.size, lighter_color,
+                            border_width, 0.4f, 3, 0.0f);
 
         parent_directory_path_position.y += application.font.pixel_height;
         parent_directory_path_position.y +=
