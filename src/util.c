@@ -135,3 +135,29 @@ u32 string_span_case_insensitive(const char* first, const char* second)
 
     return count;
 }
+
+b8 string_contains(const char* string, const u32 string_length,
+                   const char* value, const u32 value_length)
+{
+    const char* begining = value;
+    for (u32 i = 0, j = 0; i < string_length; ++i)
+    {
+        j = string[i] == value[j] ? j + 1 : 0;
+        if (j == value_length) return true;
+    }
+    return false;
+}
+
+b8 string_contains_case_insensitive(const char* string, const char* value)
+{
+    const char* begining = value;
+    while (*string && *value)
+    {
+        value =
+            tolower((unsigned char)*string) == tolower((unsigned char)*value)
+                ? value + 1
+                : begining;
+        string++;
+    }
+    return !(*value);
+}

@@ -321,6 +321,7 @@ const char* get_file_extension(const char* path, const u32 path_length);
 void parse_all_subdirectories(const char* start_directory, const u32 length);
 b8 string_contains(const char* string, const u32 string_length,
                    const char* value, const u32 value_length);
+b8 string_contains_case_insensitive(const char* string, const char* value);
 char* copy_string(const char* string, const u32 string_length,
                   const u32 extra_length);
 void safe_add_directory_item(const DirectoryItem* item,
@@ -578,19 +579,6 @@ void parse_all_subdirectories(const char* start_directory, const u32 length)
     }
 }
 
-b8 string_contains(const char* string, const u32 string_length,
-                   const char* value, const u32 value_length)
-{
-    if (value_length > string_length) return false;
-
-    for (u32 i = 0, j = 0; i < string_length; ++i)
-    {
-        j = string[i] == value[j] ? j + 1 : 0;
-        if (j == value_length) return true;
-    }
-    return false;
-}
-
 char* copy_string(const char* string, const u32 string_length,
                   const u32 extra_length)
 {
@@ -605,11 +593,10 @@ void safe_add_directory_item(const DirectoryItem* item,
                              SafeFileArray* safe_array)
 {
     const char* name = item->name;
-    const u32 name_length = (u32)strlen(name);
     char* path = item->path;
-    if (string_contains(name, name_length, arguments->string_to_match,
-                        arguments->string_to_match_length))
+    if (string_contains_case_insensitive(name, arguments->string_to_match))
     {
+        const u32 name_length = (u32)strlen(name);
         const u32 path_length = (u32)strlen(path);
         DirectoryItem copy = {
             .size = item->size,
@@ -677,34 +664,6 @@ void finding_callback(void* data)
     }
     free(arguments->start_directory);
     free(data);
-}
-
-void find_matching_string(const char* start_directory, const u32 length,
-                          const char* string_to_match,
-                          const u32 string_to_match_length)
-{
-    Directory directory = platform_get_directory(start_directory, length);
-
-    for (u32 i = 0; i < directory.files.size; ++i)
-    {
-        const char* name = directory.files.data[i].name;
-        if (string_contains(name, (u32)strlen(name), string_to_match,
-                            string_to_match_length))
-        {
-            log_message(name, strlen(name));
-        }
-        free(directory.files.data[i].path);
-    }
-    for (u32 i = 0; i < directory.sub_directories.size; ++i)
-    {
-        char* path = directory.sub_directories.data[i].path;
-        size_t directory_name_length = strlen(path);
-        path[directory_name_length++] = '/';
-        path[directory_name_length++] = '*';
-        find_matching_string(path, (u32)directory_name_length, string_to_match,
-                             string_to_match_length);
-        free(path);
-    }
 }
 
 void clear_search_result(SafeFileArray* files)
