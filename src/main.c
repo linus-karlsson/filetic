@@ -211,12 +211,26 @@ DirectoryPage* current_directory(DirectoryHistory* history)
     return history->history.data + history->current_index;
 }
 
+typedef struct DirectoryTab
+{
+    DirectoryHistory directory_history;
+    SelectedItemValues selected_item_values;
+} DirectoryTab;
+
+typedef struct DirectoryTabArray
+{
+    u32 size;
+    u32 capacity;
+    DirectoryTab* data;
+} DirectoryTabArray;
+
 typedef struct ApplicationContext
 {
     GLFWwindow* window;
     FontTTF font;
 
-    DirectoryHistory directory_history;
+    u32 tab_index;
+    DirectoryTabArray tabs;
 
     Event* key_event;
     Event* mouse_button;
@@ -232,11 +246,6 @@ typedef struct ApplicationContext
 
     f64 last_moved_time;
 } ApplicationContext;
-
-typedef struct DirectoryTab
-{
-    int i;
-} DirectoryTab;
 
 typedef struct SearchPage
 {
@@ -1298,6 +1307,13 @@ b8 is_ctrl_and_key_pressed(const Event* event, i32 key)
            event->key_event.ctrl_pressed && event->key_event.key == key;
 }
 
+b8 is_ctrl_and_key_range_pressed(const Event* event, i32 key_low, i32 key_high)
+{
+    return event->activated && event->key_event.action == 1 &&
+           event->key_event.ctrl_pressed &&
+           (closed_interval(key_low, event->key_event.key, key_high));
+}
+
 b8 is_key_clicked(const Event* event, i32 key)
 {
     return event->activated && event->key_event.action == FTIC_RELEASE &&
@@ -1472,6 +1488,28 @@ b8 is_mouse_button_clicked(const Event* event, i32 button)
            event->mouse_button_event.button == button;
 }
 
+DirectoryTab tab_add()
+{
+    DirectoryHistory directory_history = { 0 };
+    array_create(&directory_history.history, 10);
+
+    const char* dir = "C:\\*";
+    DirectoryPage page = { 0 };
+    page.directory = platform_get_directory(dir, (u32)strlen(dir));
+    array_push(&directory_history.history, page);
+
+    // TODO(Linus): Make a set for this instead
+    SelectedItemValues selected_item_values = { 0 };
+    array_create(&selected_item_values.paths, 10);
+    selected_item_values.selected_items =
+        hash_table_create_char_u32(100, hash_murmur);
+
+    return (DirectoryTab){
+        .directory_history = directory_history,
+        .selected_item_values = selected_item_values,
+    };
+}
+
 u8* application_init(ApplicationContext* application)
 {
 #if 0
@@ -1510,13 +1548,10 @@ u8* application_init(ApplicationContext* application)
     application->mouse_wheel = event_subscribe(MOUSE_WHEEL);
     application->mouse_move = event_subscribe(MOUSE_MOVE);
 
-    application->directory_history = (DirectoryHistory){ 0 };
-    array_create(&application->directory_history.history, 10);
+    array_create(&application->tabs, 10);
+    application->tab_index = 0;
 
-    const char* dir = "C:\\*";
-    DirectoryPage page = { 0 };
-    page.directory = platform_get_directory(dir, (u32)strlen(dir));
-    array_push(&application->directory_history.history, page);
+    array_push(&application->tabs, tab_add());
 
     application->last_time = platform_get_time();
     application->delta_time = 0.0f;
@@ -1817,7 +1852,7 @@ void search_page_top_bar_update(SearchPage* page,
     search_input_position.y += scale * application->font.pixel_height + 8.0f;
 
     quad_shadow(&page->render->vertices, page->search_bar_aabb.min,
-         page->search_bar_aabb.size, high_light_color, 0.0f);
+                page->search_bar_aabb.size, high_light_color, 0.0f);
     page->render->index_count++;
     page->render->index_count++;
 
@@ -2477,12 +2512,6 @@ int main(int argc, char** argv)
 
     search_page.render = main_render;
 
-    // TODO(Linus): Make a set for this instead
-    SelectedItemValues selected_item_values = { 0 };
-    array_create(&selected_item_values.paths, 10);
-    selected_item_values.selected_items =
-        hash_table_create_char_u32(100, hash_murmur);
-
     CharPtrArray pasted_paths = { 0 };
     array_create(&pasted_paths, 10);
 
@@ -2552,6 +2581,23 @@ int main(int argc, char** argv)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (!window_should_close(application.window))
     {
+        if (is_ctrl_and_key_pressed(application.key_event, FTIC_KEY_T))
+        {
+            array_push(&application.tabs, tab_add());
+            application.tab_index = application.tabs.size - 1;
+        }
+
+        if (is_ctrl_and_key_range_pressed(application.key_event, FTIC_KEY_1,
+                                          FTIC_KEY_9))
+        {
+            const u32 index = application.key_event->key_event.key - FTIC_KEY_1;
+            if (index < application.tabs.size)
+            {
+                application.tab_index = index;
+            }
+        }
+
+        DirectoryTab* tab = application.tabs.data + application.tab_index;
         application_begin_frame(&application);
 
         rendering_properties_array_clear(&rendering_properties);
@@ -2567,16 +2613,16 @@ int main(int argc, char** argv)
             check_collision = false;
         }
 
-        if (selected_item_values.paths.size)
+        if (tab->selected_item_values.paths.size)
         {
             const MouseButtonEvent* event =
                 &application.mouse_button->mouse_button_event;
 
             if (is_ctrl_and_key_pressed(application.key_event, FTIC_KEY_C))
             {
-                platform_copy_to_clipboard(&selected_item_values.paths);
+                platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
-            else if (selected_item_values.paths.size == 1 &&
+            else if (tab->selected_item_values.paths.size == 1 &&
                      is_ctrl_and_key_pressed(application.key_event, FTIC_KEY_D))
             {
                 if (preview_render->texture_count > 1)
@@ -2585,7 +2631,7 @@ int main(int argc, char** argv)
                         preview_render
                             ->textures[--preview_render->texture_count]);
                 }
-                const char* path = selected_item_values.paths.data[0];
+                const char* path = tab->selected_item_values.paths.data[0];
                 const char* extension =
                     get_file_extension(path, (u32)strlen(path));
                 if (extension &&
@@ -2602,7 +2648,7 @@ int main(int argc, char** argv)
                     preview_render->textures[preview_render->texture_count++] =
                         texture;
                     free(texture_properties.bytes);
-                    reset_selected_items(&selected_item_values);
+                    reset_selected_items(&tab->selected_item_values);
                 }
             }
             else if (application.key_event->activated &&
@@ -2611,7 +2657,7 @@ int main(int argc, char** argv)
             {
                 // TODO: Not get called when you press escape in a drop down for
                 // example
-                // platform_delete_files(&selected_item_values.paths);
+                // platform_delete_files(&tab->selected_item_values.paths);
                 // reload_directory(
                 //   current_directory(&application.directory_history));
             }
@@ -2620,13 +2666,12 @@ int main(int argc, char** argv)
                      application.mouse_button->activated &&
                      event->action == 0 && event->button == FTIC_MOUSE_BUTTON_1)
             {
-                reset_selected_items(&selected_item_values);
+                reset_selected_items(&tab->selected_item_values);
             }
         }
         if (is_ctrl_and_key_pressed(application.key_event, FTIC_KEY_V))
         {
-            paste_in_directory(
-                current_directory(&application.directory_history));
+            paste_in_directory(current_directory(&tab->directory_history));
         }
 
         const f32 top_bar_height = 60.0f;
@@ -2745,24 +2790,23 @@ int main(int argc, char** argv)
         folder_item_list(&application, &quick_access_folders, check_collision,
                          v2f(10.0f, side_under_border_aabb.min.y + 8.0f),
                          rect.min.x - 10.0f, quad_height, padding_top,
-                         quick_access_pulse_x, &selected_item_values,
-                         main_render, &application.directory_history);
+                         quick_access_pulse_x, &tab->selected_item_values,
+                         main_render, &tab->directory_history);
 
         text_starting_position.y +=
-            current_directory(&application.directory_history)->scroll_offset;
+            current_directory(&tab->directory_history)->scroll_offset;
 
         DirectoryItemListReturnValue main_list_return_value;
         {
-            DirectoryPage* current =
-                current_directory(&application.directory_history);
+            DirectoryPage* current = current_directory(&tab->directory_history);
             current->pulse_x += application.delta_time * 6.0f;
 
             main_list_return_value = directory_item_list(
                 &application, &current->directory.sub_directories,
                 &current->directory.files, check_collision,
                 text_starting_position, width - 10.0f, quad_height, padding_top,
-                current->pulse_x, &selected_item_values, main_render,
-                &application.directory_history);
+                current->pulse_x, &tab->selected_item_values, main_render,
+                &tab->directory_history);
         }
 
         AABB parent_directory_path_aabb = { 0 };
@@ -2783,7 +2827,7 @@ int main(int argc, char** argv)
                     parent_directory_clicked_time = 0.4f;
                     parent_directory.size = 0;
                     const char* path =
-                        current_directory(&application.directory_history)
+                        current_directory(&tab->directory_history)
                             ->directory.parent;
                     const u32 parent_length = (u32)strlen(path);
                     for (u32 i = 0; i < parent_length; ++i)
@@ -2810,9 +2854,9 @@ int main(int argc, char** argv)
 
         DirectoryItemListReturnValue search_list_return_value =
             search_page_update(&search_page, &application, check_collision,
-                               search_bar_position,
-                               &application.directory_history,
-                               &thread_queue.task_queue, &selected_item_values);
+                               search_bar_position, &tab->directory_history,
+                               &thread_queue.task_queue,
+                               &tab->selected_item_values);
 
         quad_gradiant_t_b(&main_render->vertices, v2d(),
                           v2f(application.dimensions.width, top_bar_height),
@@ -2821,7 +2865,7 @@ int main(int argc, char** argv)
 
         search_page_top_bar_update(
             &search_page, &application, check_collision, search_bar_position,
-            search_list_return_value.count, &application.directory_history,
+            search_list_return_value.count, &tab->directory_history,
             &thread_queue.task_queue);
 
         quad_shadow(&main_render->vertices, parent_directory_path_aabb.min,
@@ -2852,35 +2896,34 @@ int main(int argc, char** argv)
 
         main_list_return_value.hit |= button_move_in_history_add(
             &button_aabb, check_collision,
-            application.directory_history.current_index > 0,
+            tab->directory_history.current_index > 0,
             application.mouse_position, application.mouse_button,
-            FTIC_MOUSE_BUTTON_4, -1, arrow_back_icon_co, &selected_item_values,
-            &application.directory_history, main_render);
+            FTIC_MOUSE_BUTTON_4, -1, arrow_back_icon_co,
+            &tab->selected_item_values, &tab->directory_history, main_render);
 
         button_aabb.min.x += button_aabb.size.x;
 
-        b8 extra_condition = application.directory_history.history.size >
-                             application.directory_history.current_index + 1;
+        b8 extra_condition = tab->directory_history.history.size >
+                             tab->directory_history.current_index + 1;
         main_list_return_value.hit |= button_move_in_history_add(
             &button_aabb, check_collision, extra_condition,
             application.mouse_position, application.mouse_button,
-            FTIC_MOUSE_BUTTON_5, 1, arrow_right_icon_co, &selected_item_values,
-            &application.directory_history, main_render);
+            FTIC_MOUSE_BUTTON_5, 1, arrow_right_icon_co,
+            &tab->selected_item_values, &tab->directory_history, main_render);
 
         button_aabb.min.x += button_aabb.size.x;
 
-        if (button_arrow_add(
-                button_aabb.min, &button_aabb, arrow_up_icon_co,
-                check_collision,
-                can_go_up_one_directory(
-                    current_directory(&application.directory_history)
-                        ->directory.parent),
-                application.mouse_position, main_render))
+        if (button_arrow_add(button_aabb.min, &button_aabb, arrow_up_icon_co,
+                             check_collision,
+                             can_go_up_one_directory(
+                                 current_directory(&tab->directory_history)
+                                     ->directory.parent),
+                             application.mouse_position, main_render))
         {
             if (is_mouse_button_clicked(application.mouse_button,
                                         FTIC_MOUSE_BUTTON_LEFT))
             {
-                go_up_one_directory(&application.directory_history);
+                go_up_one_directory(&tab->directory_history);
             }
         }
 
@@ -2900,9 +2943,8 @@ int main(int argc, char** argv)
             &main_scroll_bar, scroll_bar_position, application.mouse_button,
             application.mouse_position, application.dimensions.y, area_y,
             total_height, quad_height,
-            &current_directory(&application.directory_history)->scroll_offset,
-            &current_directory(&application.directory_history)->offset,
-            main_render);
+            &current_directory(&tab->directory_history)->scroll_offset,
+            &current_directory(&tab->directory_history)->offset, main_render);
 
         if (is_mouse_button_clicked(application.mouse_button,
                                     FTIC_MOUSE_BUTTON_2))
@@ -2916,8 +2958,8 @@ int main(int argc, char** argv)
         {
             MainDropDownSelectionData data = {
                 .quick_access = &quick_access_folders,
-                .directory = current_directory(&application.directory_history),
-                .selected_paths = &selected_item_values.paths,
+                .directory = current_directory(&tab->directory_history),
+                .selected_paths = &tab->selected_item_values.paths,
             };
             right_clicked =
                 !drop_down_menu_add(&drop_down_menu, &application, &data);
@@ -2955,7 +2997,7 @@ int main(int argc, char** argv)
             {
 
                 DirectoryPage* current =
-                    current_directory(&application.directory_history);
+                    current_directory(&tab->directory_history);
 
                 char* path = parent_directory.data;
                 u32 current_directory_len =
@@ -3036,7 +3078,7 @@ int main(int argc, char** argv)
                 }
                 if (!go_to_directory(parent_directory.data,
                                      parent_directory.size,
-                                     &application.directory_history))
+                                     &tab->directory_history))
                 {
                 }
                 if (should_restore)
@@ -3054,8 +3096,7 @@ int main(int argc, char** argv)
             parent_directory_aabbs.size = 0;
             main_render->index_count += text_generation(
                 application.font.chars,
-                current_directory(&application.directory_history)
-                    ->directory.parent,
+                current_directory(&tab->directory_history)->directory.parent,
                 1.0f, parent_directory_path_position, scale,
                 application.font.pixel_height, NULL, NULL,
                 &parent_directory_aabbs, &main_render->vertices);
@@ -3078,8 +3119,7 @@ int main(int argc, char** argv)
                             0, sizeof(Vertex) * preview_render->vertices.size,
                             preview_render->vertices.data);
 
-        DirectoryPage* current =
-            current_directory(&application.directory_history);
+        DirectoryPage* current = current_directory(&tab->directory_history);
         if (!search_page.scroll_bar.dragging && !main_scroll_bar.dragging)
         {
             if (application.mouse_wheel->activated)
