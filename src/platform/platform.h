@@ -49,6 +49,11 @@ void platform_shut_down(Platform* platform);
 b8 platform_is_running(Platform* platform);
 void platform_event_fire(Platform* platform);
 
+void platform_init_drag_drop();
+void platform_uninit_drag_drop();
+
+void platform_start_drag_drop(const CharPtrArray* paths);
+
 char* platform_get_last_error();
 void platform_print_string(const char* string);
 void platform_local_free(void* memory);

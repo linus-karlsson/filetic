@@ -197,7 +197,8 @@ typedef struct Event
     };
 } Event;
 
-void event_init(FTicWindow* window);
+void event_initialize(FTicWindow* window);
+void event_uninitialize();
 void event_poll();
 Event* event_subscribe(EventType type);
 

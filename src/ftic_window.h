@@ -16,7 +16,8 @@ typedef void (*OnMouseWheelCallback)(void* window, double x_offset, double y_off
 typedef void (*OnKeyStrokeCallback)(void* window, unsigned int codepoint);
 typedef void (*OnDropCallback)(void* window, int count, const char** paths);
 
-FTicWindow* window_init(const char* title, int width, int height);
+FTicWindow* window_create(const char* title, int width, int height);
+void window_destroy(FTicWindow* window);
 void window_set_on_key_event(FTicWindow* window, OnKeyCallback callback);
 void window_set_on_button_event(FTicWindow* window, OnButtonCallback callback);
 void window_set_on_mouse_move_event(FTicWindow* window, OnMouseMovedCallback callback);

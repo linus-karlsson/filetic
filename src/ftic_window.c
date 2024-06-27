@@ -6,7 +6,7 @@
 
 global GLFWcursor* cursors[TOTAL_CURSORS] = { 0 };
 
-FTicWindow* window_init(const char* title, int width, int height)
+FTicWindow* window_create(const char* title, int width, int height)
 {
     if (!glfwInit())
     {
@@ -33,6 +33,11 @@ FTicWindow* window_init(const char* title, int width, int height)
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
     return (FTicWindow*)window;
+}
+
+void window_destroy(FTicWindow* window)
+{
+    glfwDestroyWindow((GLFWwindow*)window);
 }
 
 void window_set_on_key_event(FTicWindow* window, OnKeyCallback callback)

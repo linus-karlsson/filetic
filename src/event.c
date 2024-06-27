@@ -130,7 +130,7 @@ internal void on_drop_event(void* window, int count, const char** paths)
     }
 }
 
-void event_init(FTicWindow* window)
+void event_initialize(FTicWindow* window)
 {
     array_create(&event_context.events, 20);
     array_create(&event_context.key_buffer, 20);
@@ -144,6 +144,13 @@ void event_init(FTicWindow* window)
     window_set_on_drop_event(window, on_drop_event);
 
     event_context.last_event_time = window_get_time();
+}
+
+void event_uninitialize()
+{
+    free(event_context.events.data);
+    free(event_context.key_buffer.data);
+    free(event_context.drop_paths.data);
 }
 
 void event_poll()

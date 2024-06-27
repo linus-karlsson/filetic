@@ -7,6 +7,7 @@
 #include <ShlObj.h>
 #include <stdlib.h>
 #include <time.h>
+#include <ole2.h>
 
 #define FTIC_NORMAL_CURSOR 0
 #define FTIC_HAND_CURSOR 1
@@ -279,6 +280,16 @@ void platform_event_fire(Platform* platform)
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+}
+
+void platform_init_drag_drop()
+{
+    OleInitialize(NULL);
+}
+
+void platform_uninit_drag_drop()
+{
+    OleUninitialize();
 }
 
 char* platform_get_last_error()
@@ -676,7 +687,7 @@ void platform_open_file(const char* file_path)
     }
 }
 
-void platform_copy_to_clipboard(const CharPtrArray* paths)
+HGLOBAL create_hglobal_from_paths(const CharPtrArray* paths)
 {
     u32* file_paths_length = (u32*)calloc(paths->size, sizeof(u32));
     // NOTE(Linus): +1 for the double null terminator
@@ -689,7 +700,7 @@ void platform_copy_to_clipboard(const CharPtrArray* paths)
     }
 
     HGLOBAL hglobal = GlobalAlloc(GHND | GMEM_SHARE, total_size);
-    if (!hglobal) return;
+    if (!hglobal) return hglobal;
 
     GlobalLock(hglobal);
 
@@ -713,6 +724,13 @@ void platform_copy_to_clipboard(const CharPtrArray* paths)
     free(file_paths_length);
 
     GlobalUnlock(hglobal);
+    return hglobal;
+}
+
+void platform_copy_to_clipboard(const CharPtrArray* paths)
+{
+    HGLOBAL hglobal = create_hglobal_from_paths(paths);
+    if (!hglobal) return;
 
     if (OpenClipboard(NULL))
     {
@@ -889,6 +907,250 @@ void platform_get_executable_directory(CharArray* buffer)
 {
     buffer->capacity = MAX_PATH;
     buffer->data = (char*)calloc(buffer->capacity, sizeof(char));
-    buffer->size = GetModuleFileNameA(NULL, buffer->data, (DWORD)buffer->capacity);
+    buffer->size =
+        GetModuleFileNameA(NULL, buffer->data, (DWORD)buffer->capacity);
 }
 
+typedef struct DataObject
+{
+    IDataObjectVtbl* vtbl;
+    LONG reference_count;
+    const CharPtrArray* file_paths;
+} DataObject;
+
+ULONG STDMETHODCALLTYPE data_object_add_ref(IDataObject* data_object)
+{
+    DataObject* object = (DataObject*)data_object;
+    return InterlockedIncrement(&object->reference_count);
+}
+
+HRESULT STDMETHODCALLTYPE data_object_query_interface(IDataObject* data_object,
+                                                      REFIID riid, void** ppv)
+{
+    DataObject* object = (DataObject*)data_object;
+    if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IDataObject))
+    {
+        *ppv = data_object;
+        data_object_add_ref(data_object);
+        return S_OK;
+    }
+    *ppv = NULL;
+    return E_NOINTERFACE;
+}
+
+ULONG STDMETHODCALLTYPE data_object_release(IDataObject* data_object)
+{
+    DataObject* object = (DataObject*)data_object;
+    ULONG count = InterlockedDecrement(&object->reference_count);
+    if (count == 0)
+    {
+        free(object);
+        return 0;
+    }
+    return count;
+}
+
+HRESULT STDMETHODCALLTYPE data_object_get_data(IDataObject* data_object,
+                                               FORMATETC* format_etc,
+                                               STGMEDIUM* medium)
+{
+    CLIPFORMAT cfShellIDList =
+        (CLIPFORMAT)RegisterClipboardFormat(CFSTR_SHELLIDLIST);
+
+    DataObject* object = (DataObject*)data_object;
+    if ((format_etc->cfFormat == CF_HDROP ||
+         format_etc->cfFormat == cfShellIDList) &&
+        (format_etc->tymed & TYMED_HGLOBAL))
+    {
+        medium->tymed = TYMED_HGLOBAL;
+        medium->pUnkForRelease = NULL;
+
+        HGLOBAL hglobal = create_hglobal_from_paths(object->file_paths);
+
+        if (hglobal == NULL)
+        {
+            return E_OUTOFMEMORY;
+        }
+        medium->hGlobal = hglobal;
+        return S_OK;
+    }
+    return DV_E_FORMATETC;
+}
+
+HRESULT STDMETHODCALLTYPE data_object_get_data_here(IDataObject* data_object,
+                                                    FORMATETC* format_etc,
+                                                    STGMEDIUM* medium)
+{
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE data_object_query_get_data(IDataObject* data_object,
+                                                     FORMATETC* format_etc)
+{
+    CLIPFORMAT cfShellIDList =
+        (CLIPFORMAT)RegisterClipboardFormat(CFSTR_SHELLIDLIST);
+
+    if ((format_etc->cfFormat == CF_HDROP ||
+         format_etc->cfFormat == cfShellIDList) &&
+        (format_etc->tymed & TYMED_HGLOBAL))
+    {
+        return S_OK;
+    }
+    return DV_E_FORMATETC;
+}
+
+HRESULT STDMETHODCALLTYPE data_object_get_canonical_format_etc(
+    IDataObject* data_object, FORMATETC* format_etc_in,
+    FORMATETC* format_etc_out)
+{
+    format_etc_out->ptd = NULL;
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE data_object_set_data(IDataObject* data_object,
+                                               FORMATETC* format_etc,
+                                               STGMEDIUM* medium, BOOL release)
+{
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE data_object_enum_format_etc(
+    IDataObject* data_object, DWORD direction, IEnumFORMATETC** enum_format_etc)
+{
+    return E_NOTIMPL;
+}
+
+HRESULT STDMETHODCALLTYPE data_object_d_advise(IDataObject* data_object,
+                                               FORMATETC* format_etc,
+                                               DWORD advf,
+                                               IAdviseSink* adv_sink,
+                                               DWORD* connection)
+{
+    return OLE_E_ADVISENOTSUPPORTED;
+}
+
+HRESULT STDMETHODCALLTYPE data_object_d_unadvise(IDataObject* data_object,
+                                                 DWORD connection)
+{
+    return OLE_E_ADVISENOTSUPPORTED;
+}
+
+HRESULT STDMETHODCALLTYPE data_object_enum_d_advise(IDataObject* data_object,
+                                                    IEnumSTATDATA** enum_advise)
+{
+    return OLE_E_ADVISENOTSUPPORTED;
+}
+
+IDataObjectVtbl data_object_vtbl = {
+    data_object_query_interface,
+    data_object_add_ref,
+    data_object_release,
+    data_object_get_data,
+    data_object_get_data_here,
+    data_object_query_get_data,
+    data_object_get_canonical_format_etc,
+    data_object_set_data,
+    data_object_enum_format_etc,
+    data_object_d_advise,
+    data_object_d_unadvise,
+    data_object_enum_d_advise,
+};
+
+DataObject* data_object_create(const CharPtrArray* paths)
+{
+    DataObject* object = (DataObject*)calloc(1, sizeof(DataObject));
+    if (object)
+    {
+        object->vtbl = &data_object_vtbl;
+        object->reference_count = 1;
+        object->file_paths = paths;
+    }
+    return object;
+}
+
+typedef struct DropSource
+{
+    IDropSourceVtbl* vtbl;
+    LONG reference_count;
+} DropSource;
+
+ULONG STDMETHODCALLTYPE drop_source_add_reference(IDropSource* drop_source)
+{
+    DropSource* object = (DropSource*)drop_source;
+    return InterlockedIncrement(&object->reference_count);
+}
+
+HRESULT STDMETHODCALLTYPE drop_source_query_interface(IDropSource* drop_source,
+                                                      REFIID riid, void** ppv)
+{
+    if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IDropSource))
+    {
+        *ppv = drop_source;
+        drop_source_add_reference(drop_source);
+        return S_OK;
+    }
+    *ppv = NULL;
+    return E_NOINTERFACE;
+}
+
+ULONG STDMETHODCALLTYPE drop_source_release(IDropSource* drop_source)
+{
+    DropSource* object = (DropSource*)drop_source;
+    ULONG count = InterlockedDecrement(&object->reference_count);
+    if (count == 0)
+    {
+        free(object);
+        return 0;
+    }
+    return count;
+}
+
+HRESULT STDMETHODCALLTYPE drop_source_query_continue_drag(
+    IDropSource* drop_source, BOOL escape_pressed, DWORD grf_key_state)
+{
+    if (escape_pressed)
+    {
+        return DRAGDROP_S_CANCEL;
+    }
+    if (!(grf_key_state & MK_LBUTTON))
+    {
+        return DRAGDROP_S_DROP;
+    }
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE drop_source_give_feedback(IDropSource* drop_source,
+                                                    DWORD effect)
+{
+    return DRAGDROP_S_USEDEFAULTCURSORS;
+}
+
+IDropSourceVtbl drop_source_vtbl = {
+    drop_source_query_interface, drop_source_add_reference, drop_source_release,
+    drop_source_query_continue_drag, drop_source_give_feedback
+};
+
+DropSource* drop_source_create()
+{
+    DropSource* object = (DropSource*)calloc(1, sizeof(DropSource));
+    if (object)
+    {
+        object->vtbl = &drop_source_vtbl;
+        object->reference_count = 1;
+    }
+    return object;
+}
+
+void platform_start_drag_drop(const CharPtrArray* paths)
+{
+    DataObject* data_object = data_object_create(paths);
+    DropSource* drop_source = drop_source_create();
+
+    DWORD effect;
+    HRESULT hr =
+        DoDragDrop((IDataObject*)data_object, (IDropSource*)drop_source,
+                   DROPEFFECT_COPY | DROPEFFECT_MOVE, &effect);
+
+    data_object->vtbl->Release((IDataObject*)data_object);
+    drop_source->vtbl->Release((IDropSource*)drop_source);
+}

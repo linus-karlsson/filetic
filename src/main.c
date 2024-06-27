@@ -340,7 +340,7 @@ void find_matching_string(const char* start_directory, const u32 length,
                           const u32 string_to_match_length);
 void clear_search_result(SafeFileArray* files);
 void search_page_clear_search_result(SearchPage* page);
-RenderingProperties rendering_properties_init(
+RenderingProperties rendering_properties_initialize(
     u32 shader_id, u32* textures, u32 texture_count, u32 index_buffer_id,
     const VertexBufferLayout* vertex_buffer_layout, u32 vertex_buffer_size);
 void rendering_properties_draw(const RenderingProperties* rendering_properties,
@@ -422,11 +422,11 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
                     f32* offset, RenderingProperties* render);
 void paste_in_directory(DirectoryPage* current_directory);
 b8 is_mouse_button_clicked(const Event* event, i32 button);
-u8* application_init(ApplicationContext* application);
-void search_page_init(SearchPage* search_page);
-void rendering_properties_array_init(const u32 index_buffer_id,
-                                     const FontTTF* font, u8* font_bitmap,
-                                     RenderingPropertiesArray* array);
+u8* application_initialize(ApplicationContext* application);
+void search_page_initialize(SearchPage* search_page);
+void rendering_properties_array_initialize(const u32 index_buffer_id,
+                                           const FontTTF* font, u8* font_bitmap,
+                                           RenderingPropertiesArray* array);
 void application_begin_frame(ApplicationContext* application);
 void application_end_frame(ApplicationContext* application);
 f64 application_get_last_mouse_move_time(const ApplicationContext* appliction);
@@ -683,7 +683,7 @@ void search_page_clear_search_result(SearchPage* page)
     clear_search_result(&page->search_result_folder_array);
 }
 
-RenderingProperties rendering_properties_init(
+RenderingProperties rendering_properties_initialize(
     u32 shader_id, u32* textures, u32 texture_count, u32 index_buffer_id,
     const VertexBufferLayout* vertex_buffer_layout, u32 vertex_buffer_size)
 {
@@ -853,9 +853,14 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
 {
     AABB aabb = { .min = starting_position, .size = v2f(width, height) };
 
-    u32* check_if_selected = hash_table_get_char_u32(
-        &selected_item_values->selected_items, item->path);
-    b8 selected = check_if_selected ? true : false;
+    b8 selected = false;
+    u32* check_if_selected = NULL;
+    if (selected_item_values)
+    {
+        check_if_selected = hash_table_get_char_u32(
+            &selected_item_values->selected_items, item->path);
+        selected = check_if_selected ? true : false;
+    }
 
     b8 this_hit = false;
     if (check_collision &&
@@ -869,7 +874,8 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
         }
         const MouseButtonEvent* event =
             &appliction->mouse_button->mouse_button_event;
-        if (!check_if_selected && appliction->mouse_button->activated &&
+        if (selected_item_values && !check_if_selected &&
+            appliction->mouse_button->activated &&
             event->action == FTIC_RELEASE &&
             (event->button == FTIC_MOUSE_BUTTON_1 ||
              event->button == FTIC_MOUSE_BUTTON_2))
@@ -1501,7 +1507,7 @@ DirectoryTab tab_add()
     };
 }
 
-u8* application_init(ApplicationContext* application)
+u8* application_initialize(ApplicationContext* application)
 {
 #if 0
     platform_init("FileTic", 1000, 600, &application->platform);
@@ -1513,9 +1519,9 @@ u8* application_init(ApplicationContext* application)
         ftic_assert(false);
     }
 #else
-    application->window = window_init("FileTic", 1250, 800);
+    application->window = window_create("FileTic", 1250, 800);
 #endif
-    event_init(application->window);
+    event_initialize(application->window);
 
     application->font = (FontTTF){ 0 };
     const i32 width_atlas = 512;
@@ -1555,7 +1561,24 @@ u8* application_init(ApplicationContext* application)
     return font_bitmap;
 }
 
-void search_page_init(SearchPage* search_page)
+void application_uninitialize(ApplicationContext* application)
+{
+    window_destroy(application->window);
+    for (u32 i = 0; i < application->tabs.size; ++i)
+    {
+        DirectoryTab* tab = application->tabs.data + i;
+        for (u32 j = 0; j < tab->directory_history.history.size; j++)
+        {
+            platform_reset_directory(
+                &tab->directory_history.history.data[j].directory);
+        }
+        free(tab->directory_history.history.data);
+        reset_selected_items(&tab->selected_item_values);
+    }
+    event_uninitialize();
+}
+
+void search_page_initialize(SearchPage* search_page)
 {
     search_page->search_result_file_array = (SafeFileArray){ 0 };
     safe_array_create(&search_page->search_result_file_array, 10);
@@ -1574,9 +1597,9 @@ void search_page_init(SearchPage* search_page)
     search_page->last_running_id = 0;
 }
 
-void rendering_properties_array_init(const u32 index_buffer_id,
-                                     const FontTTF* font, u8* font_bitmap,
-                                     RenderingPropertiesArray* array)
+void rendering_properties_array_initialize(const u32 index_buffer_id,
+                                           const FontTTF* font, u8* font_bitmap,
+                                           RenderingPropertiesArray* array)
 {
     const i32 width_atlas = 512;
     const i32 height_atlas = 512;
@@ -1630,16 +1653,16 @@ void rendering_properties_array_init(const u32 index_buffer_id,
     main_textures[3] = arrow_icon_texture;
 
     array_push(&rendering_properties,
-               rendering_properties_init(main_shader, main_textures,
-                                         main_texture_count, index_buffer_id,
-                                         &vertex_buffer_layout, 100 * 4));
+               rendering_properties_initialize(
+                   main_shader, main_textures, main_texture_count,
+                   index_buffer_id, &vertex_buffer_layout, 100 * 4));
 
     u32* preview_textures = (u32*)calloc(2, sizeof(u32));
     preview_textures[0] = default_texture;
     array_push(&rendering_properties,
-               rendering_properties_init(preview_shader, preview_textures, 1,
-                                         index_buffer_id, &vertex_buffer_layout,
-                                         100 * 4));
+               rendering_properties_initialize(preview_shader, preview_textures,
+                                               1, index_buffer_id,
+                                               &vertex_buffer_layout, 100 * 4));
     *array = rendering_properties;
 }
 
@@ -2488,13 +2511,15 @@ void look_for_dropped_files(DirectoryPage* current)
 int main(int argc, char** argv)
 {
     ApplicationContext application = { 0 };
-    u8* font_bitmap = application_init(&application);
+    u8* font_bitmap = application_initialize(&application);
+
+    platform_init_drag_drop();
 
     ThreadQueue thread_queue = { 0 };
     thread_init(100000, 8, &thread_queue);
 
     SearchPage search_page = { 0 };
-    search_page_init(&search_page);
+    search_page_initialize(&search_page);
 
     IndexArray index_array = { 0 };
     array_create(&index_array, 100 * 6);
@@ -2504,8 +2529,8 @@ int main(int argc, char** argv)
     free(index_array.data);
 
     RenderingPropertiesArray rendering_properties = { 0 };
-    rendering_properties_array_init(index_buffer_id, &application.font,
-                                    font_bitmap, &rendering_properties);
+    rendering_properties_array_initialize(index_buffer_id, &application.font,
+                                          font_bitmap, &rendering_properties);
     RenderingProperties* main_render = rendering_properties.data;
     RenderingProperties* preview_render = rendering_properties.data + 1;
 
@@ -2573,6 +2598,11 @@ int main(int argc, char** argv)
     b8 resize_dragging = false;
     f32 resize_offset = 0.0f;
 
+    b8 activated = false;
+    b8 dragging = false;
+    V2 last_mouse_position = v2d();
+    f32 distance = 0.0f;
+
     enable_gldebugging();
     glEnable(GL_BLEND);
     glEnable(GL_SCISSOR_TEST);
@@ -2601,6 +2631,32 @@ int main(int argc, char** argv)
 
         rendering_properties_array_clear(&rendering_properties);
         main_render->scissor.size = application.dimensions;
+
+        if (application.mouse_button->activated)
+        {
+            last_mouse_position = application.mouse_position;
+            distance = 0.0f;
+            activated = true;
+        }
+        if (application.mouse_button->mouse_button_event.action == FTIC_RELEASE)
+        {
+            activated = false;
+        }
+
+        if (activated &&
+            application.mouse_button->mouse_button_event.action == FTIC_PRESS &&
+            application.mouse_move->activated &&
+            tab->selected_item_values.paths.size > 0)
+        {
+            distance +=
+                v2_distance(last_mouse_position, application.mouse_position);
+            if (distance >= 10.0f)
+            {
+                platform_start_drag_drop(&tab->selected_item_values.paths);
+                activated = false;
+            }
+            last_mouse_position = application.mouse_position;
+        }
 
         look_for_dropped_files(current_directory(&tab->directory_history));
 
@@ -2795,7 +2851,7 @@ int main(int argc, char** argv)
                              check_collision,
                              v2f(10.0f, side_under_border_aabb.min.y + 8.0f),
                              rect.min.x - 10.0f, quad_height, padding_top,
-                             quick_access_pulse_x, &tab->selected_item_values,
+                             quick_access_pulse_x, NULL,
                              main_render, &tab->directory_history);
 
         text_starting_position.y +=
@@ -3074,7 +3130,8 @@ int main(int argc, char** argv)
 
                 char* path = parent_directory.data;
                 u32 current_directory_len =
-                    get_path_length(path, parent_directory.size) - 1;
+                    get_path_length(path, parent_directory.size);
+                if (current_directory_len != 0) current_directory_len--;
 
                 Directory directory = { 0 };
                 char saved_chars[3];
@@ -3244,5 +3301,8 @@ int main(int argc, char** argv)
         free(rp->textures);
     }
     // TODO: Cleanup of all
+
     threads_destroy(&thread_queue);
+    platform_uninit_drag_drop();
+    application_uninitialize(&application);
 }
