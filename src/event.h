@@ -202,4 +202,4 @@ void event_poll();
 Event* event_subscribe(EventType type);
 
 const CharArray* event_get_key_buffer();
-
+const CharPtrArray* event_get_drop_buffer();

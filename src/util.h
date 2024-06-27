@@ -45,6 +45,7 @@ void file_buffer_read(FileAttrib* file, char* delims, u32 delim_len, b8 remove_c
 void file_line_read(FileAttrib* file, b8 remove_newline, CharArray* line);
 f32 lerp_f32(const f32 a, const f32 b, const f32 t);
 V4 v4_lerp(V4 v1, V4 v2, f32 t);
+char* copy_string(const char* string, const u32 string_length, const u32 extra_length);
 b8 string_compare_case_insensitive(const char* first, const char* second);
 u32 string_span_case_insensitive(const char* first, const char* second);
 b8 string_contains_case_insensitive(const char* string, const char* value);

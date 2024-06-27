@@ -1,5 +1,6 @@
 #include "util.h"
 #include "logging.h"
+#include <string.h>
 #include <stdio.h>
 #include <ctype.h>
 
@@ -95,6 +96,15 @@ f32 lerp_f32(const f32 a, const f32 b, const f32 t)
 V4 v4_lerp(V4 v1, V4 v2, f32 t)
 {
     return v4_add(v1, v4_s_multi(v4_sub(v2, v1), t));
+}
+
+char* copy_string(const char* string, const u32 string_length,
+                  const u32 extra_length)
+{
+    char* result =
+        (char*)calloc(string_length + extra_length + 1, sizeof(char));
+    memcpy(result, string, string_length);
+    return result;
 }
 
 b8 string_compare_case_insensitive(const char* first, const char* second)

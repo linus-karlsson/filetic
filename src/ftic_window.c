@@ -73,6 +73,11 @@ void window_set_cursor(FTicWindow* window, int cursor)
     glfwSetCursor((GLFWwindow*)window, cursors[cursor]);
 }
 
+void window_set_on_drop_event(FTicWindow* window, OnDropCallback callback)
+{
+    glfwSetDropCallback((GLFWwindow*)window, callback);
+}
+
 int window_should_close(FTicWindow* window)
 {
     return glfwWindowShouldClose((GLFWwindow*)window);

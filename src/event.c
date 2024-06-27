@@ -25,6 +25,8 @@ typedef struct EventContextInternal
 
     CharArray key_buffer;
 
+    CharPtrArray drop_paths;
+
     V2 position;
 
     double last_click_time;
@@ -119,16 +121,27 @@ internal void on_key_stroke_event(void* window, unsigned int codepoint)
     array_push(&event_context.key_buffer, (char)codepoint);
 }
 
+internal void on_drop_event(void* window, int count, const char** paths)
+{
+    for (u32 i = 0; i < (u32)count; ++i)
+    {
+        array_push(&event_context.drop_paths,
+                   copy_string(paths[i], (u32)strlen(paths[i]), 3));
+    }
+}
+
 void event_init(FTicWindow* window)
 {
     array_create(&event_context.events, 20);
     array_create(&event_context.key_buffer, 20);
+    array_create(&event_context.drop_paths, 20);
 
     window_set_on_key_event(window, on_key_event);
     window_set_on_button_event(window, on_mouse_button_event);
     window_set_on_mouse_move_event(window, on_mouse_move_event);
     window_set_on_mouse_wheel_event(window, on_mouse_wheel_event);
     window_set_on_key_stroke_event(window, on_key_stroke_event);
+    window_set_on_drop_event(window, on_drop_event);
 
     event_context.last_event_time = window_get_time();
 }
@@ -149,6 +162,12 @@ void event_poll()
         memset(event_context.key_buffer.data, 0, event_context.key_buffer.size);
         event_context.key_buffer.size = 0;
     }
+
+    for (u32 i = 0; i < event_context.drop_paths.size; ++i)
+    {
+        free(event_context.drop_paths.data[i]);
+    }
+    event_context.drop_paths.size = 0;
 
 #if 0
     if (window_get_time() - event_context.last_event_time >= 5.0f)
@@ -181,3 +200,7 @@ const CharArray* event_get_key_buffer()
     return &event_context.key_buffer;
 }
 
+const CharPtrArray* event_get_drop_buffer()
+{
+    return &event_context.drop_paths;
+}

@@ -484,13 +484,6 @@ void platform_change_cursor(Platform* platform, u32 cursor_id)
     }
 }
 
-internal char* copy_string(const char* string, const u32 string_length)
-{
-    char* result = (char*)calloc(string_length + 3, sizeof(char));
-    memcpy(result, string, string_length);
-    return result;
-}
-
 b8 platform_directory_exists(const char* directory_path)
 {
     DWORD file_attributes = GetFileAttributes(directory_path);
@@ -891,3 +884,11 @@ void platform_listen_to_directory_change(void* data)
 
 }
 */
+
+void platform_get_executable_directory(CharArray* buffer)
+{
+    buffer->capacity = MAX_PATH;
+    buffer->data = (char*)calloc(buffer->capacity, sizeof(char));
+    buffer->size = GetModuleFileNameA(NULL, buffer->data, (DWORD)buffer->capacity);
+}
+

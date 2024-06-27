@@ -1,5 +1,6 @@
 #pragma once
 #include "define.h"
+#include "util.h"
 
 typedef void Platform;
 typedef void (*OnKeyPressedCallback)(u16 key, b8 ctrl_pressed, b8 alt_pressed);
@@ -42,12 +43,6 @@ typedef struct Directory
     DirectoryItemArray sub_directories;
 } Directory;
 
-typedef struct CharPtrArray
-{
-    u32 size;
-    u32 capacity;
-    char** data;
-} CharPtrArray;
 
 void platform_init(const char* title, u16 width, u16 height, Platform** platform);
 void platform_shut_down(Platform* platform);
@@ -116,4 +111,6 @@ void platform_delete_files(const CharPtrArray* paths);
 void platform_show_properties(i32 x, i32 y, const char* file_path);
 
 void platform_listen_to_directory_change(void* data);
+
+void platform_get_executable_directory(CharArray* buffer);
 

@@ -4,6 +4,7 @@
 
 #define PI 3.141592653589f
 
+
 #define array_create(array, array_capacity)                                    \
     do                                                                         \
     {                                                                          \
@@ -89,3 +90,10 @@ typedef float f32;
 #define global static
 #define internal static
 #define presist static
+
+typedef struct CharPtrArray
+{
+    u32 size;
+    u32 capacity;
+    char** data;
+} CharPtrArray;

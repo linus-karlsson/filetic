@@ -331,8 +331,6 @@ void parse_all_subdirectories(const char* start_directory, const u32 length);
 b8 string_contains(const char* string, const u32 string_length,
                    const char* value, const u32 value_length);
 b8 string_contains_case_insensitive(const char* string, const char* value);
-char* copy_string(const char* string, const u32 string_length,
-                  const u32 extra_length);
 void safe_add_directory_item(const DirectoryItem* item,
                              FindingCallbackAttribute* arguments,
                              SafeFileArray* safe_array);
@@ -586,15 +584,6 @@ void parse_all_subdirectories(const char* start_directory, const u32 length)
         parse_all_subdirectories(path, (u32)directory_name_length);
         free(path);
     }
-}
-
-char* copy_string(const char* string, const u32 string_length,
-                  const u32 extra_length)
-{
-    char* result =
-        (char*)calloc(string_length + extra_length + 1, sizeof(char));
-    memcpy(result, string, string_length);
-    return result;
 }
 
 void safe_add_directory_item(const DirectoryItem* item,
@@ -2486,6 +2475,16 @@ f32 middle(const f32 area_size, const f32 object_size)
     return (area_size * 0.5f) - (object_size * 0.5f);
 }
 
+void look_for_dropped_files(DirectoryPage* current)
+{
+    const CharPtrArray* dropped_paths = event_get_drop_buffer();
+    if (dropped_paths->size)
+    {
+        platform_paste_to_directory(dropped_paths, current->directory.parent);
+        reload_directory(current);
+    }
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext application = { 0 };
@@ -2602,6 +2601,8 @@ int main(int argc, char** argv)
 
         rendering_properties_array_clear(&rendering_properties);
         main_render->scissor.size = application.dimensions;
+
+        look_for_dropped_files(current_directory(&tab->directory_history));
 
         b8 check_collision = preview_render->texture_count == 1;
         if (check_collision &&
