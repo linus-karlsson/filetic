@@ -2524,14 +2524,22 @@ f32 middle(const f32 area_size, const f32 object_size)
     return (area_size * 0.5f) - (object_size * 0.5f);
 }
 
-void look_for_dropped_files(DirectoryPage* current)
+void look_for_dropped_files(DirectoryPage* current, const char* directory_path)
 {
     const CharPtrArray* dropped_paths = event_get_drop_buffer();
     if (dropped_paths->size)
     {
-        platform_paste_to_directory(dropped_paths, current->directory.parent);
+        platform_paste_to_directory(dropped_paths,
+                                    directory_path ? directory_path
+                                                   : current->directory.parent);
         reload_directory(current);
     }
+}
+
+void drag_drop_callback(void* data)
+{
+    CharPtrArray* selected_paths = (CharPtrArray*)data;
+    platform_start_drag_drop(selected_paths);
 }
 
 int main(int argc, char** argv)
@@ -2653,10 +2661,6 @@ int main(int argc, char** argv)
         }
 
         DirectoryTab* tab = application.tabs.data + application.tab_index;
-        application_begin_frame(&application);
-
-        rendering_properties_array_clear(&rendering_properties);
-        main_render->scissor.size = application.dimensions;
 
         if (application.mouse_button->activated)
         {
@@ -2664,6 +2668,7 @@ int main(int argc, char** argv)
             distance = 0.0f;
             activated = true;
         }
+
         if (application.mouse_button->mouse_button_event.action == FTIC_RELEASE)
         {
             activated = false;
@@ -2678,11 +2683,20 @@ int main(int argc, char** argv)
                 v2_distance(last_mouse_position, application.mouse_position);
             if (distance >= 10.0f)
             {
+                //ThreadTask drag_task = thread_task(
+                 //   drag_drop_callback, &tab->selected_item_values.paths);
+                //thread_tasks_push(&thread_queue.task_queue, &drag_task, 1, NULL);
                 platform_start_drag_drop(&tab->selected_item_values.paths);
+                
                 activated = false;
             }
             last_mouse_position = application.mouse_position;
         }
+
+        application_begin_frame(&application);
+
+        rendering_properties_array_clear(&rendering_properties);
+        main_render->scissor.size = application.dimensions;
 
         b8 check_collision = preview_render->texture_count == 1;
         if (check_collision &&
@@ -3051,7 +3065,25 @@ int main(int argc, char** argv)
             drop_down_menu.aabb = (AABB){ 0 };
         }
 
-        look_for_dropped_files(current_directory(&tab->directory_history));
+        const char* directory_to_drop_in = NULL;
+        if (main_list_return_value.hit_index >= 0 &&
+            main_list_return_value.type == TYPE_FOLDER)
+        {
+            directory_to_drop_in = current_directory(&tab->directory_history)
+                                       ->directory.sub_directories
+                                       .data[main_list_return_value.hit_index]
+                                       .path;
+        }
+        else if (quick_access_list_return_value.hit_index >= 0 &&
+                 quick_access_list_return_value.type == TYPE_FOLDER)
+        {
+            directory_to_drop_in =
+                quick_access_folders
+                    .data[quick_access_list_return_value.hit_index]
+                    .path;
+        }
+        look_for_dropped_files(current_directory(&tab->directory_history),
+                               directory_to_drop_in);
 
         const u32 tab_count = application.tabs.size;
         if (tab_count > 1)
@@ -3311,7 +3343,6 @@ int main(int argc, char** argv)
         }
 
         application_end_frame(&application);
-
     }
     memset(running_callbacks, 0, sizeof(running_callbacks));
 
