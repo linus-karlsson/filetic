@@ -54,6 +54,14 @@ typedef struct WindowsPlatformInternal
     b8 running;
 } WindowsPlatformInternal;
 
+internal wchar_t* char_to_wchar(const char* text, const size_t original_size)
+{
+    size_t converted_chars = 0;
+    wchar_t* wText = (wchar_t*)calloc(original_size, sizeof(wchar_t));
+    mbstowcs_s(&converted_chars, wText, original_size, text, _TRUNCATE);
+    return wText;
+}
+
 internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
                              LPARAM l_param)
 {
@@ -687,16 +695,16 @@ void platform_open_file(const char* file_path)
     }
 }
 
-HGLOBAL create_hglobal_from_paths(const CharPtrArray* paths)
+internal HGLOBAL create_hglobal_from_paths(const CharPtrArray* paths)
 {
     u32* file_paths_length = (u32*)calloc(paths->size, sizeof(u32));
     // NOTE(Linus): +1 for the double null terminator
     size_t total_size = sizeof(DROPFILES) + 1;
     for (u32 i = 0; i < paths->size; ++i)
     {
-        const u32 length = (u32)strlen(paths->data[i]);
+        const u32 length = (u32)strlen(paths->data[i]) + 1;
         file_paths_length[i] = length;
-        total_size += (length + 1);
+        total_size += length * sizeof(wchar_t);
     }
 
     HGLOBAL hglobal = GlobalAlloc(GHND | GMEM_SHARE, total_size);
@@ -709,18 +717,19 @@ HGLOBAL create_hglobal_from_paths(const CharPtrArray* paths)
     drop_files->pt.x = 0;
     drop_files->pt.y = 0;
     drop_files->fNC = TRUE;
-    drop_files->fWide = FALSE; // TODO(Linus): ANSI or Unicode
+    drop_files->fWide = TRUE; // ANSI or Unicode
 
-    char* ptr = (char*)drop_files + sizeof(DROPFILES);
+    wchar_t* ptr = (wchar_t*)((char*)drop_files + sizeof(DROPFILES));
     u32 j = 0;
     for (u32 i = 0; i < paths->size; ++i)
     {
         const size_t size_left = total_size - sizeof(DROPFILES) - j;
-        ftic_assert(size_left >= (file_paths_length[i] + 1));
-        strcpy_s(ptr + j, size_left, paths->data[i]);
-        j += (file_paths_length[i] + 1);
+        ftic_assert(size_left >= file_paths_length[i]);
+        memcpy(ptr + j, char_to_wchar(paths->data[i], file_paths_length[i]),
+               file_paths_length[i] * sizeof(wchar_t));
+        j += file_paths_length[i];
     }
-    ptr[j] = '\0'; // Double null terminator
+    ptr[j] = L'\0'; // Double null terminator
     free(file_paths_length);
 
     GlobalUnlock(hglobal);
@@ -879,18 +888,9 @@ void platform_delete_files(const CharPtrArray* paths)
     }
 }
 
-internal wchar_t* charToWChar(const char* text)
-{
-    size_t origSize = strlen(text) + 1;
-    size_t convertedChars = 0;
-    wchar_t* wText = (wchar_t*)calloc(origSize, sizeof(wchar_t));
-    mbstowcs_s(&convertedChars, wText, origSize, text, _TRUNCATE);
-    return wText;
-}
-
 void platform_show_properties(i32 x, i32 y, const char* file_path)
 {
-    wchar_t* w_file_path = charToWChar(file_path);
+    wchar_t* w_file_path = char_to_wchar(file_path, strlen(file_path));
 
     HRESULT hr = SHObjectProperties(NULL, SHOP_FILEPATH, w_file_path, NULL);
 }
