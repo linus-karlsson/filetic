@@ -126,7 +126,7 @@ internal void on_drop_event(void* window, int count, const char** paths)
     for (u32 i = 0; i < (u32)count; ++i)
     {
         array_push(&event_context.drop_paths,
-                   copy_string(paths[i], (u32)strlen(paths[i]), 3));
+                   string_copy(paths[i], (u32)strlen(paths[i]), 3));
     }
 }
 

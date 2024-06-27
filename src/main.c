@@ -294,8 +294,16 @@ typedef enum DebugLogLevel
 
 global DebugLogLevel g_debug_log_level = HIGH;
 
+typedef enum ItemType
+{
+    TYPE_UNKNOWN,
+    TYPE_FOLDER,
+    TYPE_FILE,
+} ItemType;
+
 typedef struct DirectoryItemListReturnValue
 {
+    ItemType type;
     u32 count;
     f32 total_height;
     i32 hit_index;
@@ -598,7 +606,7 @@ void safe_add_directory_item(const DirectoryItem* item,
         const u32 path_length = (u32)strlen(path);
         DirectoryItem copy = {
             .size = item->size,
-            .path = copy_string(path, path_length, 2),
+            .path = string_copy(path, path_length, 2),
         };
         copy.name = copy.path + path_length - name_length;
         safe_array_push(safe_array, copy);
@@ -635,7 +643,7 @@ void finding_callback(void* data)
         size_t directory_name_length = strlen(path);
 
         next_arguments->start_directory =
-            copy_string(path, (u32)directory_name_length, 2);
+            string_copy(path, (u32)directory_name_length, 2);
         next_arguments->start_directory[directory_name_length++] = '\\';
         next_arguments->start_directory[directory_name_length++] = '*';
         next_arguments->file_array = arguments->file_array;
@@ -1074,6 +1082,7 @@ item_list(const ApplicationContext* application,
         starting_position.y += item_height;
     }
     return (DirectoryItemListReturnValue){
+        .type = TYPE_UNKNOWN,
         .count = items->size,
         .total_height = starting_position.y - starting_y,
         .hit_index = hit_index,
@@ -1096,6 +1105,7 @@ DirectoryItemListReturnValue folder_item_list(
     check_and_open_folder(application->mouse_button, list_return.hit,
                           list_return.hit_index, folders->data,
                           directory_history);
+    list_return.type = TYPE_FOLDER;
     return list_return;
 }
 
@@ -1113,6 +1123,7 @@ DirectoryItemListReturnValue files_item_list(
     check_and_open_file(application->mouse_button, list_return.hit, files->data,
                         list_return.hit_index);
 
+    list_return.type = TYPE_FILE;
     return list_return;
 }
 
@@ -1168,7 +1179,22 @@ DirectoryItemListReturnValue directory_item_list(
     {
     }
 
+    ItemType type = TYPE_UNKNOWN;
+    i32 hit_index = -1;
+    if (folder_list_return.hit_index >= 0)
+    {
+        type = TYPE_FOLDER;
+        hit_index = folder_list_return.hit_index;
+    }
+    else if (files_list_return.hit_index >= 0)
+    {
+        type = TYPE_FILE;
+        hit_index = files_list_return.hit_index;
+    }
+
     return (DirectoryItemListReturnValue){
+        .type = type,
+        .hit_index = hit_index,
         .count = folder_list_return.count + files_list_return.count,
         .total_height =
             folder_list_return.total_height + files_list_return.total_height,
@@ -2658,8 +2684,6 @@ int main(int argc, char** argv)
             last_mouse_position = application.mouse_position;
         }
 
-        look_for_dropped_files(current_directory(&tab->directory_history));
-
         b8 check_collision = preview_render->texture_count == 1;
         if (check_collision &&
             (collision_point_in_aabb(application.mouse_position,
@@ -2851,8 +2875,8 @@ int main(int argc, char** argv)
                              check_collision,
                              v2f(10.0f, side_under_border_aabb.min.y + 8.0f),
                              rect.min.x - 10.0f, quad_height, padding_top,
-                             quick_access_pulse_x, NULL,
-                             main_render, &tab->directory_history);
+                             quick_access_pulse_x, NULL, main_render,
+                             &tab->directory_history);
 
         text_starting_position.y +=
             current_directory(&tab->directory_history)->scroll_offset;
@@ -3026,6 +3050,8 @@ int main(int argc, char** argv)
         {
             drop_down_menu.aabb = (AABB){ 0 };
         }
+
+        look_for_dropped_files(current_directory(&tab->directory_history));
 
         const u32 tab_count = application.tabs.size;
         if (tab_count > 1)
@@ -3283,7 +3309,9 @@ int main(int argc, char** argv)
             rendering_properties_draw(&rendering_properties.data[i],
                                       &application.mvp);
         }
+
         application_end_frame(&application);
+
     }
     memset(running_callbacks, 0, sizeof(running_callbacks));
 

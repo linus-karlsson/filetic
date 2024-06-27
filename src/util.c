@@ -98,7 +98,7 @@ V4 v4_lerp(V4 v1, V4 v2, f32 t)
     return v4_add(v1, v4_s_multi(v4_sub(v2, v1), t));
 }
 
-char* copy_string(const char* string, const u32 string_length,
+char* string_copy(const char* string, const u32 string_length,
                   const u32 extra_length)
 {
     char* result =
