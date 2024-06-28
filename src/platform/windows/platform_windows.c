@@ -843,7 +843,7 @@ void platform_paste_to_directory(const CharPtrArray* paths,
         const size_t source_parent_length = source_path_length - name_length;
         char saved_char = source_path[source_parent_length - 1];
         source_path[source_parent_length - 1] = '\0';
-        if (string_compare_case_insensitive(directory_path, source_path))
+        if (!string_compare_case_insensitive(directory_path, source_path))
         {
             source_path[source_parent_length - 1] = saved_char;
             continue;

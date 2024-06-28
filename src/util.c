@@ -107,18 +107,20 @@ char* string_copy(const char* string, const u32 string_length,
     return result;
 }
 
-b8 string_compare_case_insensitive(const char* first, const char* second)
+i32 string_compare_case_insensitive(const char* first, const char* second)
 {
     while (*first && *second)
     {
-        if (tolower((unsigned char)*first) != tolower((unsigned char)*second))
+        i32 value =
+            tolower((unsigned char)*first) - tolower((unsigned char)*second);
+        if (value != 0)
         {
-            return false;
+            return value;
         }
         first++;
         second++;
     }
-    return !(*first || *second);
+    return tolower((unsigned char)*first) - tolower((unsigned char)*second);
 }
 
 u32 string_span_case_insensitive(const char* first, const char* second)

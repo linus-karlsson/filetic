@@ -1012,7 +1012,7 @@ b8 go_to_directory(char* path, u32 length, DirectoryHistory* directory_history)
     char saved_chars[3];
     saved_chars[0] = path[length];
     path[length] = '\0';
-    if (!string_compare_case_insensitive(
+    if (string_compare_case_insensitive(
             path, current_directory(directory_history)->directory.parent) &&
         platform_directory_exists(path))
     {
@@ -1329,70 +1329,70 @@ void reset_selected_items(SelectedItemValues* selected_item_values)
     selected_item_values->paths.size = 0;
 }
 
-void merge(DirectoryItemArray* array, int left, int mid, int right)
+void merge(DirectoryItem* array, u32 left, u32 mid, u32 right)
 {
-    int n1 = mid - left + 1;
-    int n2 = right - mid;
+    u32 n1 = mid - left + 1;
+    u32 n2 = right - mid;
 
-    DirectoryItemArray* left_array =
-        (DirectoryItemArray*)malloc(n1 * sizeof(DirectoryItemArray));
-    DirectoryItemArray* right_array =
-        (DirectoryItemArray*)malloc(n2 * sizeof(DirectoryItemArray));
+    DirectoryItem* left_array =
+        (DirectoryItem*)malloc(n1 * sizeof(DirectoryItem));
+    DirectoryItem* right_array =
+        (DirectoryItem*)malloc(n2 * sizeof(DirectoryItem));
 
-    for (int i = 0; i < n1; i++)
+    for (u32 i = 0; i < n1; ++i)
     {
-        left_array->data[i] = array->data[left + i];
+        left_array[i] = array[left + i];
     }
-    for (int j = 0; j < n2; j++)
+    for (u32 i = 0; i < n2; ++i)
     {
-        right_array->data[j] = array->data[mid + 1 + j];
+        right_array[i] = array[mid + 1 + i];
     }
 
-    int i = 0;
-    int j = 0;
-    int k = left;
+    u32 i = 0;
+    u32 j = 0;
+    u32 k = left;
     while (i < n1 && j < n2)
     {
-        if (strcmp(left_array->data[i].name, right_array->data[j].name) <= 0)
+        if (string_compare_case_insensitive(left_array[i].name,
+                                            right_array[j].name) <= 0)
         {
-            array->data[k] = left_array->data[i];
-            i++;
+            array[k] = left_array[i++];
         }
         else
         {
-            array->data[k] = right_array->data[j];
-            j++;
+            array[k] = right_array[j++];
         }
-        k++;
+        ++k;
     }
 
     while (i < n1)
     {
-        array->data[k] = left_array->data[i];
-        i++;
-        k++;
+        array[k++] = left_array[i++];
     }
 
     while (j < n2)
     {
-        array->data[k] = right_array->data[j];
-        j++;
-        k++;
+        array[k++] = right_array[j++];
     }
 
     free(left_array);
     free(right_array);
 }
 
-void mergeSort(DirectoryItemArray* array, int left, int right)
+void mergeSort(DirectoryItem* array, u32 left, u32 right)
 {
     if (left < right)
     {
-        int mid = left + (right - left) / 2;
+        u32 mid = left + (right - left) / 2;
         mergeSort(array, left, mid);
         mergeSort(array, mid + 1, right);
         merge(array, left, mid, right);
     }
+}
+
+void directory_sort_by_name(DirectoryItemArray* array)
+{
+    mergeSort(array->data, 0, array->size - 1);
 }
 
 void sort_directory(DirectoryPage* directory_page)
@@ -1401,6 +1401,14 @@ void sort_directory(DirectoryPage* directory_page)
     {
         case SORT_NAME:
         {
+            directory_sort_by_name(&directory_page->directory.sub_directories);
+            directory_sort_by_name(&directory_page->directory.files);
+            if (directory_page->sort_count == 2)
+            {
+                directory_flip_array(
+                    &directory_page->directory.sub_directories);
+                directory_flip_array(&directory_page->directory.files);
+            }
             break;
         }
         case SORT_SIZE:
@@ -2349,8 +2357,8 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
     {
         for (i32 i = 0; i < (i32)files->size; ++i)
         {
-            if (string_compare_case_insensitive(*current_path,
-                                                files->data[i].path))
+            if (!string_compare_case_insensitive(*current_path,
+                                                 files->data[i].path))
             {
                 if (right_key)
                 {
@@ -2366,11 +2374,10 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
                 }
                 else
                 {
-
-                    for (i32 count = 1; count <= (i32)files->size; ++count)
+                    for (i32 count = 1, index = i - count; count <= (i32)files->size;
+                         ++count, --index)
                     {
-                        const i32 index =
-                            ((i - count) < 0) ? files->size - 1 : (i - count);
+                        if (index < 0) index = files->size - 1;
                         if (check_and_load_image(index, image_dimensions,
                                                  current_path, files, render))
                         {
