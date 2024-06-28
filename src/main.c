@@ -155,8 +155,17 @@ typedef struct FindingCallbackAttribute
     SafeFileArray* folder_array;
 } FindingCallbackAttribute;
 
+typedef enum SortBy
+{
+    SORT_NONE = 0,
+    SORT_NAME = 1,
+    SORT_SIZE = 2,
+} SortBy;
+
 typedef struct DirectoryPage
 {
+    SortBy sort_by;
+    u32 sort_count;
     f32 offset;
     f32 scroll_offset;
     f64 pulse_x;
@@ -270,6 +279,12 @@ typedef struct SearchPage
     i32 search_bar_cursor_index;
     b8 search_bar_hit;
 } SearchPage;
+
+b8 search_page_has_result(const SearchPage* search_page)
+{
+    return search_page->search_result_file_array.array.size > 0 ||
+           search_page->search_result_folder_array.array.size > 0;
+}
 
 typedef struct DropDownMenu
 {
@@ -454,7 +469,8 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
                             V4* text_color, void* data);
 b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
                       const ApplicationContext* application, void* option_data);
-void open_preview(V2 image_dimensions, const ApplicationContext* application,
+void open_preview(const ApplicationContext* application, V2* image_dimensions,
+                  char** current_path, const DirectoryItemArray* files,
                   RenderingProperties* render);
 b8 button_arrow_add(V2 position, const AABB* button_aabb,
                     const V4 texture_coordinates, const b8 check_collision,
@@ -478,6 +494,8 @@ void directory_sort_by_size(DirectoryItemArray* array);
 void directory_flip_array(DirectoryItemArray* array);
 b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
                         V4* text_color, void* data);
+b8 load_preview_image(const char* path, V2* image_dimensions,
+                      RenderingProperties* render);
 
 void set_gldebug_log_level(DebugLogLevel level)
 {
@@ -1311,6 +1329,93 @@ void reset_selected_items(SelectedItemValues* selected_item_values)
     selected_item_values->paths.size = 0;
 }
 
+void merge(DirectoryItemArray* array, int left, int mid, int right)
+{
+    int n1 = mid - left + 1;
+    int n2 = right - mid;
+
+    DirectoryItemArray* left_array =
+        (DirectoryItemArray*)malloc(n1 * sizeof(DirectoryItemArray));
+    DirectoryItemArray* right_array =
+        (DirectoryItemArray*)malloc(n2 * sizeof(DirectoryItemArray));
+
+    for (int i = 0; i < n1; i++)
+    {
+        left_array->data[i] = array->data[left + i];
+    }
+    for (int j = 0; j < n2; j++)
+    {
+        right_array->data[j] = array->data[mid + 1 + j];
+    }
+
+    int i = 0;
+    int j = 0;
+    int k = left;
+    while (i < n1 && j < n2)
+    {
+        if (strcmp(left_array->data[i].name, right_array->data[j].name) <= 0)
+        {
+            array->data[k] = left_array->data[i];
+            i++;
+        }
+        else
+        {
+            array->data[k] = right_array->data[j];
+            j++;
+        }
+        k++;
+    }
+
+    while (i < n1)
+    {
+        array->data[k] = left_array->data[i];
+        i++;
+        k++;
+    }
+
+    while (j < n2)
+    {
+        array->data[k] = right_array->data[j];
+        j++;
+        k++;
+    }
+
+    free(left_array);
+    free(right_array);
+}
+
+void mergeSort(DirectoryItemArray* array, int left, int right)
+{
+    if (left < right)
+    {
+        int mid = left + (right - left) / 2;
+        mergeSort(array, left, mid);
+        mergeSort(array, mid + 1, right);
+        merge(array, left, mid, right);
+    }
+}
+
+void sort_directory(DirectoryPage* directory_page)
+{
+    switch (directory_page->sort_by)
+    {
+        case SORT_NAME:
+        {
+            break;
+        }
+        case SORT_SIZE:
+        {
+            directory_sort_by_size(&directory_page->directory.files);
+            if (directory_page->sort_count == 2)
+            {
+                directory_flip_array(&directory_page->directory.files);
+            }
+            break;
+        }
+        default: break;
+    }
+}
+
 void reload_directory(DirectoryPage* directory_page)
 {
     char* path = directory_page->directory.parent;
@@ -1322,6 +1427,7 @@ void reload_directory(DirectoryPage* directory_page)
     path[length - 1] = '\0';
     platform_reset_directory(&directory_page->directory);
     directory_page->directory = reloaded_directory;
+    sort_directory(directory_page);
 }
 
 b8 is_ctrl_and_key_pressed(const Event* event, i32 key)
@@ -1949,8 +2055,7 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
 
     // Rendered first to go behind search bar when scrolling
     DirectoryItemListReturnValue search_list_return_value = { 0 };
-    if (page->search_result_file_array.array.size ||
-        page->search_result_folder_array.array.size)
+    if (search_page_has_result(page) && page->search_buffer.size)
     {
         const f32 search_result_width =
             (application->dimensions.x - search_result_position.x) - 10.0f;
@@ -1969,6 +2074,10 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
 
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
         platform_mutex_unlock(&page->search_result_file_array.mutex);
+    }
+    else
+    {
+        search_page_clear_search_result(page);
     }
 
     return search_list_return_value;
@@ -2215,20 +2324,79 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
            is_key_clicked(application->key_event, FTIC_KEY_ESCAPE);
 }
 
-void open_preview(V2 image_dimensions, const ApplicationContext* application,
+b8 check_and_load_image(const i32 index, V2* image_dimensions,
+                        char** current_path, const DirectoryItemArray* files,
+                        RenderingProperties* render)
+{
+    const char* path = files->data[index].path;
+    if (load_preview_image(path, image_dimensions, render))
+    {
+        free(*current_path);
+        *current_path = string_copy(path, (u32)strlen(path), 0);
+        return true;
+    }
+    return false;
+}
+
+void open_preview(const ApplicationContext* application, V2* image_dimensions,
+                  char** current_path, const DirectoryItemArray* files,
                   RenderingProperties* render)
 {
+    b8 right_key =
+        is_key_pressed_repeat(application->key_event, FTIC_KEY_RIGHT);
+    b8 left_key = is_key_pressed_repeat(application->key_event, FTIC_KEY_LEFT);
+    if (right_key || left_key)
+    {
+        for (i32 i = 0; i < (i32)files->size; ++i)
+        {
+            if (string_compare_case_insensitive(*current_path,
+                                                files->data[i].path))
+            {
+                if (right_key)
+                {
+                    for (i32 count = 1; count <= (i32)files->size; ++count)
+                    {
+                        const i32 index = (i + count) % files->size;
+                        if (check_and_load_image(index, image_dimensions,
+                                                 current_path, files, render))
+                        {
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+
+                    for (i32 count = 1; count <= (i32)files->size; ++count)
+                    {
+                        const i32 index =
+                            ((i - count) < 0) ? files->size - 1 : (i - count);
+                        if (check_and_load_image(index, image_dimensions,
+                                                 current_path, files, render))
+                        {
+                            break;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    V2 image_dimensions_internal = *image_dimensions;
+
     const V2 total_preview_dimensions =
         v2_s_sub(application->dimensions, 40.0f);
-    const V2 ratios = v2_div(total_preview_dimensions, image_dimensions);
+    const V2 ratios =
+        v2_div(total_preview_dimensions, image_dimensions_internal);
     f32 scale_factor =
         ratios.width < ratios.height ? ratios.width : ratios.height;
     V2 preview_dimensions = { 0 };
     if (scale_factor < 1.0f)
     {
-        v2_s_multi_equal(&image_dimensions, scale_factor);
+        v2_s_multi_equal(&image_dimensions_internal, scale_factor);
     }
-    preview_dimensions = image_dimensions;
+    preview_dimensions = image_dimensions_internal;
     v2_s_add_equal(&preview_dimensions, border_width * 2.0f);
 
     V2 preview_position = v2_s_multi(application->dimensions, 0.5f);
@@ -2265,6 +2433,8 @@ void open_preview(V2 image_dimensions, const ApplicationContext* application,
         if (render->texture_count > 1)
         {
             texture_delete(render->textures[--render->texture_count]);
+            if (*current_path) free(*current_path);
+            *current_path = NULL;
         }
         rendering_properties_clear(render);
     }
@@ -2542,6 +2712,73 @@ void drag_drop_callback(void* data)
     platform_start_drag_drop(selected_paths);
 }
 
+b8 load_preview_image(const char* path, V2* image_dimensions,
+                      RenderingProperties* render)
+{
+    b8 result = false;
+    const char* extension = get_file_extension(path, (u32)strlen(path));
+    if (extension && (!strcmp(extension, ".png") || !strcmp(extension, ".jpg")))
+    {
+        if (render->texture_count > 1)
+        {
+            texture_delete(render->textures[--render->texture_count]);
+        }
+        TextureProperties texture_properties = { 0 };
+        texture_load(path, &texture_properties);
+        *image_dimensions =
+            v2f((f32)texture_properties.width, (f32)texture_properties.height);
+
+        ftic_assert(texture_properties.bytes);
+        u32 texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+        render->textures[render->texture_count++] = texture;
+        free(texture_properties.bytes);
+        result = true;
+    }
+    return result;
+}
+
+void set_sorting_buttons(const ApplicationContext* application,
+                         const char* text, const AABB* aabb,
+                         const SortBy sort_by, const b8 hover,
+                         DirectoryTab* tab, RenderingProperties* render)
+{
+    V4 name_button_color = clear_color;
+    if (hover)
+    {
+        name_button_color = high_light_color;
+        if (is_mouse_button_clicked(application->mouse_button,
+                                    FTIC_MOUSE_BUTTON_LEFT))
+        {
+            DirectoryPage* current = current_directory(&tab->directory_history);
+            if (current->sort_by != sort_by)
+            {
+                current->sort_by = sort_by;
+                current->sort_count = 1;
+            }
+            else
+            {
+                current->sort_count++;
+                if (current->sort_count > 2)
+                {
+                    current->sort_count = 0;
+                    current->sort_by = SORT_NONE;
+                }
+            }
+            reload_directory(current_directory(&tab->directory_history));
+        }
+    }
+    quad(&render->vertices, aabb->min, aabb->size, name_button_color, 0.0f);
+    render->index_count++;
+    quad_border(&render->vertices, &render->index_count, aabb->min, aabb->size,
+                border_color, border_width, 0.0f);
+    const V2 name_text_position =
+        v2f(aabb->min.x + 10.0f,
+            aabb->min.y + application->font.pixel_height + 9.0f);
+    render->index_count += text_generation(
+        application->font.chars, text, 1.0f, name_text_position, 1.0f,
+        application->font.pixel_height, NULL, NULL, NULL, &render->vertices);
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext application = { 0 };
@@ -2594,7 +2831,9 @@ int main(int argc, char** argv)
     array_push(&drop_down_menu.options, options[ADD_TO_QUICK_OPTION_INDEX]);
     array_push(&drop_down_menu.options, options[PROPERTIES_OPTION_INDEX]);
 
-    V2 image_dimensions = v2d();
+    V2 preview_image_dimensions = v2d();
+    char* current_path = NULL;
+    i32 preview_image_index = -1;
 
     ScrollBar main_scroll_bar = { 0 };
     b8 search_scroll_bar_dragging = false;
@@ -2683,11 +2922,15 @@ int main(int argc, char** argv)
                 v2_distance(last_mouse_position, application.mouse_position);
             if (distance >= 10.0f)
             {
-                //ThreadTask drag_task = thread_task(
-                 //   drag_drop_callback, &tab->selected_item_values.paths);
-                //thread_tasks_push(&thread_queue.task_queue, &drag_task, 1, NULL);
+#if 0
+                ThreadTask drag_task = thread_task(
+                    drag_drop_callback, &tab->selected_item_values.paths);
+                thread_tasks_push(&thread_queue.task_queue, &drag_task, 1,
+                                  NULL);
+#else
                 platform_start_drag_drop(&tab->selected_item_values.paths);
-                
+#endif
+
                 activated = false;
             }
             last_mouse_position = application.mouse_position;
@@ -2720,29 +2963,12 @@ int main(int argc, char** argv)
             else if (tab->selected_item_values.paths.size == 1 &&
                      is_ctrl_and_key_pressed(application.key_event, FTIC_KEY_D))
             {
-                if (preview_render->texture_count > 1)
-                {
-                    texture_delete(
-                        preview_render
-                            ->textures[--preview_render->texture_count]);
-                }
                 const char* path = tab->selected_item_values.paths.data[0];
-                const char* extension =
-                    get_file_extension(path, (u32)strlen(path));
-                if (extension &&
-                    (!strcmp(extension, ".png") || !strcmp(extension, ".jpg")))
-                {
-                    TextureProperties texture_properties = { 0 };
-                    texture_load(path, &texture_properties);
-                    image_dimensions = v2f((f32)texture_properties.width,
-                                           (f32)texture_properties.height);
 
-                    ftic_assert(texture_properties.bytes);
-                    u32 texture =
-                        texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
-                    preview_render->textures[preview_render->texture_count++] =
-                        texture;
-                    free(texture_properties.bytes);
+                if (load_preview_image(path, &preview_image_dimensions,
+                                       preview_render))
+                {
+                    current_path = string_copy(path, (u32)strlen(path), 0);
                     reset_selected_items(&tab->selected_item_values);
                 }
             }
@@ -2778,13 +3004,6 @@ int main(int argc, char** argv)
             border_color, 0.0f);
         main_render->index_count++;
 
-        AABB right_border_aabb = {
-            .min = v2f(application.dimensions.x - search_result_width - 10.0f,
-                       top_bar_height),
-            .size =
-                v2f(border_width, application.dimensions.y - top_bar_height),
-        };
-
         AABB resize_aabb = rect;
         resize_aabb.min.x -= 2.0f;
         resize_aabb.size.x += 4.0f;
@@ -2792,11 +3011,30 @@ int main(int argc, char** argv)
         b8 left_side_resize =
             collision_point_in_aabb(application.mouse_position, &resize_aabb);
 
-        resize_aabb = right_border_aabb;
-        resize_aabb.min.x -= 2.0f;
-        resize_aabb.size.x += 4.0f;
-        b8 right_side_resize =
-            collision_point_in_aabb(application.mouse_position, &resize_aabb);
+        AABB right_border_aabb = {
+            .min = v2f(application.dimensions.x, top_bar_height),
+            .size =
+                v2f(border_width, application.dimensions.y - top_bar_height),
+        };
+        b8 right_side_resize = false;
+        if (search_page_has_result(&search_page))
+        {
+            right_border_aabb.min.x -= search_result_width + 10.0f;
+
+            right_border_aabb = (AABB){
+                .min =
+                    v2f(application.dimensions.x - search_result_width - 10.0f,
+                        top_bar_height),
+                .size = v2f(border_width,
+                            application.dimensions.y - top_bar_height),
+            };
+
+            resize_aabb = right_border_aabb;
+            resize_aabb.min.x -= 2.0f;
+            resize_aabb.size.x += 4.0f;
+            right_side_resize = collision_point_in_aabb(
+                application.mouse_position, &resize_aabb);
+        }
 
         if (left_side_resize || right_side_resize)
         {
@@ -2863,8 +3101,15 @@ int main(int argc, char** argv)
         text_starting_position.y = top_bar_height + border_width;
         text_starting_position.y += tab_height * (application.tabs.size > 1);
 
-        const f32 width =
-            ((search_bar_position.x - 10.0f) - text_starting_position.x);
+        const f32 width = (right_border_aabb.min.x - text_starting_position.x);
+
+        AABB directory_name_aabb = {
+            .min = v2f(text_starting_position.x,
+                       text_starting_position.y - border_width),
+            .size = v2f(100.0f, 40.0f),
+        };
+
+        text_starting_position.y += directory_name_aabb.size.y;
 
         AABB directory_aabb = {
             .min = text_starting_position,
@@ -2872,6 +3117,23 @@ int main(int argc, char** argv)
                 v2f(width, application.dimensions.y - text_starting_position.y),
         };
         text_starting_position.y += 8.0f;
+
+        AABB directory_size_aabb = {
+            .min = v2f(directory_aabb.min.x + directory_aabb.size.x -
+                           directory_name_aabb.size.x - 15.0f,
+                       directory_name_aabb.min.y),
+            .size = directory_name_aabb.size,
+        };
+
+        b8 sort_by_name_highlighted = collision_point_in_aabb(
+            application.mouse_position, &directory_name_aabb);
+        b8 sort_by_size_highlighted = collision_point_in_aabb(
+            application.mouse_position, &directory_size_aabb);
+
+        if (sort_by_name_highlighted || sort_by_size_highlighted)
+        {
+            check_collision = false;
+        }
 
         AABB side_under_border_aabb = {
             .min = v2f(0.0f, top_bar_height),
@@ -2907,6 +3169,14 @@ int main(int argc, char** argv)
                 current->pulse_x, &tab->selected_item_values, main_render,
                 &tab->directory_history);
         }
+
+        set_sorting_buttons(&application, "Name", &directory_name_aabb,
+                            SORT_NAME, sort_by_name_highlighted, tab,
+                            main_render);
+
+        set_sorting_buttons(&application, "Size", &directory_size_aabb,
+                            SORT_SIZE, sort_by_size_highlighted, tab,
+                            main_render);
 
         AABB parent_directory_path_aabb = { 0 };
         parent_directory_path_aabb.min = parent_directory_path_position;
@@ -2976,14 +3246,14 @@ int main(int argc, char** argv)
                             parent_directory_path_aabb.size, border_color,
                             border_width, 0.4f, 3, 0.0f);
 
+        quad(&main_render->vertices, right_border_aabb.min,
+             right_border_aabb.size, border_color, 0.0f);
+        main_render->index_count++;
+
         parent_directory_path_position.y += application.font.pixel_height;
         parent_directory_path_position.y +=
             middle(back_drop_height, application.font.pixel_height) - 3.0f;
         parent_directory_path_position.x += 10.0f;
-
-        quad(&main_render->vertices, right_border_aabb.min,
-             right_border_aabb.size, border_color, 0.0f);
-        main_render->index_count++;
 
         AABB button_aabb = {
             .min = v2i(10.0f),
@@ -3031,8 +3301,8 @@ int main(int argc, char** argv)
              side_under_border_aabb.size, border_color, 0.0f);
         main_render->index_count++;
 
-        V2 scroll_bar_position =
-            v2f(right_border_aabb.min.x, directory_aabb.min.y);
+        V2 scroll_bar_position = v2f(
+            directory_aabb.min.x + directory_aabb.size.x, directory_aabb.min.y);
         f32 area_y = directory_aabb.size.y;
         f32 total_height = main_list_return_value.count * quad_height;
         scroll_bar_add(
@@ -3091,7 +3361,8 @@ int main(int argc, char** argv)
             V2 tab_position =
                 v2f(rect.min.x + border_width, top_bar_height + border_width);
 
-            const f32 area_width = right_border_aabb.min.x - tab_position.x;
+            const f32 area_width =
+                (directory_aabb.min.x + directory_aabb.size.x) - tab_position.x;
             const f32 max_tab_width = 200.0f;
             const f32 padding = 5.0f;
             const f32 tab_width =
@@ -3292,7 +3563,10 @@ int main(int argc, char** argv)
 
         if (preview_render->texture_count > 1)
         {
-            open_preview(image_dimensions, &application, preview_render);
+            open_preview(
+                &application, &preview_image_dimensions, &current_path,
+                &current_directory(&tab->directory_history)->directory.files,
+                preview_render);
         }
 
         rendering_properties_check_and_grow_buffers(main_render, &index_array);
@@ -3345,6 +3619,7 @@ int main(int argc, char** argv)
         application_end_frame(&application);
     }
     memset(running_callbacks, 0, sizeof(running_callbacks));
+    if (current_path) free(current_path);
 
     quick_access_save(&quick_access_folders);
 

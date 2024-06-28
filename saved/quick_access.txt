@@ -8,3 +8,4 @@ C:\Users\linus\Documents
 C:\Users\linus
 C:\VulkanSDK
 C:\Users\linus\.ssh
+C:\Users\linus\Downloads

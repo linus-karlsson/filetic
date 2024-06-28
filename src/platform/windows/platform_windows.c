@@ -890,7 +890,7 @@ void platform_delete_files(const CharPtrArray* paths)
 
 void platform_show_properties(i32 x, i32 y, const char* file_path)
 {
-    wchar_t* w_file_path = char_to_wchar(file_path, strlen(file_path));
+    wchar_t* w_file_path = char_to_wchar(file_path, strlen(file_path) + 1);
 
     HRESULT hr = SHObjectProperties(NULL, SHOP_FILEPATH, w_file_path, NULL);
 }
