@@ -3594,20 +3594,20 @@ int main(int argc, char** argv)
             if (application.mouse_wheel->activated)
             {
                 if (collision_point_in_aabb(application.mouse_position,
-                                            &search_page.search_result_aabb))
-                {
-                    set_scroll_offset(
-                        search_list_return_value.count, quad_height,
-                        search_page.search_result_aabb.size.y,
-                        application.mouse_wheel, &search_page.offset);
-                }
-                else if (collision_point_in_aabb(application.mouse_position,
                                                  &directory_aabb))
                 {
                     set_scroll_offset(main_list_return_value.count, quad_height,
                                       directory_aabb.size.y,
                                       application.mouse_wheel,
                                       &current->offset);
+                }
+                else if (collision_point_in_aabb(application.mouse_position,
+                                            &search_page.search_result_aabb))
+                {
+                    set_scroll_offset(
+                        search_list_return_value.count, quad_height,
+                        search_page.search_result_aabb.size.y,
+                        application.mouse_wheel, &search_page.offset);
                 }
             }
             current->scroll_offset =
