@@ -54,6 +54,8 @@ typedef struct AABBArrayArray
 
 typedef struct UiContext
 {
+    MVP mvp;
+
     U32Array id_to_index;
     U32Array free_indices;
     UiWindowArray windows;
@@ -67,11 +69,11 @@ typedef struct UiContext
 
 void ui_context_create(UiContext* context);
 void ui_context_begin(UiContext* context, V2 dimensions, f64 delta_time, b8 check_collisions);
-void ui_context_end();
+void ui_context_end(UiContext* context);
 
-u32 ui_window_create(UiContext* context, const RenderingProperties* render);
+u32 ui_window_create(UiContext* context, RenderingProperties render);
 UiWindow* ui_window_begin(u64 window_id, UiContext* context);
-void ui_window_end(UiWindow* window, const f64 delta_time);
+void ui_window_end(UiWindow* window, UiContext* context, const f64 delta_time);
 void ui_window_add_directory_list(UiWindow* window, V2 position);
 void ui_window_add_folder_list(UiWindow* window, V2 position);
 void ui_window_add_file_list(UiWindow* window, V2 position);

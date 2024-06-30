@@ -1340,6 +1340,33 @@ void search_page_initialize(SearchPage* search_page)
     search_page->last_running_id = 0;
 }
 
+VertexBufferLayout default_vertex_buffer_layout()
+{
+    VertexBufferLayout vertex_buffer_layout = { 0 };
+    vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 4,
+                                    offsetof(Vertex, color));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 3,
+                                    offsetof(Vertex, position));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 2,
+                                    offsetof(Vertex, texture_coordinates));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 1,
+                                    offsetof(Vertex, texture_index));
+
+    return vertex_buffer_layout;
+}
+
+u32 create_default_texture()
+{
+    u8 pixels[4] = { UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX };
+    TextureProperties texture_properties = {
+        .width = 1,
+        .height = 1,
+        .bytes = pixels,
+    };
+    return texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+}
+
 void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
                                            RenderingPropertiesArray* array)
 {
@@ -1354,23 +1381,9 @@ void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
     u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
     free(texture_properties.bytes);
 
-    VertexBufferLayout vertex_buffer_layout = { 0 };
-    vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 4,
-                                    offsetof(Vertex, color));
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 3,
-                                    offsetof(Vertex, position));
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 2,
-                                    offsetof(Vertex, texture_coordinates));
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 1,
-                                    offsetof(Vertex, texture_index));
+    VertexBufferLayout vertex_buffer_layout = default_vertex_buffer_layout();
 
-    texture_properties.width = 1;
-    texture_properties.height = 1;
-    u8 pixels[4] = { UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX };
-    texture_properties.bytes = pixels;
-    u32 default_texture =
-        texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    u32 default_texture = create_default_texture();
 
     u32 file_icon_texture = load_icon("res/icons/icon_sheet.png");
     u32 arrow_icon_texture =
@@ -1395,16 +1408,19 @@ void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
     main_textures[3] = arrow_icon_texture;
 
     array_push(&rendering_properties,
-               rendering_properties_initialize(main_shader, main_textures,
-                                               main_texture_count,
-                                               &vertex_buffer_layout, 100 * 4, 100 * 6));
+               rendering_properties_initialize(
+                   main_shader, main_textures, main_texture_count,
+                   &vertex_buffer_layout, 100 * 4, 100 * 6));
 
     u32* preview_textures = (u32*)calloc(2, sizeof(u32));
     preview_textures[0] = default_texture;
-    array_push(&rendering_properties, rendering_properties_initialize(
-                                          preview_shader, preview_textures, 1,
-                                          &vertex_buffer_layout, 100 * 4, 100 * 6));
+    array_push(&rendering_properties,
+               rendering_properties_initialize(preview_shader, preview_textures,
+                                               1, &vertex_buffer_layout,
+                                               100 * 4, 100 * 6));
     *array = rendering_properties;
+
+    free(vertex_buffer_layout.items.data);
 }
 
 void add_from_key_buffer(const FontTTF* font, const f32 width, i32* input_index,
@@ -2350,6 +2366,33 @@ int main(int argc, char** argv)
 
     search_page.render = main_render;
 
+    UiContext ui = { 0 };
+    U32Array windows = { 0 };
+    array_create(&windows, 10);
+    {
+
+        ui_context_create(&ui);
+
+        VertexBufferLayout vertex_buffer_layout =
+            default_vertex_buffer_layout();
+
+        u32 shader = shader_create("./res/shaders/vertex.glsl",
+                                   "./res/shaders/fragment.glsl");
+        ftic_assert(shader);
+        for (u32 i = 0; i < 1; ++i)
+        {
+            u32 default_texture = create_default_texture();
+            u32* textures = (u32*)calloc(1, sizeof(u32));
+            textures[0] = default_texture;
+            array_push(&windows,
+                       ui_window_create(&ui, rendering_properties_initialize(
+                                                 shader, textures, 1,
+                                                 &vertex_buffer_layout, 100 * 4,
+                                                 100 * 6)));
+            ui.windows.data[i].dimensions = v2f(100.0f, 100.0f);
+        }
+    }
+
     CharPtrArray pasted_paths = { 0 };
     array_create(&pasted_paths, 10);
 
@@ -2421,7 +2464,7 @@ int main(int argc, char** argv)
 
     enable_gldebugging();
     glEnable(GL_BLEND);
-    glEnable(GL_SCISSOR_TEST);
+    //glEnable(GL_SCISSOR_TEST);
     glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (!window_should_close(application.window))
@@ -3147,6 +3190,15 @@ int main(int argc, char** argv)
             rendering_properties_draw(&rendering_properties.data[i],
                                       &application.mvp);
         }
+
+        ui_context_begin(&ui, application.dimensions, application.delta_time,
+                         true);
+
+        UiWindow* window = ui_window_begin(windows.data[0], &ui);
+
+        ui_window_end(window, &ui, application.delta_time);
+
+        ui_context_end(&ui);
 
         application_end_frame(&application);
     }

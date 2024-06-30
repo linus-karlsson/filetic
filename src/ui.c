@@ -2,6 +2,7 @@
 #include "event.h"
 #include "application.h"
 #include "opengl_util.h"
+#include <glad/glad.h>
 
 internal f32 set_scroll_offset(const f32 total_height, const f32 area_y,
                                f32 offset)
@@ -76,6 +77,11 @@ void ui_context_begin(UiContext* context, V2 dimensions, f64 delta_time,
     context->delta_time = delta_time;
     context->dimensions = dimensions;
 
+    context->mvp.projection =
+        ortho(0.0f, dimensions.width, dimensions.height, 0.0f, -1.0f, 1.0f);
+    context->mvp.view = m4d();
+    context->mvp.model = m4d();
+
     for (u32 i = 0; i < context->window_hover_clicked_indices.size; ++i)
     {
         HoverClickedIndex* hover_clicked_index =
@@ -125,13 +131,22 @@ collision_check_done:;
 
 void ui_context_end(UiContext* context)
 {
-    for(i32 i = context->window_rendering_properties.size - 1; i >= 0; ++i)
+    for (i32 i = context->window_rendering_properties.size - 1; i >= 0; --i)
     {
+        RenderingProperties* render =
+            context->window_rendering_properties.data + i;
 
+        rendering_properties_check_and_grow_buffers(render);
+
+        buffer_set_sub_data(render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
+                            sizeof(Vertex) * render->vertices.size,
+                            render->vertices.data);
+
+        rendering_properties_draw(render, &context->mvp);
     }
 }
 
-u32 ui_window_create(UiContext* context, const RenderingProperties* render)
+u32 ui_window_create(UiContext* context, RenderingProperties render)
 {
     u32 id = 0;
     if (context->free_indices.size)
@@ -155,7 +170,7 @@ u32 ui_window_create(UiContext* context, const RenderingProperties* render)
     HoverClickedIndex hover_clicked_index = { .index = -1 };
     array_push(&context->window_hover_clicked_indices, hover_clicked_index);
 
-    array_push(&context->window_rendering_properties, *render);
+    array_push(&context->window_rendering_properties, render);
 
     return id;
 }
@@ -168,15 +183,19 @@ UiWindow* ui_window_begin(u64 window_id, UiContext* context)
         context->window_rendering_properties.data + window_index;
     AABBArray* aabbs = context->window_aabbs.data + window_index;
 
+    aabbs->size = 0;
+
     array_push(aabbs, quad(&render->vertices, window->position,
                            window->dimensions, clear_color, 0.0f));
+
     render->index_count++;
-    window->area_hit = collision_point_in_aabb(event_get_mouse_position(), array_back(aabbs));
+    window->area_hit =
+        collision_point_in_aabb(event_get_mouse_position(), array_back(aabbs));
 
     return window;
 }
 
-void ui_window_end(UiWindow* window, const f64 delta_time)
+void ui_window_end(UiWindow* window, UiContext* context, const f64 delta_time)
 {
     if (!window->scroll_bar.dragging)
     {
@@ -190,6 +209,25 @@ void ui_window_end(UiWindow* window, const f64 delta_time)
             smooth_scroll(delta_time, window->end_scroll_offset,
                           window->current_scroll_offset);
     }
+
+    const u32 window_index = context->id_to_index.data[window->id];
+    const b8 in_focus = window_index == 0;
+
+    RenderingProperties* render =
+        context->window_rendering_properties.data + window_index;
+    AABBArray* aabbs = context->window_aabbs.data + window_index;
+
+    if (in_focus)
+    {
+        array_push(aabbs, quad_border(&render->vertices, &render->index_count,
+                                      window->position, window->dimensions,
+                                      border_color, 1.0f, 0.0f));
+    }
+
+    render->scissor.min.x = window->position.x;
+    render->scissor.min.y = context->dimensions.y - window->position.y;
+    render->scissor.min.y -= window->dimensions.y;
+    render->scissor.size = window->dimensions;
 }
 
 void ui_window_add_directory_list(UiWindow* window, V2 position)

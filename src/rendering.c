@@ -109,13 +109,24 @@ void rendering_properties_draw(const RenderingProperties* rendering_properties,
             texture_bind(rendering_properties->textures[i], (int)i);
         }
 
+        /*
         const AABB* scissor = &rendering_properties->scissor;
         glScissor((int)scissor->min.x, (int)scissor->min.y,
                   (int)scissor->size.width, (int)scissor->size.height);
+                  */
 
         vertex_array_bind(rendering_properties->vertex_array_id);
         index_buffer_bind(rendering_properties->index_buffer_id);
         glDrawElements(GL_TRIANGLES, rendering_properties->index_count * 6,
                        GL_UNSIGNED_INT, NULL);
+
+        for (u32 i = 0; i < rendering_properties->texture_count; ++i)
+        {
+            texture_unbind((int)i);
+        }
+        index_buffer_unbind();
+        vertex_array_unbind();
+        shader_unbind();
+
     }
 }
