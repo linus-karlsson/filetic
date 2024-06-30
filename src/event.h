@@ -148,14 +148,6 @@
 
 #define KEY_BUFFER_CAPACITY 50
 
-typedef enum EventType
-{
-    KEY,
-    MOUSE_MOVE,
-    MOUSE_BUTTON,
-    MOUSE_WHEEL,
-} EventType;
-
 typedef struct KeyEvent
 {
     i32 key;
@@ -163,12 +155,14 @@ typedef struct KeyEvent
     b8 ctrl_pressed;
     b8 alt_pressed;
     b8 shift_pressed;
+    b8 activated;
 } KeyEvent;
 
 typedef struct MouseMoveEvent
 {
     f32 position_x;
     f32 position_y;
+    b8 activated;
 } MouseMoveEvent;
 
 typedef struct MouseButtonEvent
@@ -176,31 +170,26 @@ typedef struct MouseButtonEvent
     int button;
     int action;
     b8 double_clicked;
+    b8 activated;
 } MouseButtonEvent;
 
 typedef struct MouseWheelEvent
 {
     f32 x_offset;
     f32 y_offset;
-} MouseWheelEvent;
-
-typedef struct Event
-{
-    EventType type;
     b8 activated;
-    union
-    {
-        KeyEvent key_event;
-        MouseMoveEvent mouse_move_event;
-        MouseButtonEvent mouse_button_event;
-        MouseWheelEvent mouse_wheel_event;
-    };
-} Event;
+} MouseWheelEvent;
 
 void event_initialize(FTicWindow* window);
 void event_uninitialize();
 void event_poll();
-Event* event_subscribe(EventType type);
+
+const KeyEvent* event_get_key_event();
+const MouseMoveEvent* event_get_mouse_move_event();
+const MouseButtonEvent* event_get_mouse_button_event();
+const MouseWheelEvent* event_get_mouse_wheel_event();
+
+V2 event_get_mouse_position();
 
 const CharArray* event_get_key_buffer();
 const CharPtrArray* event_get_drop_buffer();

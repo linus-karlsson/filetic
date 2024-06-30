@@ -12,20 +12,15 @@
 
 #define DOUBLE_CLICK_THRESHOLD 0.3
 
-typedef struct EventArray
+typedef struct EventContext
 {
-    u32 size;
-    u32 capacity;
-    Event* data;
-} EventArray;
-
-typedef struct EventContextInternal
-{
-    EventArray events;
-
     CharArray key_buffer;
-
     CharPtrArray drop_paths;
+
+    KeyEvent key_event;
+    MouseMoveEvent mouse_move_event;
+    MouseButtonEvent mouse_button_event;
+    MouseWheelEvent mouse_wheel_event;
 
     V2 position;
 
@@ -35,41 +30,29 @@ typedef struct EventContextInternal
 
     f64 last_event_time;
 
-} EventContextInternal;
+} EventContext;
 
-EventContextInternal event_context = { .last_button = -1 };
+EventContext event_context = { .last_button = -1 };
 
 internal void on_key_event(void* window, int key, int scancode, int action,
                            int mods)
 {
-    for (u32 i = 0; i < event_context.events.size; ++i)
-    {
-        Event* event = event_context.events.data + i;
-        if (event->type == KEY)
-        {
-            event->key_event.key = key;
-            event->key_event.ctrl_pressed = mods & FTIC_MOD_CONTROL;
-            event->key_event.alt_pressed = mods & FTIC_MOD_ALT;
-            event->key_event.shift_pressed = mods & FTIC_MOD_SHIFT;
-            event->key_event.action = action;
-            event->activated = true;
-        }
-    }
+    event_context.key_event.key = key;
+    event_context.key_event.ctrl_pressed = mods & FTIC_MOD_CONTROL;
+    event_context.key_event.alt_pressed = mods & FTIC_MOD_ALT;
+    event_context.key_event.shift_pressed = mods & FTIC_MOD_SHIFT;
+    event_context.key_event.action = action;
+    event_context.key_event.activated = true;
+
     event_context.last_event_time = window_get_time();
 }
 
 internal void on_mouse_move_event(void* window, double x_pos, double y_pos)
 {
-    for (u32 i = 0; i < event_context.events.size; ++i)
-    {
-        Event* event = event_context.events.data + i;
-        if (event->type == MOUSE_MOVE)
-        {
-            event->mouse_move_event.position_x = (f32)x_pos;
-            event->mouse_move_event.position_y = (f32)y_pos;
-            event->activated = true;
-        }
-    }
+    event_context.mouse_move_event.position_x = (f32)x_pos;
+    event_context.mouse_move_event.position_y = (f32)y_pos;
+    event_context.mouse_move_event.activated = true;
+
     event_context.last_event_time = window_get_time();
     event_context.position = v2f((f32)x_pos, (f32)y_pos);
 }
@@ -83,17 +66,12 @@ internal void on_mouse_button_event(void* window, int button, int action,
         (action == FTIC_PRESS) && (button == event_context.last_button) &&
         (time_since_last <= DOUBLE_CLICK_THRESHOLD) &&
         v2_equal(event_context.last_position, event_context.position);
-    for (u32 i = 0; i < event_context.events.size; ++i)
-    {
-        Event* event = event_context.events.data + i;
-        if (event->type == MOUSE_BUTTON)
-        {
-            event->mouse_button_event.button = button;
-            event->mouse_button_event.action = action;
-            event->mouse_button_event.double_clicked = double_clicked;
-            event->activated = true;
-        }
-    }
+
+    event_context.mouse_button_event.button = button;
+    event_context.mouse_button_event.action = action;
+    event_context.mouse_button_event.double_clicked = double_clicked;
+    event_context.mouse_button_event.activated = true;
+
     event_context.last_click_time = time;
     event_context.last_button = button;
     event_context.last_position = event_context.position;
@@ -103,16 +81,10 @@ internal void on_mouse_button_event(void* window, int button, int action,
 internal void on_mouse_wheel_event(void* window, double x_offset,
                                    double y_offset)
 {
-    for (u32 i = 0; i < event_context.events.size; ++i)
-    {
-        Event* event = event_context.events.data + i;
-        if (event->type == MOUSE_WHEEL)
-        {
-            event->mouse_wheel_event.x_offset = (f32)x_offset;
-            event->mouse_wheel_event.y_offset = (f32)y_offset;
-            event->activated = true;
-        }
-    }
+    event_context.mouse_wheel_event.x_offset = (f32)x_offset;
+    event_context.mouse_wheel_event.y_offset = (f32)y_offset;
+    event_context.mouse_wheel_event.activated = true;
+
     event_context.last_event_time = window_get_time();
 }
 
@@ -132,7 +104,6 @@ internal void on_drop_event(void* window, int count, const char** paths)
 
 void event_initialize(FTicWindow* window)
 {
-    array_create(&event_context.events, 20);
     array_create(&event_context.key_buffer, 20);
     array_create(&event_context.drop_paths, 20);
 
@@ -148,22 +119,19 @@ void event_initialize(FTicWindow* window)
 
 void event_uninitialize()
 {
-    free(event_context.events.data);
     free(event_context.key_buffer.data);
     free(event_context.drop_paths.data);
 }
 
 void event_poll()
 {
-    for (u32 i = 0; i < event_context.events.size; ++i)
-    {
-        Event* event = event_context.events.data + i;
-        event->activated = false;
-        if (event->type == MOUSE_BUTTON)
-        {
-            event->mouse_button_event.double_clicked = false;
-        }
-    }
+    event_context.key_event.activated = false;
+    event_context.mouse_move_event.activated = false;
+    event_context.mouse_button_event.activated = false;
+    event_context.mouse_wheel_event.activated = false;
+
+    event_context.mouse_button_event.double_clicked = false;
+
     if (event_context.key_buffer.size)
     {
         memset(event_context.key_buffer.data, 0, event_context.key_buffer.size);
@@ -190,16 +158,30 @@ void event_poll()
 #endif
 }
 
-Event* event_subscribe(EventType type)
+const KeyEvent* event_get_key_event()
 {
-    Event event = { .type = type };
-
-    array_push(&event_context.events, event);
-    return array_back(&event_context.events);
+    return &event_context.key_event;
 }
 
-void event_unsubscribe(Event* event)
+const MouseMoveEvent* event_get_mouse_move_event()
 {
+    return &event_context.mouse_move_event;
+}
+
+const MouseButtonEvent* event_get_mouse_button_event()
+{
+    return &event_context.mouse_button_event;
+}
+
+const MouseWheelEvent* event_get_mouse_wheel_event()
+{
+    return &event_context.mouse_wheel_event;
+}
+
+V2 event_get_mouse_position()
+{
+    return v2f((f32)event_context.mouse_move_event.position_x,
+               (f32)event_context.mouse_move_event.position_y);
 }
 
 const CharArray* event_get_key_buffer()

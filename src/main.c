@@ -22,53 +22,14 @@
 #include "event.h"
 #include "hash.h"
 #include "util.h"
+#include "ui.h"
+#include "application.h"
 
 #define COPY_OPTION_INDEX 0
 #define PASTE_OPTION_INDEX 1
 #define DELETE_OPTION_INDEX 2
 #define ADD_TO_QUICK_OPTION_INDEX 3
 #define PROPERTIES_OPTION_INDEX 4
-
-global const V4 clear_color = {
-    .r = 0.1f,
-    .g = 0.1f,
-    .b = 0.1f,
-    .a = 1.0f,
-};
-global const V4 high_light_color = {
-    .r = 0.2f,
-    .g = 0.2f,
-    .b = 0.2f,
-    .a = 1.0f,
-};
-
-global const V4 border_color = {
-    .r = 0.35f,
-    .g = 0.35f,
-    .b = 0.35f,
-    .a = 1.0f,
-};
-
-global const V4 lighter_color = {
-    .r = 0.55f,
-    .g = 0.55f,
-    .b = 0.55f,
-    .a = 1.0f,
-};
-global const V4 bright_color = {
-    .r = 0.7f,
-    .g = 0.7f,
-    .b = 0.7f,
-    .a = 1.0f,
-};
-global const V4 secondary_color = {
-    .r = 0.0f,
-    .g = 0.59f,
-    .b = 1.0f,
-    .a = 1.0f,
-};
-
-global const f32 border_width = 1.0f;
 
 #define icon_1_co(width, height)                                               \
     {                                                                          \
@@ -123,25 +84,11 @@ typedef struct B8PtrArray
     b8** data;
 } B8PtrArray;
 
-typedef struct U32Array
-{
-    u32 size;
-    u32 capacity;
-    u32* data;
-} U32Array;
-
 typedef struct DirectoryItemList
 {
     DirectoryItemArray* items;
     f64 pulse_x;
 } DirectoryItemList;
-
-// TODO(Linus): find a better way to do this
-typedef struct SelectedItemValues
-{
-    CharPtrArray paths;
-    HashTableCharU32 selected_items;
-} SelectedItemValues;
 
 typedef struct FindingCallbackAttribute
 {
@@ -154,107 +101,6 @@ typedef struct FindingCallbackAttribute
     SafeFileArray* file_array;
     SafeFileArray* folder_array;
 } FindingCallbackAttribute;
-
-typedef enum SortBy
-{
-    SORT_NONE = 0,
-    SORT_NAME = 1,
-    SORT_SIZE = 2,
-} SortBy;
-
-typedef struct DirectoryPage
-{
-    SortBy sort_by;
-    u32 sort_count;
-    f32 offset;
-    f32 scroll_offset;
-    f64 pulse_x;
-    Directory directory;
-} DirectoryPage;
-
-typedef struct DirectoryArray
-{
-    u32 size;
-    u32 capacity;
-    DirectoryPage* data;
-} DirectoryArray;
-
-typedef struct RenderingProperties
-{
-    u32 vertex_buffer_id;
-    u32 vertex_buffer_capacity;
-    u32 vertex_array_id;
-    u32 index_buffer_id;
-    u32 index_count;
-    u32 texture_count;
-    u32* textures;
-
-    AABB scissor;
-
-    ShaderProperties shader_properties;
-    VertexArray vertices;
-
-} RenderingProperties;
-
-typedef struct RenderingPropertiesArray
-{
-    u32 size;
-    u32 capacity;
-    RenderingProperties* data;
-} RenderingPropertiesArray;
-
-typedef struct ScrollBar
-{
-    f32 mouse_pointer_offset;
-    b8 dragging;
-} ScrollBar;
-
-typedef struct DirectoryHistory
-{
-    u32 current_index;
-    DirectoryArray history;
-} DirectoryHistory;
-
-DirectoryPage* current_directory(DirectoryHistory* history)
-{
-    return history->history.data + history->current_index;
-}
-
-typedef struct DirectoryTab
-{
-    DirectoryHistory directory_history;
-    SelectedItemValues selected_item_values;
-} DirectoryTab;
-
-typedef struct DirectoryTabArray
-{
-    u32 size;
-    u32 capacity;
-    DirectoryTab* data;
-} DirectoryTabArray;
-
-typedef struct ApplicationContext
-{
-    GLFWwindow* window;
-    FontTTF font;
-
-    u32 tab_index;
-    DirectoryTabArray tabs;
-
-    Event* key_event;
-    Event* mouse_button;
-    Event* mouse_wheel;
-    Event* mouse_move;
-
-    V2 dimensions;
-    V2 mouse_position;
-
-    f64 last_time;
-    f64 delta_time;
-    MVP mvp;
-
-    f64 last_moved_time;
-} ApplicationContext;
 
 typedef struct SearchPage
 {
@@ -363,16 +209,6 @@ void find_matching_string(const char* start_directory, const u32 length,
                           const u32 string_to_match_length);
 void clear_search_result(SafeFileArray* files);
 void search_page_clear_search_result(SearchPage* page);
-RenderingProperties rendering_properties_initialize(
-    u32 shader_id, u32* textures, u32 texture_count, u32 index_buffer_id,
-    const VertexBufferLayout* vertex_buffer_layout, u32 vertex_buffer_size);
-void rendering_properties_draw(const RenderingProperties* rendering_properties,
-                               const MVP* mvp);
-void rendering_properties_check_and_grow_buffers(
-    RenderingProperties* rendering_properties, IndexArray* index_array);
-void rendering_properties_clear(RenderingProperties* rendering_properties);
-void rendering_properties_array_clear(
-    RenderingPropertiesArray* rendering_properties);
 void format_file_size(u64 size_in_bytes, char* output, size_t output_size);
 void swap_strings(char* first, char* second);
 b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
@@ -384,12 +220,10 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
                   RenderingProperties* render);
 b8 item_in_view(const f32 position_y, const f32 height,
                 const f32 window_height);
-void check_and_open_file(const Event* mouse_button_event, const b8 hit,
-                         const DirectoryItem* current_files,
+void check_and_open_file(const b8 hit, const DirectoryItem* current_files,
                          const i32 file_index);
 b8 go_to_directory(char* path, u32 length, DirectoryHistory* directory_history);
-void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
-                           const i32 index,
+void check_and_open_folder(const b8 hit, const i32 index,
                            const DirectoryItem* current_folders,
                            DirectoryHistory* directory_history);
 DirectoryItemListReturnValue item_list(
@@ -421,44 +255,36 @@ f32 clampf32_high(f32 value, f32 high);
 void extract_only_aplha_channel(TextureProperties* texture_properties);
 u32 render_input(const FontTTF* font, const char* text, const u32 text_length,
                  const f32 scale, const V2 text_position, const f32 cursor_y,
-                 const b8 active, const Event* key_event, i32 input_index,
-                 const f64 delta_time, f64* time, AABBArray* aabbs,
-                 RenderingProperties* render);
+                 const b8 active, i32 input_index, const f64 delta_time,
+                 f64* time, AABBArray* aabbs, RenderingProperties* render);
 void set_scroll_offset(const u32 item_count, const f32 item_height,
-                       const f32 area_y, const Event* mouse_wheel_event,
-                       f32* offset);
+                       const f32 area_y, f32* offset);
 f32 smooth_scroll(const f64 delta_time, const f32 offset, f32 scroll_offset);
 u64 u64_hash_function(const void* data, u32 len, u64 seed);
 void reset_selected_items(SelectedItemValues* selected_item_values);
 void reload_directory(DirectoryPage* directory_page);
-b8 is_ctrl_and_key_pressed(const Event* event, i32 key);
-b8 is_key_clicked(const Event* event, i32 key);
-b8 is_key_pressed_repeat(const Event* event, i32 key);
+b8 is_ctrl_and_key_pressed(i32 key);
+b8 is_key_clicked(i32 key);
+b8 is_key_pressed_repeat(i32 key);
 u32 load_icon_as_only_red(const char* file_path);
 u32 load_icon_as_white(const char* file_path);
 u32 load_icon(const char* file_path);
 AABB ui_add_border(RenderingProperties* render, V2 position, V2 size);
-void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
-                    const Event* mouse_button, const V2 mouse_position,
-                    const f32 dimension_y, const f32 area_y,
-                    const f32 item_height, f32 total_height, f32* scroll_offset,
-                    f32* offset, RenderingProperties* render);
+void scroll_bar_add(ScrollBar* scroll_bar, V2 position, const f32 dimension_y,
+                    const f32 area_y, const f32 item_height, f32 total_height,
+                    f32* scroll_offset, f32* offset,
+                    RenderingProperties* render);
 void paste_in_directory(DirectoryPage* current_directory);
-b8 is_mouse_button_clicked(const Event* event, i32 button);
-u8* application_initialize(ApplicationContext* application);
+b8 is_mouse_button_clicked(i32 button);
 void search_page_initialize(SearchPage* search_page);
-void rendering_properties_array_initialize(const u32 index_buffer_id,
-                                           const FontTTF* font, u8* font_bitmap,
+void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
                                            RenderingPropertiesArray* array);
-void application_begin_frame(ApplicationContext* application);
-void application_end_frame(ApplicationContext* application);
-f64 application_get_last_mouse_move_time(const ApplicationContext* appliction);
 void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
                                   const FontTTF* font,
                                   const b8 reload_search_result,
                                   DirectoryHistory* directory_history,
                                   ThreadTaskQueue* thread_task_queue);
-b8 erase_char(const Event* key_event, i32* cursor_index, CharArray* buffer);
+b8 erase_char(i32* cursor_index, CharArray* buffer);
 DirectoryItemListReturnValue
 search_page_update(SearchPage* page, const ApplicationContext* application,
                    const b8 check_collision, const V2 search_bar_position,
@@ -474,8 +300,7 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
                   RenderingProperties* render);
 b8 button_arrow_add(V2 position, const AABB* button_aabb,
                     const V4 texture_coordinates, const b8 check_collision,
-                    const b8 extra_condition, const V2 mouse_position,
-                    RenderingProperties* render);
+                    const b8 extra_condition, RenderingProperties* render);
 void move_in_history(const i32 index_add,
                      SelectedItemValues* selected_item_values,
                      DirectoryHistory* directory_history);
@@ -483,10 +308,8 @@ b8 can_go_up_one_directory(char* parent);
 u32 get_path_length(const char* path, u32 path_length);
 void go_up_one_directory(DirectoryHistory* directory_history);
 b8 button_move_in_history_add(const AABB* button_aabb, const b8 check_collision,
-                              const b8 extra_condition, const V2 mouse_position,
-                              const Event* mouse_button_event,
-                              const int mouse_button, const i32 history_add,
-                              const V4 icon_co,
+                              const b8 extra_condition, const int mouse_button,
+                              const i32 history_add, const V4 icon_co,
                               SelectedItemValues* selected_item_values,
                               DirectoryHistory* directory_history,
                               RenderingProperties* render);
@@ -709,109 +532,6 @@ void search_page_clear_search_result(SearchPage* page)
     clear_search_result(&page->search_result_folder_array);
 }
 
-RenderingProperties rendering_properties_initialize(
-    u32 shader_id, u32* textures, u32 texture_count, u32 index_buffer_id,
-    const VertexBufferLayout* vertex_buffer_layout, u32 vertex_buffer_size)
-{
-    RenderingProperties rendering_properties = { 0 };
-    array_create(&rendering_properties.vertices, vertex_buffer_size);
-    rendering_properties.vertex_array_id = vertex_array_create();
-    vertex_array_bind(rendering_properties.vertex_array_id);
-
-    rendering_properties.vertex_buffer_id =
-        vertex_buffer_create(NULL, rendering_properties.vertices.capacity,
-                             sizeof(Vertex), GL_STREAM_DRAW);
-    rendering_properties.vertex_buffer_capacity =
-        rendering_properties.vertices.capacity;
-    vertex_array_add_buffer(rendering_properties.vertex_array_id,
-                            rendering_properties.vertex_buffer_id,
-                            vertex_buffer_layout);
-
-    rendering_properties.index_buffer_id = index_buffer_id;
-    rendering_properties.texture_count = texture_count;
-    rendering_properties.textures = textures;
-    rendering_properties.shader_properties =
-        shader_create_properties(shader_id, "proj", "view", "model");
-
-    return rendering_properties;
-}
-
-void rendering_properties_draw(const RenderingProperties* rendering_properties,
-                               const MVP* mvp)
-{
-    if (rendering_properties->index_count)
-    {
-        shader_bind(rendering_properties->shader_properties.shader);
-        shader_set_mvp(&rendering_properties->shader_properties, mvp);
-
-        int textures[20] = { 0 };
-        for (u32 i = 0; i < rendering_properties->texture_count; ++i)
-        {
-            textures[i] = (int)i;
-        }
-        int location = glGetUniformLocation(
-            rendering_properties->shader_properties.shader, "textures");
-        ftic_assert(location != -1);
-        glUniform1iv(location, rendering_properties->texture_count, textures);
-
-        for (u32 i = 0; i < rendering_properties->texture_count; ++i)
-        {
-            texture_bind(rendering_properties->textures[i], (int)i);
-        }
-
-        const AABB* scissor = &rendering_properties->scissor;
-        glScissor((int)scissor->min.x, (int)scissor->min.y,
-                  (int)scissor->size.width, (int)scissor->size.height);
-
-        vertex_array_bind(rendering_properties->vertex_array_id);
-        index_buffer_bind(rendering_properties->index_buffer_id);
-        glDrawElements(GL_TRIANGLES, rendering_properties->index_count * 6,
-                       GL_UNSIGNED_INT, NULL);
-    }
-}
-
-void rendering_properties_check_and_grow_buffers(
-    RenderingProperties* rendering_properties, IndexArray* index_array)
-{
-    if (rendering_properties->vertices.size >
-        rendering_properties->vertex_buffer_capacity)
-    {
-        vertex_buffer_orphan(rendering_properties->vertex_buffer_id,
-                             rendering_properties->vertices.capacity *
-                                 sizeof(Vertex),
-                             GL_STREAM_DRAW, NULL);
-        rendering_properties->vertex_buffer_capacity =
-            rendering_properties->vertices.capacity;
-    }
-
-    if (rendering_properties->index_count * 6 > index_array->size)
-    {
-        index_array->size = 0;
-        index_array->capacity *= 2;
-        index_array->data = (u32*)calloc(index_array->capacity, sizeof(u32));
-        generate_indicies(index_array, 0, index_array->capacity * 6);
-        index_buffer_orphan(rendering_properties->index_buffer_id,
-                            index_array->capacity * sizeof(u32), GL_STATIC_DRAW,
-                            index_array->data);
-        free(index_array->data);
-    }
-}
-
-void rendering_properties_clear(RenderingProperties* rendering_properties)
-{
-    rendering_properties->index_count = 0;
-    rendering_properties->vertices.size = 0;
-}
-
-void rendering_properties_array_clear(
-    RenderingPropertiesArray* rendering_properties)
-{
-    for (u32 i = 0; i < rendering_properties->size; ++i)
-    {
-        rendering_properties_clear(&rendering_properties->data[i]);
-    }
-}
-
 void format_file_size(u64 size_in_bytes, char* output, size_t output_size)
 {
     const u64 KB = 1024;
@@ -898,10 +618,8 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
             this_hit = true;
             hit = true;
         }
-        const MouseButtonEvent* event =
-            &appliction->mouse_button->mouse_button_event;
-        if (selected_item_values && !check_if_selected &&
-            appliction->mouse_button->activated &&
+        const MouseButtonEvent* event = event_get_mouse_button_event();
+        if (selected_item_values && !check_if_selected && event->activated &&
             event->action == FTIC_RELEASE &&
             (event->button == FTIC_MOUSE_BUTTON_1 ||
              event->button == FTIC_MOUSE_BUTTON_2))
@@ -990,12 +708,11 @@ b8 item_in_view(const f32 position_y, const f32 height, const f32 window_height)
     return closed_interval(-height, value, window_height + height);
 }
 
-void check_and_open_file(const Event* mouse_button_event, const b8 hit,
-                         const DirectoryItem* current_files,
+void check_and_open_file(const b8 hit, const DirectoryItem* current_files,
                          const i32 file_index)
 {
-    if (mouse_button_event->mouse_button_event.double_clicked &&
-        mouse_button_event->mouse_button_event.button == FTIC_MOUSE_BUTTON_1)
+    const MouseButtonEvent* event = event_get_mouse_button_event();
+    if (event->double_clicked && event->button == FTIC_MOUSE_BUTTON_1)
     {
         if (hit)
         {
@@ -1039,13 +756,12 @@ b8 go_to_directory(char* path, u32 length, DirectoryHistory* directory_history)
     return result;
 }
 
-void check_and_open_folder(const Event* mouse_button_event, const b8 hit,
-                           const i32 index,
+void check_and_open_folder(const b8 hit, const i32 index,
                            const DirectoryItem* current_folders,
                            DirectoryHistory* directory_history)
 {
-    if (mouse_button_event->mouse_button_event.double_clicked &&
-        mouse_button_event->mouse_button_event.button == FTIC_MOUSE_BUTTON_1)
+    const MouseButtonEvent* event = event_get_mouse_button_event();
+    if (event->double_clicked && event->button == FTIC_MOUSE_BUTTON_1)
     {
         if (hit)
         {
@@ -1120,8 +836,7 @@ DirectoryItemListReturnValue folder_item_list(
                   starting_position, item_width, item_height, padding, pulse_x,
                   selected_item_values, render);
 
-    check_and_open_folder(application->mouse_button, list_return.hit,
-                          list_return.hit_index, folders->data,
+    check_and_open_folder(list_return.hit, list_return.hit_index, folders->data,
                           directory_history);
     list_return.type = TYPE_FOLDER;
     return list_return;
@@ -1138,8 +853,7 @@ DirectoryItemListReturnValue files_item_list(
                   starting_position, item_width, item_height, padding, pulse_x,
                   selected_item_values, render);
 
-    check_and_open_file(application->mouse_button, list_return.hit, files->data,
-                        list_return.hit_index);
+    check_and_open_file(list_return.hit, files->data, list_return.hit_index);
 
     list_return.type = TYPE_FILE;
     return list_return;
@@ -1220,16 +934,6 @@ DirectoryItemListReturnValue directory_item_list(
     };
 }
 
-f32 clampf32_low(f32 value, f32 low)
-{
-    return value < low ? low : value;
-}
-
-f32 clampf32_high(f32 value, f32 high)
-{
-    return value > high ? high : value;
-}
-
 void extract_only_aplha_channel(TextureProperties* texture_properties)
 {
     const u32 size = texture_properties->height * texture_properties->width;
@@ -1246,9 +950,8 @@ void extract_only_aplha_channel(TextureProperties* texture_properties)
 
 u32 render_input(const FontTTF* font, const char* text, const u32 text_length,
                  const f32 scale, const V2 text_position, const f32 cursor_y,
-                 const b8 active, const Event* key_event, i32 input_index,
-                 const f64 delta_time, f64* time, AABBArray* aabbs,
-                 RenderingProperties* render)
+                 const b8 active, i32 input_index, const f64 delta_time,
+                 f64* time, AABBArray* aabbs, RenderingProperties* render)
 {
     // Blinking cursor
     if (active)
@@ -1261,12 +964,12 @@ u32 render_input(const FontTTF* font, const char* text, const u32 text_length,
         {
             input_index = min((i32)text_length, input_index);
         }
-        if (is_key_pressed_repeat(key_event, FTIC_KEY_LEFT))
+        if (is_key_pressed_repeat(FTIC_KEY_LEFT))
         {
             input_index = max(input_index - 1, 0);
             *time = 0.4f;
         }
-        if (is_key_pressed_repeat(key_event, FTIC_KEY_RIGHT))
+        if (is_key_pressed_repeat(FTIC_KEY_RIGHT))
         {
             input_index = min(input_index + 1, (i32)text_length);
             *time = 0.4f;
@@ -1295,11 +998,10 @@ u32 render_input(const FontTTF* font, const char* text, const u32 text_length,
 }
 
 void set_scroll_offset(const u32 item_count, const f32 item_height,
-                       const f32 area_y, const Event* mouse_wheel_event,
-                       f32* offset)
+                       const f32 area_y, f32* offset)
 {
     const f32 total_height = item_count * item_height;
-    const f32 y_offset = mouse_wheel_event->mouse_wheel_event.y_offset * 100.0f;
+    const f32 y_offset = event_get_mouse_wheel_event()->y_offset * 100.0f;
     *offset += y_offset;
     *offset = clampf32_high(*offset, 0.0f);
 
@@ -1317,16 +1019,6 @@ f32 smooth_scroll(const f64 delta_time, const f32 offset, f32 scroll_offset)
 u64 u64_hash_function(const void* data, u32 len, u64 seed)
 {
     return *(u64*)data;
-}
-
-void reset_selected_items(SelectedItemValues* selected_item_values)
-{
-    for (u32 i = 0; i < selected_item_values->paths.size; ++i)
-    {
-        free(selected_item_values->paths.data[i]);
-    }
-    hash_table_clear_char_u32(&selected_item_values->selected_items);
-    selected_item_values->paths.size = 0;
 }
 
 void merge(DirectoryItem* array, u32 left, u32 mid, u32 right)
@@ -1438,31 +1130,33 @@ void reload_directory(DirectoryPage* directory_page)
     sort_directory(directory_page);
 }
 
-b8 is_ctrl_and_key_pressed(const Event* event, i32 key)
+b8 is_ctrl_and_key_pressed(i32 key)
 {
-    return event->activated && event->key_event.action == 1 &&
-           event->key_event.ctrl_pressed && event->key_event.key == key;
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == 1 && event->ctrl_pressed &&
+           event->key == key;
 }
 
-b8 is_ctrl_and_key_range_pressed(const Event* event, i32 key_low, i32 key_high)
+b8 is_ctrl_and_key_range_pressed(i32 key_low, i32 key_high)
 {
-    return event->activated && event->key_event.action == 1 &&
-           event->key_event.ctrl_pressed &&
-           (closed_interval(key_low, event->key_event.key, key_high));
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == 1 && event->ctrl_pressed &&
+           (closed_interval(key_low, event->key, key_high));
 }
 
-b8 is_key_clicked(const Event* event, i32 key)
+b8 is_key_clicked(i32 key)
 {
-    return event->activated && event->key_event.action == FTIC_RELEASE &&
-           event->key_event.key == key;
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == FTIC_RELEASE &&
+           event->key == key;
 }
 
-b8 is_key_pressed_repeat(const Event* event, i32 key)
+b8 is_key_pressed_repeat(i32 key)
 {
+    const KeyEvent* event = event_get_key_event();
     return event->activated &&
-           (event->key_event.action == FTIC_PRESS ||
-            event->key_event.action == FTIC_REPEAT) &&
-           event->key_event.key == key;
+           (event->action == FTIC_PRESS || event->action == FTIC_REPEAT) &&
+           event->key == key;
 }
 
 u32 load_icon_as_only_red(const char* file_path)
@@ -1509,11 +1203,10 @@ AABB ui_add_border(RenderingProperties* render, V2 position, V2 size)
     return border_aabb;
 }
 
-void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
-                    const Event* mouse_button, const V2 mouse_position,
-                    const f32 dimension_y, const f32 area_y,
-                    const f32 item_height, f32 total_height, f32* scroll_offset,
-                    f32* offset, RenderingProperties* render)
+void scroll_bar_add(ScrollBar* scroll_bar, V2 position, const f32 dimension_y,
+                    const f32 area_y, const f32 item_height, f32 total_height,
+                    f32* scroll_offset, f32* offset,
+                    RenderingProperties* render)
 {
     const f32 scroll_bar_width = 8.0f;
     position.x -= scroll_bar_width;
@@ -1540,6 +1233,7 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
             .size = scroll_bar_dimensions,
         };
 
+        V2 mouse_position = event_get_mouse_position();
         b8 collided = collision_point_in_aabb(mouse_position, &scroll_bar_aabb);
 
         if (collided || scroll_bar->dragging)
@@ -1556,13 +1250,15 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position,
             render->index_count++;
         }
 
-        if (mouse_button->activated && collided)
+        const MouseButtonEvent* mouse_button_event =
+            event_get_mouse_button_event();
+        if (mouse_button_event->activated && collided)
         {
             scroll_bar->dragging = true;
             scroll_bar->mouse_pointer_offset =
                 scroll_bar_aabb.min.y - mouse_position.y;
         }
-        if (mouse_button->mouse_button_event.action == FTIC_RELEASE)
+        if (mouse_button_event->action == FTIC_RELEASE)
         {
             scroll_bar->dragging = false;
         }
@@ -1618,104 +1314,11 @@ void paste_in_directory(DirectoryPage* current_directory)
     free(pasted_paths.data);
 }
 
-b8 is_mouse_button_clicked(const Event* event, i32 button)
+b8 is_mouse_button_clicked(i32 button)
 {
-    return event->activated &&
-           event->mouse_button_event.action == FTIC_RELEASE &&
-           event->mouse_button_event.button == button;
-}
-
-DirectoryTab tab_add()
-{
-    DirectoryHistory directory_history = { 0 };
-    array_create(&directory_history.history, 10);
-
-    const char* dir = "C:\\*";
-    DirectoryPage page = { 0 };
-    page.directory = platform_get_directory(dir, (u32)strlen(dir));
-    array_push(&directory_history.history, page);
-
-    // TODO(Linus): Make a set for this instead
-    SelectedItemValues selected_item_values = { 0 };
-    array_create(&selected_item_values.paths, 10);
-    selected_item_values.selected_items =
-        hash_table_create_char_u32(100, hash_murmur);
-
-    return (DirectoryTab){
-        .directory_history = directory_history,
-        .selected_item_values = selected_item_values,
-    };
-}
-
-u8* application_initialize(ApplicationContext* application)
-{
-#if 0
-    platform_init("FileTic", 1000, 600, &application->platform);
-    platform_opengl_init(application->platform);
-    if (!gladLoadGL())
-    {
-        const char* message = "Could not load glad!";
-        log_error_message(message, strlen(message));
-        ftic_assert(false);
-    }
-#else
-    application->window = window_create("FileTic", 1250, 800);
-#endif
-    event_initialize(application->window);
-
-    application->font = (FontTTF){ 0 };
-    const i32 width_atlas = 512;
-    const i32 height_atlas = 512;
-    const f32 pixel_height = 16;
-    const u32 bitmap_size = width_atlas * height_atlas;
-    u8* font_bitmap_temp = (u8*)calloc(bitmap_size, sizeof(u8));
-    init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
-                   "res/fonts/arial.ttf", font_bitmap_temp, &application->font);
-
-    // Puts the red channel in the alpha.
-    u8* font_bitmap = (u8*)malloc(bitmap_size * 4 * sizeof(u8));
-    memset(font_bitmap, UINT8_MAX, bitmap_size * 4 * sizeof(u8));
-    for (u32 i = 0, j = 3; i < bitmap_size; ++i, j += 4)
-    {
-        font_bitmap[j] = font_bitmap_temp[i];
-    }
-
-    application->key_event = event_subscribe(KEY);
-    application->mouse_button = event_subscribe(MOUSE_BUTTON);
-    application->mouse_wheel = event_subscribe(MOUSE_WHEEL);
-    application->mouse_move = event_subscribe(MOUSE_MOVE);
-
-    array_create(&application->tabs, 10);
-    application->tab_index = 0;
-
-    array_push(&application->tabs, tab_add());
-
-    application->last_time = platform_get_time();
-    application->delta_time = 0.0f;
-    application->mvp = (MVP){ 0 };
-    application->mvp.view = m4d();
-    application->mvp.model = m4d();
-
-    application->last_moved_time = window_get_time();
-
-    return font_bitmap;
-}
-
-void application_uninitialize(ApplicationContext* application)
-{
-    window_destroy(application->window);
-    for (u32 i = 0; i < application->tabs.size; ++i)
-    {
-        DirectoryTab* tab = application->tabs.data + i;
-        for (u32 j = 0; j < tab->directory_history.history.size; j++)
-        {
-            platform_reset_directory(
-                &tab->directory_history.history.data[j].directory);
-        }
-        free(tab->directory_history.history.data);
-        reset_selected_items(&tab->selected_item_values);
-    }
-    event_uninitialize();
+    const MouseButtonEvent* event = event_get_mouse_button_event();
+    return event->activated && event->action == FTIC_RELEASE &&
+           event->button == button;
 }
 
 void search_page_initialize(SearchPage* search_page)
@@ -1737,8 +1340,7 @@ void search_page_initialize(SearchPage* search_page)
     search_page->last_running_id = 0;
 }
 
-void rendering_properties_array_initialize(const u32 index_buffer_id,
-                                           const FontTTF* font, u8* font_bitmap,
+void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
                                            RenderingPropertiesArray* array)
 {
     const i32 width_atlas = 512;
@@ -1793,64 +1395,16 @@ void rendering_properties_array_initialize(const u32 index_buffer_id,
     main_textures[3] = arrow_icon_texture;
 
     array_push(&rendering_properties,
-               rendering_properties_initialize(
-                   main_shader, main_textures, main_texture_count,
-                   index_buffer_id, &vertex_buffer_layout, 100 * 4));
+               rendering_properties_initialize(main_shader, main_textures,
+                                               main_texture_count,
+                                               &vertex_buffer_layout, 100 * 4, 100 * 6));
 
     u32* preview_textures = (u32*)calloc(2, sizeof(u32));
     preview_textures[0] = default_texture;
-    array_push(&rendering_properties,
-               rendering_properties_initialize(preview_shader, preview_textures,
-                                               1, index_buffer_id,
-                                               &vertex_buffer_layout, 100 * 4));
+    array_push(&rendering_properties, rendering_properties_initialize(
+                                          preview_shader, preview_textures, 1,
+                                          &vertex_buffer_layout, 100 * 4, 100 * 6));
     *array = rendering_properties;
-}
-
-void application_begin_frame(ApplicationContext* application)
-{
-    int width, height;
-    window_get_size(application->window, &width, &height);
-    application->dimensions = v2f((f32)width, (f32)height);
-    double x, y;
-    window_get_mouse_position(application->window, &x, &y);
-    application->mouse_position = v2f((f32)x, (f32)y);
-    if (application->mouse_move->activated)
-    {
-        application->last_moved_time = window_get_time();
-    }
-
-    glViewport(0, 0, width, height);
-    glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    application->mvp.projection =
-        ortho(0.0f, application->dimensions.width,
-              application->dimensions.height, 0.0f, -1.0f, 1.0f);
-}
-
-void application_end_frame(ApplicationContext* application)
-{
-    window_swap(application->window);
-    event_poll();
-
-    f64 now = window_get_time();
-    application->delta_time = now - application->last_time;
-    const u32 target_milliseconds = 8;
-    const u64 curr_milliseconds = (u64)(application->delta_time * 1000.0f);
-    if (target_milliseconds > curr_milliseconds)
-    {
-        const u64 milli_to_sleep =
-            (u64)(target_milliseconds - curr_milliseconds);
-        platform_sleep(milli_to_sleep);
-        now = window_get_time();
-        application->delta_time = now - application->last_time;
-    }
-    application->last_time = now;
-}
-
-f64 application_get_last_mouse_move_time(const ApplicationContext* appliction)
-{
-    return window_get_time() - appliction->last_moved_time;
 }
 
 void add_from_key_buffer(const FontTTF* font, const f32 width, i32* input_index,
@@ -1932,14 +1486,13 @@ void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
     }
 }
 
-b8 erase_char(const Event* key_event, i32* cursor_index, CharArray* buffer)
+b8 erase_char(i32* cursor_index, CharArray* buffer)
 {
+    const KeyEvent* key_event = event_get_key_event();
     if (key_event->activated &&
-        (key_event->key_event.action == FTIC_PRESS ||
-         key_event->key_event.action == FTIC_REPEAT) &&
-        (key_event->key_event.key == FTIC_KEY_BACKSPACE ||
-         (key_event->key_event.ctrl_pressed &&
-          key_event->key_event.key == FTIC_KEY_H)))
+        (key_event->action == FTIC_PRESS || key_event->action == FTIC_REPEAT) &&
+        (key_event->key == FTIC_KEY_BACKSPACE ||
+         (key_event->ctrl_pressed && key_event->key == FTIC_KEY_H)))
     {
         if ((*cursor_index) > 0)
         {
@@ -1974,7 +1527,7 @@ void search_page_top_bar_update(SearchPage* page,
     search_result_position.y += page->search_bar_aabb.size.y + 20.0f;
     const f32 search_page_header_size_y = search_result_position.y;
 
-    if (application->mouse_button->activated)
+    if (event_get_mouse_button_event()->activated)
     {
         if (check_collision &&
             collision_point_in_aabb(application->mouse_position,
@@ -1992,8 +1545,7 @@ void search_page_top_bar_update(SearchPage* page,
     if (page->search_bar_hit)
     {
         b8 reload_search_result =
-            erase_char(application->key_event, &page->search_bar_cursor_index,
-                       &page->search_buffer);
+            erase_char(&page->search_bar_cursor_index, &page->search_buffer);
         search_page_parse_key_buffer(page,
                                      page->search_bar_aabb.size.width -
                                          (search_bar_input_text_padding * 2),
@@ -2010,12 +1562,12 @@ void search_page_top_bar_update(SearchPage* page,
     page->render->index_count++;
 
     // Search bar
-    page->search_bar_cursor_index = render_input(
-        &application->font, page->search_buffer.data, page->search_buffer.size,
-        scale, search_input_position, search_bar_position.y + 10.0f,
-        page->search_bar_hit, application->key_event,
-        page->search_bar_cursor_index, application->delta_time,
-        &page->search_blinking_time, NULL, page->render);
+    page->search_bar_cursor_index =
+        render_input(&application->font, page->search_buffer.data,
+                     page->search_buffer.size, scale, search_input_position,
+                     search_bar_position.y + 10.0f, page->search_bar_hit,
+                     page->search_bar_cursor_index, application->delta_time,
+                     &page->search_blinking_time, NULL, page->render);
 
     quad_border_rounded(&page->render->vertices, &page->render->index_count,
                         page->search_bar_aabb.min, page->search_bar_aabb.size,
@@ -2026,7 +1578,6 @@ void search_page_top_bar_update(SearchPage* page,
     const f32 area_y = page->search_result_aabb.size.y + 8.0f;
     const f32 total_height = item_count * quad_height;
     scroll_bar_add(&page->scroll_bar, scroll_bar_position,
-                   application->mouse_button, application->mouse_position,
                    application->dimensions.y, area_y, total_height, quad_height,
                    &page->scroll_offset, &page->offset, page->render);
 }
@@ -2255,12 +1806,11 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
 
     b8 item_clicked = false;
 
-    b8 mouse_button_clicked =
-        is_mouse_button_clicked(application->mouse_button, FTIC_MOUSE_BUTTON_1);
+    b8 mouse_button_clicked = is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
 
-    if (is_key_pressed_repeat(application->key_event, FTIC_KEY_TAB))
+    if (is_key_pressed_repeat(FTIC_KEY_TAB))
     {
-        if (application->key_event->key_event.shift_pressed)
+        if (event_get_key_event()->shift_pressed)
         {
             if (--drop_down_menu->tab_index < 0)
             {
@@ -2274,7 +1824,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
         }
     }
 
-    b8 enter_clicked = is_key_clicked(application->key_event, FTIC_KEY_ENTER);
+    b8 enter_clicked = is_key_clicked(FTIC_KEY_ENTER);
 
     b8 any_drop_down_item_hit = false;
     b8 should_close = false;
@@ -2293,7 +1843,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
                                     &drop_down_item_aabb))
         {
             if (drop_down_menu->tab_index == -1 ||
-                application->mouse_move->activated)
+                event_get_mouse_move_event()->activated)
             {
                 drop_down_item_hit = true;
                 drop_down_menu->tab_index = -1;
@@ -2329,7 +1879,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
     }
     return should_close ||
            ((!any_drop_down_item_hit) && mouse_button_clicked) ||
-           is_key_clicked(application->key_event, FTIC_KEY_ESCAPE);
+           is_key_clicked(FTIC_KEY_ESCAPE);
 }
 
 b8 check_and_load_image(const i32 index, V2* image_dimensions,
@@ -2350,9 +1900,8 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
                   char** current_path, const DirectoryItemArray* files,
                   RenderingProperties* render)
 {
-    b8 right_key =
-        is_key_pressed_repeat(application->key_event, FTIC_KEY_RIGHT);
-    b8 left_key = is_key_pressed_repeat(application->key_event, FTIC_KEY_LEFT);
+    b8 right_key = is_key_pressed_repeat(FTIC_KEY_RIGHT);
+    b8 left_key = is_key_pressed_repeat(FTIC_KEY_LEFT);
     if (right_key || left_key)
     {
         for (i32 i = 0; i < (i32)files->size; ++i)
@@ -2374,8 +1923,8 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
                 }
                 else
                 {
-                    for (i32 count = 1, index = i - count; count <= (i32)files->size;
-                         ++count, --index)
+                    for (i32 count = 1, index = i - count;
+                         count <= (i32)files->size; ++count, --index)
                     {
                         if (index < 0) index = files->size - 1;
                         if (check_and_load_image(index, image_dimensions,
@@ -2431,10 +1980,9 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
          1.0f);
     render->index_count++;
 
-    const MouseButtonEvent* event =
-        &application->mouse_button->mouse_button_event;
+    const MouseButtonEvent* event = event_get_mouse_button_event();
     if (!collision_point_in_aabb(application->mouse_position, &preview_aabb) &&
-        application->mouse_button->activated && event->action == 0 &&
+        event->activated && event->action == 0 &&
         event->button == FTIC_MOUSE_BUTTON_1)
     {
         if (render->texture_count > 1)
@@ -2449,15 +1997,14 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
 
 b8 button_arrow_add(V2 position, const AABB* button_aabb,
                     const V4 texture_coordinates, const b8 check_collision,
-                    const b8 extra_condition, const V2 mouse_position,
-                    RenderingProperties* render)
+                    const b8 extra_condition, RenderingProperties* render)
 {
     V4 button_color = v4ic(1.0f);
     b8 collision = false;
     if (extra_condition)
     {
         if (check_collision &&
-            collision_point_in_aabb(mouse_position, button_aabb))
+            collision_point_in_aabb(event_get_mouse_position(), button_aabb))
         {
             collision = true;
         }
@@ -2534,20 +2081,17 @@ void go_up_one_directory(DirectoryHistory* directory_history)
 }
 
 b8 button_move_in_history_add(const AABB* button_aabb, const b8 check_collision,
-                              const b8 extra_condition, const V2 mouse_position,
-                              const Event* mouse_button_event,
-                              const int mouse_button, const i32 history_add,
-                              const V4 icon_co,
+                              const b8 extra_condition, const int mouse_button,
+                              const i32 history_add, const V4 icon_co,
                               SelectedItemValues* selected_item_values,
                               DirectoryHistory* directory_history,
                               RenderingProperties* render)
 {
     b8 result = false;
     if (button_arrow_add(button_aabb->min, button_aabb, icon_co,
-                         check_collision, extra_condition, mouse_position,
-                         render))
+                         check_collision, extra_condition, render))
     {
-        if (is_mouse_button_clicked(mouse_button_event, FTIC_MOUSE_BUTTON_LEFT))
+        if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
         {
             move_in_history(history_add, selected_item_values,
                             directory_history);
@@ -2555,7 +2099,7 @@ b8 button_move_in_history_add(const AABB* button_aabb, const b8 check_collision,
         result = true;
     }
     if (check_collision && extra_condition &&
-        is_mouse_button_clicked(mouse_button_event, mouse_button))
+        is_mouse_button_clicked(mouse_button))
     {
         move_in_history(history_add, selected_item_values, directory_history);
     }
@@ -2753,8 +2297,7 @@ void set_sorting_buttons(const ApplicationContext* application,
     if (hover)
     {
         name_button_color = high_light_color;
-        if (is_mouse_button_clicked(application->mouse_button,
-                                    FTIC_MOUSE_BUTTON_LEFT))
+        if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
         {
             DirectoryPage* current = current_directory(&tab->directory_history);
             if (current->sort_by != sort_by)
@@ -2799,16 +2342,9 @@ int main(int argc, char** argv)
     SearchPage search_page = { 0 };
     search_page_initialize(&search_page);
 
-    IndexArray index_array = { 0 };
-    array_create(&index_array, 100 * 6);
-    generate_indicies(&index_array, 0, index_array.capacity * 6);
-    u32 index_buffer_id = index_buffer_create(
-        index_array.data, index_array.size, sizeof(u32), GL_STATIC_DRAW);
-    free(index_array.data);
-
     RenderingPropertiesArray rendering_properties = { 0 };
-    rendering_properties_array_initialize(index_buffer_id, &application.font,
-                                          font_bitmap, &rendering_properties);
+    rendering_properties_array_initialize(&application.font, font_bitmap,
+                                          &rendering_properties);
     RenderingProperties* main_render = rendering_properties.data;
     RenderingProperties* preview_render = rendering_properties.data + 1;
 
@@ -2890,16 +2426,15 @@ int main(int argc, char** argv)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (!window_should_close(application.window))
     {
-        if (is_ctrl_and_key_pressed(application.key_event, FTIC_KEY_T))
+        if (is_ctrl_and_key_pressed(FTIC_KEY_T))
         {
             array_push(&application.tabs, tab_add());
             application.tab_index = application.tabs.size - 1;
         }
 
-        if (is_ctrl_and_key_range_pressed(application.key_event, FTIC_KEY_1,
-                                          FTIC_KEY_9))
+        if (is_ctrl_and_key_range_pressed(FTIC_KEY_1, FTIC_KEY_9))
         {
-            const u32 index = application.key_event->key_event.key - FTIC_KEY_1;
+            const u32 index = event_get_key_event()->key - FTIC_KEY_1;
             if (index < application.tabs.size)
             {
                 application.tab_index = index;
@@ -2908,21 +2443,25 @@ int main(int argc, char** argv)
 
         DirectoryTab* tab = application.tabs.data + application.tab_index;
 
-        if (application.mouse_button->activated)
+        const MouseButtonEvent* mouse_button_event =
+            event_get_mouse_button_event();
+        const MouseMoveEvent* mouse_move_event = event_get_mouse_move_event();
+        const KeyEvent* key_event = event_get_key_event();
+
+        if (mouse_button_event->activated)
         {
             last_mouse_position = application.mouse_position;
             distance = 0.0f;
             activated = true;
         }
 
-        if (application.mouse_button->mouse_button_event.action == FTIC_RELEASE)
+        if (mouse_button_event->action == FTIC_RELEASE)
         {
             activated = false;
         }
 
-        if (activated &&
-            application.mouse_button->mouse_button_event.action == FTIC_PRESS &&
-            application.mouse_move->activated &&
+        if (activated && mouse_button_event->action == FTIC_PRESS &&
+            mouse_move_event->activated &&
             tab->selected_item_values.paths.size > 0)
         {
             distance +=
@@ -2960,15 +2499,12 @@ int main(int argc, char** argv)
 
         if (tab->selected_item_values.paths.size)
         {
-            const MouseButtonEvent* event =
-                &application.mouse_button->mouse_button_event;
-
-            if (is_ctrl_and_key_pressed(application.key_event, FTIC_KEY_C))
+            if (is_ctrl_and_key_pressed(FTIC_KEY_C))
             {
                 platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
             else if (tab->selected_item_values.paths.size == 1 &&
-                     is_ctrl_and_key_pressed(application.key_event, FTIC_KEY_D))
+                     is_ctrl_and_key_pressed(FTIC_KEY_D))
             {
                 const char* path = tab->selected_item_values.paths.data[0];
 
@@ -2979,9 +2515,8 @@ int main(int argc, char** argv)
                     reset_selected_items(&tab->selected_item_values);
                 }
             }
-            else if (application.key_event->activated &&
-                     application.key_event->key_event.action == 1 &&
-                     application.key_event->key_event.key == FTIC_KEY_ESCAPE)
+            else if (key_event->activated && key_event->action == 1 &&
+                     key_event->key == FTIC_KEY_ESCAPE)
             {
                 // TODO: Not get called when you press escape in a drop down for
                 // example
@@ -2989,15 +2524,15 @@ int main(int argc, char** argv)
                 // reload_directory(
                 //   current_directory(&application.directory_history));
             }
-            else if (check_collision &&
-                     !application.key_event->key_event.ctrl_pressed &&
-                     application.mouse_button->activated &&
-                     event->action == 0 && event->button == FTIC_MOUSE_BUTTON_1)
+            else if (check_collision && !key_event->ctrl_pressed &&
+                     mouse_button_event->activated &&
+                     mouse_button_event->action == 0 &&
+                     mouse_button_event->button == FTIC_MOUSE_BUTTON_1)
             {
                 reset_selected_items(&tab->selected_item_values);
             }
         }
-        if (is_ctrl_and_key_pressed(application.key_event, FTIC_KEY_V))
+        if (is_ctrl_and_key_pressed(FTIC_KEY_V))
         {
             paste_in_directory(current_directory(&tab->directory_history));
         }
@@ -3046,7 +2581,7 @@ int main(int argc, char** argv)
         if (left_side_resize || right_side_resize)
         {
             window_set_cursor(application.window, FTIC_RESIZE_H_CURSOR);
-            if (application.mouse_button->activated)
+            if (mouse_button_event->activated)
             {
                 if (left_side_resize)
                 {
@@ -3066,7 +2601,7 @@ int main(int argc, char** argv)
         {
             window_set_cursor(application.window, FTIC_NORMAL_CURSOR);
         }
-        if (application.mouse_button->mouse_button_event.action == FTIC_RELEASE)
+        if (mouse_button_event->action == FTIC_RELEASE)
         {
             resize_dragging = false;
         }
@@ -3192,8 +2727,7 @@ int main(int argc, char** argv)
                     parent_directory_path_aabb.min.x - 10.0f,
                 back_drop_height);
 
-        if (is_mouse_button_clicked(application.mouse_button,
-                                    FTIC_MOUSE_BUTTON_LEFT))
+        if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
         {
             if (collision_point_in_aabb(application.mouse_position,
                                         &parent_directory_path_aabb))
@@ -3270,20 +2804,18 @@ int main(int argc, char** argv)
 
         main_list_return_value.hit |= button_move_in_history_add(
             &button_aabb, check_collision,
-            tab->directory_history.current_index > 0,
-            application.mouse_position, application.mouse_button,
-            FTIC_MOUSE_BUTTON_4, -1, arrow_back_icon_co,
-            &tab->selected_item_values, &tab->directory_history, main_render);
+            tab->directory_history.current_index > 0, FTIC_MOUSE_BUTTON_4, -1,
+            arrow_back_icon_co, &tab->selected_item_values,
+            &tab->directory_history, main_render);
 
         button_aabb.min.x += button_aabb.size.x;
 
         b8 extra_condition = tab->directory_history.history.size >
                              tab->directory_history.current_index + 1;
         main_list_return_value.hit |= button_move_in_history_add(
-            &button_aabb, check_collision, extra_condition,
-            application.mouse_position, application.mouse_button,
-            FTIC_MOUSE_BUTTON_5, 1, arrow_right_icon_co,
-            &tab->selected_item_values, &tab->directory_history, main_render);
+            &button_aabb, check_collision, extra_condition, FTIC_MOUSE_BUTTON_5,
+            1, arrow_right_icon_co, &tab->selected_item_values,
+            &tab->directory_history, main_render);
 
         button_aabb.min.x += button_aabb.size.x;
 
@@ -3292,10 +2824,9 @@ int main(int argc, char** argv)
                              can_go_up_one_directory(
                                  current_directory(&tab->directory_history)
                                      ->directory.parent),
-                             application.mouse_position, main_render))
+                             main_render))
         {
-            if (is_mouse_button_clicked(application.mouse_button,
-                                        FTIC_MOUSE_BUTTON_LEFT))
+            if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
             {
                 go_up_one_directory(&tab->directory_history);
             }
@@ -3313,14 +2844,12 @@ int main(int argc, char** argv)
         f32 area_y = directory_aabb.size.y;
         f32 total_height = main_list_return_value.count * quad_height;
         scroll_bar_add(
-            &main_scroll_bar, scroll_bar_position, application.mouse_button,
-            application.mouse_position, application.dimensions.y, area_y,
-            total_height, quad_height,
+            &main_scroll_bar, scroll_bar_position, application.dimensions.y,
+            area_y, total_height, quad_height,
             &current_directory(&tab->directory_history)->scroll_offset,
             &current_directory(&tab->directory_history)->offset, main_render);
 
-        if (is_mouse_button_clicked(application.mouse_button,
-                                    FTIC_MOUSE_BUTTON_2))
+        if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
         {
             right_clicked = true;
             drop_down_menu.position = application.mouse_position;
@@ -3400,8 +2929,7 @@ int main(int argc, char** argv)
                                             &tab_aabb))
                 {
                     tab_color = v4ic(0.3f);
-                    if (is_mouse_button_clicked(application.mouse_button,
-                                                FTIC_MOUSE_BUTTON_LEFT))
+                    if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
                     {
                         application.tab_index = i;
                     }
@@ -3445,8 +2973,7 @@ int main(int argc, char** argv)
 
         if (parent_directory_clicked)
         {
-            b8 backspace_pressed = erase_char(application.key_event,
-                                              &input_index, &parent_directory);
+            b8 backspace_pressed = erase_char(&input_index, &parent_directory);
             if (backspace_pressed)
             {
                 suggestions.tab_index = -1;
@@ -3528,11 +3055,11 @@ int main(int argc, char** argv)
                 scale, parent_directory_path_position,
                 parent_directory_path_position.y -
                     application.font.pixel_height,
-                true, application.key_event, input_index,
-                application.delta_time, &parent_directory_clicked_time,
-                &parent_directory_aabbs, main_render);
+                true, input_index, application.delta_time,
+                &parent_directory_clicked_time, &parent_directory_aabbs,
+                main_render);
             if (suggestion_data.change_directory ||
-                is_key_clicked(application.key_event, FTIC_KEY_ENTER))
+                is_key_clicked(FTIC_KEY_ENTER))
             {
                 char* last_char = array_back(&parent_directory);
                 char saved = *last_char;
@@ -3576,9 +3103,8 @@ int main(int argc, char** argv)
                 preview_render);
         }
 
-        rendering_properties_check_and_grow_buffers(main_render, &index_array);
-        rendering_properties_check_and_grow_buffers(preview_render,
-                                                    &index_array);
+        rendering_properties_check_and_grow_buffers(main_render);
+        rendering_properties_check_and_grow_buffers(preview_render);
 
         buffer_set_sub_data(main_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                             sizeof(Vertex) * main_render->vertices.size,
@@ -3591,23 +3117,22 @@ int main(int argc, char** argv)
         DirectoryPage* current = current_directory(&tab->directory_history);
         if (!search_page.scroll_bar.dragging && !main_scroll_bar.dragging)
         {
-            if (application.mouse_wheel->activated)
+            if (event_get_mouse_wheel_event()->activated)
             {
                 if (collision_point_in_aabb(application.mouse_position,
-                                                 &directory_aabb))
+                                            &directory_aabb))
                 {
                     set_scroll_offset(main_list_return_value.count, quad_height,
-                                      directory_aabb.size.y,
-                                      application.mouse_wheel,
-                                      &current->offset);
+                                      directory_aabb.size.y, &current->offset);
                 }
-                else if (collision_point_in_aabb(application.mouse_position,
-                                            &search_page.search_result_aabb))
+                else if (collision_point_in_aabb(
+                             application.mouse_position,
+                             &search_page.search_result_aabb))
                 {
-                    set_scroll_offset(
-                        search_list_return_value.count, quad_height,
-                        search_page.search_result_aabb.size.y,
-                        application.mouse_wheel, &search_page.offset);
+                    set_scroll_offset(search_list_return_value.count,
+                                      quad_height,
+                                      search_page.search_result_aabb.size.y,
+                                      &search_page.offset);
                 }
             }
             current->scroll_offset =

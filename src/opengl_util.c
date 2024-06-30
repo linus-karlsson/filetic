@@ -171,20 +171,20 @@ AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
 }
 
 AABB quad_border(VertexArray* vertex_array, u32* num_indices, V2 top_left,
-                 V2 size, V4 border_color, f32 thickness, f32 texture_index)
+                 V2 size, V4 color, f32 thickness, f32 texture_index)
 {
     V2 h_size = v2f(size.x, thickness);
     V2 v_size = v2f(thickness, size.y);
 
-    quad(vertex_array, top_left, h_size, border_color, texture_index);
+    quad(vertex_array, top_left, h_size, color, texture_index);
 
     quad(vertex_array, v2f(top_left.x, top_left.y + v_size.y - thickness),
-         h_size, border_color, texture_index);
+         h_size, color, texture_index);
 
-    quad(vertex_array, top_left, v_size, border_color, texture_index);
+    quad(vertex_array, top_left, v_size, color, texture_index);
 
     quad(vertex_array, v2f(top_left.x + h_size.x - thickness, top_left.y),
-         v_size, border_color, texture_index);
+         v_size, color, texture_index);
 
     if (num_indices)
     {
@@ -203,7 +203,7 @@ V2 get_position(VertexArray* vertex_array, const V2 focal, const f32 half_size,
 }
 
 AABB quad_border_rounded(VertexArray* vertex_array, u32* num_indices,
-                         V2 top_left, V2 size, V4 border_color, f32 thickness,
+                         V2 top_left, V2 size, V4 color, f32 thickness,
                          f32 roundness, u32 samples_per_side, f32 texture_index)
 {
 
@@ -220,13 +220,13 @@ AABB quad_border_rounded(VertexArray* vertex_array, u32* num_indices,
     V2 pivot_point_down = v2f(top_left.x, top_left.y + v_size.y);
     pivot_point_down.y -= pivot_offset;
 
-    quad(vertex_array, top_left, h_size, border_color, texture_index);
+    quad(vertex_array, top_left, h_size, color, texture_index);
 
     quad(vertex_array, v2f(top_left.x, top_left.y + v_size.y - thickness),
-         h_size, border_color, texture_index);
+         h_size, color, texture_index);
 
     quad(vertex_array, v2f(pivot_point_up.x - pivot_offset, pivot_point_up.y),
-         v2f(thickness, pivot_point_down.y - pivot_point_up.y), border_color, texture_index);
+         v2f(thickness, pivot_point_down.y - pivot_point_up.y), color, texture_index);
 
     TextureCoordinates texture_coordinates = { v2d(), v2f(0.0f, 1.0f),
                                                v2f(1.0f, 1.0f),
@@ -247,7 +247,7 @@ AABB quad_border_rounded(VertexArray* vertex_array, u32* num_indices,
                 Vertex vertex = {
                     .position = v2d(),
                     .texture_coordinates = texture_coordinates.coordinates[0],
-                    .color = border_color,
+                    .color = color,
                     .texture_index = texture_index,
                 };
                 vertex.position = pivot_point;
@@ -288,7 +288,7 @@ AABB quad_border_rounded(VertexArray* vertex_array, u32* num_indices,
     pivot_point_up.x -= h_size.x;
 
     quad(vertex_array, v2f(pivot_point_up.x + pivot_offset - thickness, pivot_point_up.y),
-         v2f(thickness, pivot_point_down.y - pivot_point_up.y), border_color, texture_index);
+         v2f(thickness, pivot_point_down.y - pivot_point_up.y), color, texture_index);
 
     if (num_indices)
     {

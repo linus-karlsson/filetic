@@ -7,6 +7,6 @@ C:\Windows
 C:\Users\linus\Documents
 C:\Users\linus
 C:\VulkanSDK
-C:\Users\linus\.ssh
-C:\Users\linus\Downloads
+C:\Users\linus\dev\help
 C:\Users\linus\dev\filetic\lib
+C:\Users\linus\dev\filetic\remedy

@@ -173,3 +173,13 @@ b8 string_contains_case_insensitive(const char* string, const char* value)
     }
     return !(*value);
 }
+
+f32 clampf32_low(f32 value, f32 low)
+{
+    return value < low ? low : value;
+}
+
+f32 clampf32_high(f32 value, f32 high)
+{
+    return value > high ? high : value;
+}
