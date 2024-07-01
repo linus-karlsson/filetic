@@ -2214,7 +2214,6 @@ void quick_access_save(DirectoryItemArray* array)
     free(buffer);
 }
 
-
 void look_for_dropped_files(DirectoryPage* current, const char* directory_path)
 {
     const CharPtrArray* dropped_paths = event_get_drop_buffer();
@@ -3139,17 +3138,23 @@ int main(int argc, char** argv)
         }
 #endif
 
-        ui_context_begin(application.dimensions, application.delta_time,
-                         true);
+        ui_context_begin(application.dimensions, application.delta_time, true);
+        {
+            ui_window_begin(windows.data[0], true);
+            {
+            }
+            ui_window_end(application.delta_time);
 
-        ui_window_begin(windows.data[0], true);
+            ui_window_begin(windows.data[1], true);
+            {
+            }
+            ui_window_end(application.delta_time);
 
-        ui_window_end(application.delta_time);
-
-        ui_window_begin(windows.data[1], true);
-
-        ui_window_end(application.delta_time);
-
+            ui_window_begin(windows.data[2], true);
+            {
+            }
+            ui_window_end(application.delta_time);
+        }
         ui_context_end();
 
         application_end_frame(&application);

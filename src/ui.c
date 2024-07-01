@@ -27,6 +27,8 @@ typedef struct UiWindow
     f32 current_scroll_offset;
 
     b8 area_hit;
+
+    b8 top_bar_pressed;
     b8 top_bar_hold;
 
     ScrollBar scroll_bar;
@@ -67,6 +69,13 @@ typedef struct DockArray
     Dock* data;
 } DockArray;
 
+typedef struct V2Array
+{
+    u32 size;
+    u32 capacity;
+    V2* data;
+} V2Array;
+
 typedef struct UiContext
 {
     MVP mvp;
@@ -81,8 +90,10 @@ typedef struct UiContext
 
     RenderingProperties render;
 
+    U32Array dock_free_indices[4];
     U32Array dock_id_to_index[4];
     DockArray docks[4];
+    AABB dock_expanded_spaces[4];
     b8 docking_hit[4];
 
     FontTTF font;
@@ -152,6 +163,24 @@ internal void change_window_order(UiContext* context,
                  window_in_focus_index);
 }
 
+internal u32 get_id(const u32 size, U32Array* free_indices,
+                    U32Array* id_to_index)
+{
+    u32 id = 0;
+    if (free_indices->size)
+    {
+        id = *array_back(free_indices);
+        free_indices->size--;
+        id_to_index->data[id] = size;
+    }
+    else
+    {
+        id = id_to_index->size;
+        array_push(id_to_index, size);
+    }
+    return id;
+}
+
 void ui_context_create()
 {
     array_create(&ui_context.id_to_index, 100);
@@ -164,6 +193,7 @@ void ui_context_create()
     {
         array_create(ui_context.docks + i, 10);
         array_create(ui_context.dock_id_to_index + i, 10);
+        array_create(ui_context.dock_free_indices + i, 10);
     }
 
     VertexBufferLayout vertex_buffer_layout = default_vertex_buffer_layout();
@@ -235,14 +265,16 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
         hover_clicked_index->double_clicked = false;
     }
     ui_context.any_window_hold = false;
+    b8 any_top_bar_pressed = false;
     for (u32 i = 0; i < ui_context.windows.size; ++i)
     {
         UiWindow* window = ui_context.windows.data + i;
         window->rendering_index_count = 0;
         window->rendering_index_offset = 0;
         ui_context.any_window_hold |= window->top_bar_hold;
+        any_top_bar_pressed |= window->top_bar_pressed;
     }
-    if (check_collisions && !ui_context.any_window_hold)
+    if (check_collisions && !ui_context.any_window_hold && !any_top_bar_pressed)
     {
         const b8 mouse_button_clicked =
             is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
@@ -289,7 +321,7 @@ collision_check_done:;
 
 internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
                         const V2 expanded_position, const V2 expanded_size,
-                        u32* index_count)
+                        const u32 index, u32* index_count)
 {
     AABB aabb = {
         .min = contracted_position,
@@ -299,9 +331,11 @@ internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
     b8 result = false;
     if (collision_point_in_aabb(event_get_mouse_position(), &aabb))
     {
-        quad(&ui_context.render.vertices, expanded_position, expanded_size,
-             v4f(secondary_color.r, secondary_color.g, secondary_color.b, 0.4f),
-             0.0f);
+        ui_context.dock_expanded_spaces[index] = quad(
+            &ui_context.render.vertices, expanded_position, expanded_size,
+            v4f(secondary_color.r, secondary_color.g, secondary_color.b, 0.4f),
+            0.0f);
+        *index_count += 6;
         result = true;
     }
     quad_border_rounded(&ui_context.render.vertices, index_count, aabb.min,
@@ -337,7 +371,7 @@ void ui_context_end()
         // Top
         ui_context.docking_hit[0] = set_docking(
             v2f(middle_top_bottom.x, 10.0f), docking_size_top_bottom, v2d(),
-            expanded_size_top_bottom, &index_count);
+            expanded_size_top_bottom, 0, &index_count);
 
         // Right
         ui_context.docking_hit[1] = set_docking(
@@ -346,7 +380,7 @@ void ui_context_end()
                 middle_left_right.y),
             docking_size_left_right,
             v2f(ui_context.dimensions.x - expanded_size_left_right.width, 0.0f),
-            expanded_size_left_right, &index_count);
+            expanded_size_left_right, 1, &index_count);
 
         // Bottom
         ui_context.docking_hit[2] =
@@ -356,23 +390,110 @@ void ui_context_end()
                         docking_size_top_bottom,
                         v2f(0.0f, ui_context.dimensions.y -
                                       expanded_size_top_bottom.height),
-                        expanded_size_top_bottom, &index_count);
+                        expanded_size_top_bottom, 2, &index_count);
 
         // Left
         ui_context.docking_hit[3] = set_docking(
             v2f(10.0f, middle_left_right.y), docking_size_left_right,
-            v2f(0, 0.0f), expanded_size_left_right, &index_count);
+            v2f(0, 0.0f), expanded_size_left_right, 3, &index_count);
 
         ui_context.current_index_offset = index_offset + index_count;
+
+        UiWindow* focused_window = ui_context.windows.data;
+        const i32 docking_space = focused_window->docking_space;
+        if (docking_space >= 0)
+        {
+            U32Array* free_indices =
+                ui_context.dock_free_indices + docking_space;
+            U32Array* id_to_index = ui_context.dock_id_to_index + docking_space;
+            DockArray* docks = ui_context.docks + docking_space;
+
+            if (docks->size > 1)
+            {
+                i32 index = id_to_index->data[focused_window->docking_id];
+                Dock dock = docks->data[index];
+                for (u32 i = index; i < docks->size - 1; ++i)
+                {
+                    docks->data[i] = docks->data[i + 1];
+                    id_to_index->data[docks->data[i].id] = i;
+                }
+                docks->size--;
+
+                if (--index >= 0)
+                {
+                    V2 new_size =
+                        v2_sub(docks->data[index].aabb.min, dock.aabb.min);
+                    docks->data[index].aabb.min = dock.aabb.min;
+                    v2_add_equal(&docks->data[index].aabb.size, new_size);
+                }
+
+                array_push(free_indices, focused_window->docking_id);
+            }
+            else
+            {
+                docks->size--;
+                id_to_index->size--;
+            }
+            focused_window->docking_id = -1;
+            focused_window->docking_space = -1;
+        }
     }
     else
     {
-        for (u32 i = 0; i < 4; ++i)
+        if (ui_context.docking_hit[3])
         {
-            if (ui_context.docking_hit[i])
-            {
+        }
+        if (ui_context.docking_hit[3])
+        {
+            U32Array* free_indices = ui_context.dock_free_indices + 3;
+            U32Array* id_to_index = ui_context.dock_id_to_index + 3;
+            DockArray* docks = ui_context.docks + 3;
 
+            u32 id = get_id(docks->size, free_indices, id_to_index);
+            Dock dock = { .id = id };
+            if (docks->size)
+            {
+                f32 highest_x = 0.0f;
+                f32 highest_width = 0.0f;
+                for (u32 i = 0; i < docks->size; ++i)
+                {
+                    const f32 current_x = docks->data[i].aabb.min.x +
+                                          docks->data[i].aabb.size.width;
+                    const f32 current_width = docks->data[i].aabb.size.width;
+                    highest_x = max(highest_x, current_x);
+                    highest_width = max(highest_width, current_width);
+                }
+                AABB aabb = {
+                    .min = ui_context.dock_expanded_spaces[3].min,
+                    .size = ui_context.dock_expanded_spaces[3].size,
+                };
+                aabb.size.width -= highest_x * 0.3f;
+
+                const f32 total_width_decrease = aabb.size.width;
+                highest_x += total_width_decrease;
+
+                f32 precent = aabb.size.width / highest_x;
+
+                aabb.size.width -= total_width_decrease * precent;
+                AABB last = aabb;
+                for (i32 i = docks->size - 1; i >= 0; --i)
+                {
+                    Dock* other_dock = docks->data + i;
+                    precent = other_dock->aabb.size.width / highest_x;
+                    other_dock->aabb.min.x = last.min.x + last.size.width;
+                    other_dock->aabb.size.width -=
+                        total_width_decrease * precent;
+                    last = other_dock->aabb;
+                }
+                dock.aabb = aabb;
             }
+            else
+            {
+                dock.aabb = ui_context.dock_expanded_spaces[3];
+            }
+            array_push(docks, dock);
+            ui_context.windows.data[0].docking_space = 3;
+            ui_context.windows.data[0].docking_id = id;
         }
         memset(ui_context.docking_hit, 0, sizeof(ui_context.docking_hit));
     }
@@ -397,18 +518,8 @@ void ui_context_end()
 
 u32 ui_window_create()
 {
-    u32 id = 0;
-    if (ui_context.free_indices.size)
-    {
-        id = *array_back(&ui_context.free_indices);
-        ui_context.free_indices.size--;
-        ui_context.id_to_index.data[id] = ui_context.windows.size;
-    }
-    else
-    {
-        id = ui_context.id_to_index.size;
-        array_push(&ui_context.id_to_index, ui_context.windows.size);
-    }
+    u32 id = get_id(ui_context.windows.size, &ui_context.free_indices,
+                    &ui_context.id_to_index);
 
     UiWindow window = {
         .id = id,
@@ -437,7 +548,7 @@ void ui_window_begin(u32 window_id, b8 top_bar)
     UiWindow* window = ui_context.windows.data + window_index;
     AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
 
-    if (window->docking_space >= 0)
+    if (window->docking_space >= 0 && !window->top_bar_hold)
     {
         const Dock* dock = ui_context.docks[window->docking_space].data +
                            ui_context.dock_id_to_index[window->docking_space]
@@ -472,15 +583,15 @@ void ui_window_end(const f64 delta_time)
 
     if (hover_clicked_index.index == (i32)aabbs->size)
     {
-        if (hover_clicked_index.pressed && !window->top_bar_hold)
+        if (hover_clicked_index.pressed && !window->top_bar_pressed)
         {
-            window->top_bar_offset =
-                v2_sub(window->position, event_get_mouse_position());
-            window->top_bar_hold = true;
+            window->top_bar_offset = event_get_mouse_position();
+            window->top_bar_pressed = true;
         }
     }
     if (event_get_mouse_button_event()->action == FTIC_RELEASE)
     {
+        window->top_bar_pressed = false;
         window->top_bar_hold = false;
     }
 
@@ -488,6 +599,16 @@ void ui_window_end(const f64 delta_time)
     {
         window->position =
             v2_add(event_get_mouse_position(), window->top_bar_offset);
+    }
+    else if (window->top_bar_pressed)
+    {
+        if (v2_distance(window->top_bar_offset, event_get_mouse_position()) >=
+            10.0f)
+        {
+            window->top_bar_hold = true;
+            window->top_bar_offset =
+                v2_sub(window->position, event_get_mouse_position());
+        }
     }
 
     array_push(aabbs, quad(&ui_context.render.vertices, window->position,
