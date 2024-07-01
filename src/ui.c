@@ -842,10 +842,12 @@ b8 ui_window_add_input_field(V2 position, const V2 size, const f64 delta_time,
                            high_light_color, 0.0f));
     window->rendering_index_count += 6;
 
-    b8 typed = erase_char(input);
-
-    typed |= add_from_key_buffer(size.width - 10.0f, input);
-
+    b8 typed = false;
+    if (input->active)
+    {
+        typed = erase_char(input);
+        typed |= add_from_key_buffer(size.width - 10.0f, input);
+    }
     V2 text_position =
         v2f(position.x + 5.0f,
             position.y + (middle(size.y, ui_context.font.pixel_height) * 0.8f));

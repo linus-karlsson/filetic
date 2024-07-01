@@ -2386,6 +2386,12 @@ int main(int argc, char** argv)
     quick_access_load(&quick_access_folders);
     f64 quick_access_pulse_x = 0.0f;
 
+    InputBuffer parent_directory_input = {
+        .input_index = -1,
+        .time = 0.4f,
+    };
+    array_create(&parent_directory_input.buffer, 20);
+
     InputBuffer search_input = {
         .input_index = -1,
         .time = 0.4f,
@@ -3212,10 +3218,22 @@ int main(int argc, char** argv)
                 }
 
                 button_aabb.min.x += button_aabb.size.width + 10.0f;
-                button_aabb.size.x = 150.0f;
-                ui_window_add_input_field(button_aabb.min, button_aabb.size,
-                                          application.delta_time,
-                                          &search_input);
+                button_aabb.size.x =
+                    (application.dimensions.width - (search_bar_width + 20.0f)) -
+                    button_aabb.min.x;
+                if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
+                                              application.delta_time,
+                                              &parent_directory_input))
+                {
+                }
+
+                button_aabb.min.x += button_aabb.size.width + 10.0f;
+                button_aabb.size.x = search_bar_width;
+                if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
+                                              application.delta_time,
+                                              &search_input))
+                {
+                }
             }
             ui_window_end(application.delta_time);
 
