@@ -2391,8 +2391,6 @@ int main(int argc, char** argv)
         .time = 0.4f,
     };
     array_create(&search_input.buffer, 20);
-    array_push(&search_input.buffer, 'd');
-    array_push(&search_input.buffer, '\0');
 
     b8 parent_directory_clicked = false;
     f64 parent_directory_clicked_time = 0.4f;

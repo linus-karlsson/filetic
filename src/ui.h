@@ -66,5 +66,5 @@ b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 texture_coordi
 void ui_window_add_directory_list(V2 position);
 void ui_window_add_folder_list(V2 position);
 void ui_window_add_file_list(V2 position);
-void ui_window_add_input_field(V2 position, const V2 size, const f64 delta_time, InputBuffer* input);
+b8 ui_window_add_input_field(V2 position, const V2 size, const f64 delta_time, InputBuffer* input);
 void ui_window_add_input_field_width_suggestions(V2 position, CharArray* input);

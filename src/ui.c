@@ -290,7 +290,7 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
                         hover_clicked_index->pressed = mouse_button_pressed;
                         hover_clicked_index->clicked = mouse_button_clicked;
                         ui_context.window_in_focus_index = window_index;
-                        //change_window_order(&ui_context, window_index);
+                        // change_window_order(&ui_context, window_index);
                     }
                     goto collision_check_done;
                 }
@@ -553,9 +553,10 @@ void ui_window_begin(u32 window_id, b8 top_bar)
     window->rendering_index_offset = ui_context.current_index_offset;
     aabbs->size = 0;
 
-    array_push(aabbs, quad_gradiant_t_b(&ui_context.render.vertices,
-                                        window->position, window->dimensions,
-                                        window->top_color, window->bottom_color, 0.0f));
+    array_push(aabbs,
+               quad_gradiant_t_b(&ui_context.render.vertices, window->position,
+                                 window->dimensions, window->top_color,
+                                 window->bottom_color, 0.0f));
     window->rendering_index_count += 6;
     window->area_hit =
         collision_point_in_aabb(event_get_mouse_position(), array_back(aabbs));
@@ -762,8 +763,9 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
     return index_count;
 }
 
-internal void add_from_key_buffer(const f32 width, InputBuffer* input)
+internal b8 add_from_key_buffer(const f32 width, InputBuffer* input)
 {
+    b8 key_typed = false;
     const CharArray* key_buffer = event_get_key_buffer();
     for (u32 i = 0; i < key_buffer->size; ++i)
     {
@@ -774,10 +776,11 @@ internal void add_from_key_buffer(const f32 width, InputBuffer* input)
             f32 x_advance =
                 text_x_advance(ui_context.font.chars, input->buffer.data,
                                input->buffer.size, 1.0f);
-            input->buffer.size--;
+
+            input->buffer.data[--input->buffer.size] = '\0';
             if (x_advance >= width)
             {
-                return;
+                return key_typed;
             }
             array_push(&input->buffer, '\0');
             for (i32 j = input->buffer.size - 1; j > input->input_index; --j)
@@ -789,12 +792,37 @@ internal void add_from_key_buffer(const f32 width, InputBuffer* input)
             array_push(&input->buffer, '\0');
             array_push(&input->buffer, '\0');
             input->buffer.size -= 3;
+            key_typed = true;
         }
     }
+    return key_typed;
 }
 
-void ui_window_add_input_field(V2 position, const V2 size, const f64 delta_time,
-                               InputBuffer* input)
+internal b8 erase_char(InputBuffer* input)
+{
+    const KeyEvent* key_event = event_get_key_event();
+    if (key_event->activated &&
+        (key_event->action == FTIC_PRESS || key_event->action == FTIC_REPEAT) &&
+        (key_event->key == FTIC_KEY_BACKSPACE ||
+         (key_event->ctrl_pressed && key_event->key == FTIC_KEY_H)))
+    {
+        if (input->input_index > 0)
+        {
+            input->input_index--;
+            for (u32 i = input->input_index; i < input->buffer.size; ++i)
+            {
+                input->buffer.data[i] = input->buffer.data[i + 1];
+            }
+            *array_back(&input->buffer) = '\0';
+            input->buffer.size--;
+            return true;
+        }
+    }
+    return false;
+}
+
+b8 ui_window_add_input_field(V2 position, const V2 size, const f64 delta_time,
+                             InputBuffer* input)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
@@ -814,15 +842,21 @@ void ui_window_add_input_field(V2 position, const V2 size, const f64 delta_time,
                            high_light_color, 0.0f));
     window->rendering_index_count += 6;
 
-    window->rendering_index_count += render_input(
-        delta_time,
+    b8 typed = erase_char(input);
+
+    typed |= add_from_key_buffer(size.width - 10.0f, input);
+
+    V2 text_position =
         v2f(position.x + 5.0f,
-            position.y + (middle(size.y, ui_context.font.pixel_height) * 0.8f)),
-        input);
+            position.y + (middle(size.y, ui_context.font.pixel_height) * 0.8f));
+    window->rendering_index_count +=
+        render_input(delta_time, text_position, input);
 
     quad_border_rounded(&ui_context.render.vertices,
                         &window->rendering_index_count, position, size,
                         border_color, 1.0f, 0.4f, 3, 0.0f);
+
+    return typed;
 }
 
 void ui_window_add_directory_list(V2 position)
