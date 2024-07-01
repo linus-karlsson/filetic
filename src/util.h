@@ -54,4 +54,4 @@ b8 string_contains(const char* string, const u32 string_length, const char* valu
 f32 clampf32_low(f32 value, f32 low);
 f32 clampf32_high(f32 value, f32 high);
 
-
+f32 middle(const f32 area_size, const f32 object_size);

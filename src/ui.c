@@ -5,11 +5,14 @@
 #include "texture.h"
 #include "logging.h"
 #include <string.h>
+#include <stdio.h>
 #include <glad/glad.h>
 
 typedef struct UiWindow
 {
     u32 id;
+    i32 docking_space;
+    i32 docking_id;
     V2 dimensions;
     V2 position;
     V2 first_item_position;
@@ -50,6 +53,20 @@ typedef struct AABBArrayArray
     AABBArray* data;
 } AABBArrayArray;
 
+typedef struct Dock
+{
+    u32 id;
+    AABB aabb;
+} Dock;
+
+typedef struct DockArray
+{
+
+    u32 size;
+    u32 capacity;
+    Dock* data;
+} DockArray;
+
 typedef struct UiContext
 {
     MVP mvp;
@@ -63,6 +80,10 @@ typedef struct UiContext
     HoverClickedIndexArray window_hover_clicked_indices;
 
     RenderingProperties render;
+
+    U32Array dock_id_to_index[4];
+    DockArray docks[4];
+    b8 docking_hit[4];
 
     FontTTF font;
 
@@ -139,6 +160,12 @@ void ui_context_create()
     array_create(&ui_context.window_aabbs, 10);
     array_create(&ui_context.window_hover_clicked_indices, 10);
 
+    for (u32 i = 0; i < 4; ++i)
+    {
+        array_create(ui_context.docks + i, 10);
+        array_create(ui_context.dock_id_to_index + i, 10);
+    }
+
     VertexBufferLayout vertex_buffer_layout = default_vertex_buffer_layout();
 
     u32 shader = shader_create("./res/shaders/vertex.glsl",
@@ -203,6 +230,7 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
             ui_context.window_hover_clicked_indices.data + i;
         hover_clicked_index->index = -1;
         hover_clicked_index->clicked = false;
+        hover_clicked_index->pressed = false;
         hover_clicked_index->hover = false;
         hover_clicked_index->double_clicked = false;
     }
@@ -214,12 +242,18 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
         window->rendering_index_offset = 0;
         ui_context.any_window_hold |= window->top_bar_hold;
     }
-    if (check_collisions)
+    if (check_collisions && !ui_context.any_window_hold)
     {
         const b8 mouse_button_clicked =
             is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
+
+        const MouseButtonEvent* mouse_button_event =
+            event_get_mouse_button_event();
+
         const b8 mouse_button_pressed =
-            event_get_mouse_button_event()->action == FTIC_PRESS;
+            mouse_button_event->activated &&
+            mouse_button_event->action == FTIC_PRESS;
+
         const V2 mouse_position = event_get_mouse_position();
         for (u32 window_index = 0; window_index < ui_context.windows.size;
              ++window_index)
@@ -238,7 +272,7 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
                     hover_clicked_index->index = aabb_index;
                     hover_clicked_index->hover = true;
                     hover_clicked_index->double_clicked =
-                        event_get_mouse_button_event()->double_clicked;
+                        mouse_button_event->double_clicked;
                     if (mouse_button_clicked || mouse_button_pressed)
                     {
                         hover_clicked_index->pressed = mouse_button_pressed;
@@ -253,27 +287,111 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
 collision_check_done:;
 }
 
+internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
+                        const V2 expanded_position, const V2 expanded_size,
+                        u32* index_count)
+{
+    AABB aabb = {
+        .min = contracted_position,
+        .size = contracted_size,
+    };
+
+    b8 result = false;
+    if (collision_point_in_aabb(event_get_mouse_position(), &aabb))
+    {
+        quad(&ui_context.render.vertices, expanded_position, expanded_size,
+             v4f(secondary_color.r, secondary_color.g, secondary_color.b, 0.4f),
+             0.0f);
+        result = true;
+    }
+    quad_border_rounded(&ui_context.render.vertices, index_count, aabb.min,
+                        aabb.size, secondary_color, 1.0f, 0.4f, 3, 0.0f);
+    return result;
+}
+
 void ui_context_end()
 {
-    u32 total_index_count = 0;
-    for (u32 i = 0; i < ui_context.windows.size; ++i)
+    const u32 index_offset = ui_context.current_index_offset;
+    u32 index_count = 0;
+
+    if (ui_context.any_window_hold)
     {
-        total_index_count += ui_context.windows.data[i].rendering_index_count;
+        const V2 docking_size_top_bottom = v2f(50.0f, 30.0f);
+        const V2 docking_size_left_right = v2f(30.0f, 50.0f);
+        const V2 middle_top_bottom = v2f(
+            middle(ui_context.dimensions.width, docking_size_top_bottom.width),
+            middle(ui_context.dimensions.height,
+                   docking_size_top_bottom.height));
+        const V2 middle_left_right = v2f(
+            middle(ui_context.dimensions.width, docking_size_top_bottom.width),
+            middle(ui_context.dimensions.height,
+                   docking_size_top_bottom.height));
+
+        const V2 expanded_size_top_bottom = v2f(
+            ui_context.dimensions.width, ui_context.dimensions.height * 0.3f);
+        const V2 expanded_size_left_right = v2f(
+            ui_context.dimensions.width * 0.5f, ui_context.dimensions.height);
+
+        memset(ui_context.docking_hit, 0, sizeof(ui_context.docking_hit));
+
+        // Top
+        ui_context.docking_hit[0] = set_docking(
+            v2f(middle_top_bottom.x, 10.0f), docking_size_top_bottom, v2d(),
+            expanded_size_top_bottom, &index_count);
+
+        // Right
+        ui_context.docking_hit[1] = set_docking(
+            v2f(ui_context.dimensions.x -
+                    (docking_size_left_right.width + 10.0f),
+                middle_left_right.y),
+            docking_size_left_right,
+            v2f(ui_context.dimensions.x - expanded_size_left_right.width, 0.0f),
+            expanded_size_left_right, &index_count);
+
+        // Bottom
+        ui_context.docking_hit[2] =
+            set_docking(v2f(middle_top_bottom.x,
+                            ui_context.dimensions.y -
+                                (docking_size_top_bottom.height + 10.0f)),
+                        docking_size_top_bottom,
+                        v2f(0.0f, ui_context.dimensions.y -
+                                      expanded_size_top_bottom.height),
+                        expanded_size_top_bottom, &index_count);
+
+        // Left
+        ui_context.docking_hit[3] = set_docking(
+            v2f(10.0f, middle_left_right.y), docking_size_left_right,
+            v2f(0, 0.0f), expanded_size_left_right, &index_count);
+
+        ui_context.current_index_offset = index_offset + index_count;
     }
-    rendering_properties_check_and_grow_buffers(&ui_context.render,
-                                                total_index_count);
+    else
+    {
+        for (u32 i = 0; i < 4; ++i)
+        {
+            if (ui_context.docking_hit[i])
+            {
+
+            }
+        }
+        memset(ui_context.docking_hit, 0, sizeof(ui_context.docking_hit));
+    }
+
+    rendering_properties_check_and_grow_buffers(
+        &ui_context.render, ui_context.current_index_offset);
 
     buffer_set_sub_data(ui_context.render.vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                         sizeof(Vertex) * ui_context.render.vertices.size,
                         ui_context.render.vertices.data);
 
     rendering_properties_begin_draw(&ui_context.render, &ui_context.mvp);
-    for (u32 i = 0; i < ui_context.windows.size; ++i)
+    for (i32 i = ui_context.windows.size - 1; i >= 0; --i)
     {
         const UiWindow* window = ui_context.windows.data + i;
         rendering_properties_draw(window->rendering_index_offset,
                                   window->rendering_index_count);
     }
+    rendering_properties_draw(index_offset, index_count);
     rendering_properties_end_draw(&ui_context.render);
 }
 
@@ -284,15 +402,18 @@ u32 ui_window_create()
     {
         id = *array_back(&ui_context.free_indices);
         ui_context.free_indices.size--;
+        ui_context.id_to_index.data[id] = ui_context.windows.size;
     }
     else
     {
         id = ui_context.id_to_index.size;
+        array_push(&ui_context.id_to_index, ui_context.windows.size);
     }
-    ui_context.id_to_index.data[id] = ui_context.windows.size;
 
     UiWindow window = {
         .id = id,
+        .docking_space = -1,
+        .docking_id = -1,
         .index = ui_context.windows.size,
         .dimensions = v2f(100.0f, 100.0f),
     };
@@ -315,6 +436,16 @@ void ui_window_begin(u32 window_id, b8 top_bar)
         ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
     AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+
+    if (window->docking_space >= 0)
+    {
+        const Dock* dock = ui_context.docks[window->docking_space].data +
+                           ui_context.dock_id_to_index[window->docking_space]
+                               .data[window->docking_id];
+
+        window->position = dock->aabb.min;
+        window->dimensions = dock->aabb.size;
+    }
 
     window->rendering_index_offset = ui_context.current_index_offset;
     aabbs->size = 0;

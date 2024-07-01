@@ -2214,10 +2214,6 @@ void quick_access_save(DirectoryItemArray* array)
     free(buffer);
 }
 
-f32 middle(const f32 area_size, const f32 object_size)
-{
-    return (area_size * 0.5f) - (object_size * 0.5f);
-}
 
 void look_for_dropped_files(DirectoryPage* current, const char* directory_path)
 {
@@ -3147,6 +3143,10 @@ int main(int argc, char** argv)
                          true);
 
         ui_window_begin(windows.data[0], true);
+
+        ui_window_end(application.delta_time);
+
+        ui_window_begin(windows.data[1], true);
 
         ui_window_end(application.delta_time);
 

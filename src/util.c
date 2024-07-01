@@ -183,3 +183,8 @@ f32 clampf32_high(f32 value, f32 high)
 {
     return value > high ? high : value;
 }
+
+f32 middle(const f32 area_size, const f32 object_size)
+{
+    return (area_size * 0.5f) - (object_size * 0.5f);
+}
