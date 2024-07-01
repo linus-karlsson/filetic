@@ -2080,6 +2080,23 @@ b8 button_move_in_history_add(const AABB* button_aabb, const b8 check_collision,
     return result;
 }
 
+void add_move_in_history_button(const AABB* aabb, const V4 icon_co,
+                                const b8 disable, const int mouse_button,
+                                const i32 history_add,
+                                SelectedItemValues* selected_item_values,
+                                DirectoryHistory* directory_history)
+{
+    if (ui_window_add_icon_button(aabb->min, aabb->size, icon_co, 3.0f,
+                                  disable))
+    {
+        move_in_history(history_add, selected_item_values, directory_history);
+    }
+    if (!disable && is_mouse_button_clicked(mouse_button))
+    {
+        move_in_history(history_add, selected_item_values, directory_history);
+    }
+}
+
 void directory_sort_by_size(DirectoryItemArray* array)
 {
     if (array->size <= 1) return;
@@ -2326,7 +2343,7 @@ int main(int argc, char** argv)
     array_create(&windows, 10);
     {
         ui_context_create();
-        for (u32 i = 0; i < 5; ++i)
+        for (u32 i = 0; i < 10; ++i)
         {
             array_push(&windows, ui_window_create());
         }
@@ -2368,6 +2385,14 @@ int main(int argc, char** argv)
     array_create(&quick_access_folders, 10);
     quick_access_load(&quick_access_folders);
     f64 quick_access_pulse_x = 0.0f;
+
+    InputBuffer search_input = {
+        .input_index = -1,
+        .time = 0.4f,
+    };
+    array_create(&search_input.buffer, 20);
+    array_push(&search_input.buffer, 'd');
+    array_push(&search_input.buffer, '\0');
 
     b8 parent_directory_clicked = false;
     f64 parent_directory_clicked_time = 0.4f;
@@ -2411,6 +2436,8 @@ int main(int argc, char** argv)
     while (!window_should_close(application.window))
     {
         application_begin_frame(&application);
+
+        DirectoryTab* tab = application.tabs.data + application.tab_index;
 #if 0
         main_index_count = 0;
         preview_index_count = 0;
@@ -2429,7 +2456,6 @@ int main(int argc, char** argv)
             }
         }
 
-        DirectoryTab* tab = application.tabs.data + application.tab_index;
 
         const MouseButtonEvent* mouse_button_event =
             event_get_mouse_button_event();
@@ -2452,25 +2478,17 @@ int main(int argc, char** argv)
             mouse_move_event->activated &&
             tab->selected_item_values.paths.size > 0)
         {
-            distance +=
+            distance =
                 v2_distance(last_mouse_position, application.mouse_position);
             if (distance >= 10.0f)
             {
-#if 0
-                ThreadTask drag_task = thread_task(
-                    drag_drop_callback, &tab->selected_item_values.paths);
-                thread_tasks_push(&thread_queue.task_queue, &drag_task, 1,
-                                  NULL);
-#else
                 platform_start_drag_drop(&tab->selected_item_values.paths);
-#endif
-
                 activated = false;
             }
-            last_mouse_position = application.mouse_position;
         }
 
         application_begin_frame(&application);
+
 
         rendering_properties_array_clear(&rendering_properties);
         main_render->scissor.size = application.dimensions;
@@ -2669,6 +2687,8 @@ int main(int argc, char** argv)
             .min = v2f(0.0f, top_bar_height),
             .size = v2f(application.dimensions.x, border_width),
         };
+
+
 
         const f32 scale = 1.0f;
         const f32 padding_top = 2.0f;
@@ -3136,26 +3156,83 @@ int main(int argc, char** argv)
             rendering_properties_draw(0, main_index_count);
             rendering_properties_end_draw(rendering_properties.data + i);
         }
-#endif
+#else
+        const f32 top_bar_height = 60.0f;
 
+        UiWindow* top_bar = ui_window_get(windows.data[0]);
+        top_bar->position = v2d();
+        top_bar->dimensions = v2f(application.dimensions.width, top_bar_height);
+        top_bar->top_color = v4ic(0.2f);
+        top_bar->bottom_color = v4ic(0.15f);
+
+        UiWindow* quick_access = ui_window_get(windows.data[1]);
+        quick_access->position = v2f(top_bar->position.x, top_bar_height);
+        quick_access->dimensions =
+            v2f(starting_position.x,
+                application.dimensions.height - top_bar_height);
+
+        UiWindow* directory = ui_window_get(windows.data[2]);
+        directory->position =
+            v2f(quick_access->position.x + quick_access->dimensions.width,
+                quick_access->position.y);
+        directory->dimensions =
+            v2f(application.dimensions.width - directory->position.x,
+                application.dimensions.height - top_bar_height);
+
+        static b8 test = false;
         ui_context_begin(application.dimensions, application.delta_time, true);
         {
-            ui_window_begin(windows.data[0], true);
+            ui_window_begin(windows.data[0], false);
+            {
+                AABB button_aabb = {
+                    .size = v2i(40.0f),
+                };
+                button_aabb.min = v2f(10.0f, middle(top_bar->dimensions.height,
+                                                    button_aabb.size.height));
+                b8 disable = tab->directory_history.current_index <= 0;
+                add_move_in_history_button(&button_aabb, arrow_back_icon_co,
+                                           disable, FTIC_MOUSE_BUTTON_4, -1,
+                                           &tab->selected_item_values,
+                                           &tab->directory_history);
+
+                button_aabb.min.x += button_aabb.size.width;
+                disable = tab->directory_history.history.size <=
+                          tab->directory_history.current_index + 1;
+                add_move_in_history_button(&button_aabb, arrow_right_icon_co,
+                                           disable, FTIC_MOUSE_BUTTON_4, 1,
+                                           &tab->selected_item_values,
+                                           &tab->directory_history);
+
+                button_aabb.min.x += button_aabb.size.width;
+                disable = !can_go_up_one_directory(
+                    current_directory(&tab->directory_history)
+                        ->directory.parent);
+                if (ui_window_add_icon_button(button_aabb.min, button_aabb.size,
+                                              arrow_up_icon_co, 3.0f, disable))
+                {
+                    go_up_one_directory(&tab->directory_history);
+                }
+
+                button_aabb.min.x += button_aabb.size.width + 10.0f;
+                button_aabb.size.x = 150.0f;
+                ui_window_add_input_field(button_aabb.min, button_aabb.size,
+                                          application.delta_time,
+                                          &search_input);
+            }
+            ui_window_end(application.delta_time);
+
+            ui_window_begin(windows.data[1], false);
             {
             }
             ui_window_end(application.delta_time);
 
-            ui_window_begin(windows.data[1], true);
-            {
-            }
-            ui_window_end(application.delta_time);
-
-            ui_window_begin(windows.data[2], true);
+            ui_window_begin(windows.data[2], false);
             {
             }
             ui_window_end(application.delta_time);
         }
         ui_context_end();
+#endif
 
         application_end_frame(&application);
     }
