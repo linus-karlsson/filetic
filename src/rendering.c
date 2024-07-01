@@ -4,7 +4,7 @@
 #include <glad/glad.h>
 
 RenderingProperties
-rendering_properties_initialize(u32 shader_id, u32* textures, u32 texture_count,
+rendering_properties_initialize(u32 shader_id, U32Array textures,
                                 const VertexBufferLayout* vertex_buffer_layout,
                                 u32 vertex_buffer_size, u32 index_buffer_size)
 {
@@ -22,7 +22,6 @@ rendering_properties_initialize(u32 shader_id, u32* textures, u32 texture_count,
                             rendering_properties.vertex_buffer_id,
                             vertex_buffer_layout);
 
-
     array_create(&rendering_properties.indices, index_buffer_size);
     generate_indicies(&rendering_properties.indices, 0, index_buffer_size / 6);
     u32 index_buffer_id = index_buffer_create(rendering_properties.indices.data,
@@ -31,7 +30,6 @@ rendering_properties_initialize(u32 shader_id, u32* textures, u32 texture_count,
     free(rendering_properties.indices.data);
 
     rendering_properties.index_buffer_id = index_buffer_id;
-    rendering_properties.texture_count = texture_count;
     rendering_properties.textures = textures;
     rendering_properties.shader_properties =
         shader_create_properties(shader_id, "proj", "view", "model");
@@ -41,9 +39,7 @@ rendering_properties_initialize(u32 shader_id, u32* textures, u32 texture_count,
 
 void rendering_properties_clear(RenderingProperties* rendering_properties)
 {
-    rendering_properties->index_count = 0;
     rendering_properties->vertices.size = 0;
-    //rendering_properties->indices.size = 0;
 }
 
 void rendering_properties_array_clear(
@@ -56,7 +52,7 @@ void rendering_properties_array_clear(
 }
 
 void rendering_properties_check_and_grow_buffers(
-    RenderingProperties* rendering_properties)
+    RenderingProperties* rendering_properties, const u32 total_index_count)
 {
     if (rendering_properties->vertices.size >
         rendering_properties->vertex_buffer_capacity)
@@ -69,8 +65,7 @@ void rendering_properties_check_and_grow_buffers(
             rendering_properties->vertices.capacity;
     }
 
-    if (rendering_properties->index_count * 6 >
-        rendering_properties->indices.size)
+    if (total_index_count > rendering_properties->indices.size)
     {
         rendering_properties->indices.size = 0;
         rendering_properties->indices.capacity *= 2;
@@ -86,28 +81,34 @@ void rendering_properties_check_and_grow_buffers(
     }
 }
 
-void rendering_properties_draw(const RenderingProperties* rendering_properties,
-                               const MVP* mvp)
+void rendering_properties_begin_draw(
+    const RenderingProperties* rendering_properties, const MVP* mvp)
 {
-    if (rendering_properties->index_count)
+    shader_bind(rendering_properties->shader_properties.shader);
+    shader_set_mvp(&rendering_properties->shader_properties, mvp);
+
+    int textures[20] = { 0 };
+    for (u32 i = 0; i < rendering_properties->textures.size; ++i)
     {
-        shader_bind(rendering_properties->shader_properties.shader);
-        shader_set_mvp(&rendering_properties->shader_properties, mvp);
+        textures[i] = (int)i;
+    }
+    int location = glGetUniformLocation(
+        rendering_properties->shader_properties.shader, "textures");
+    ftic_assert(location != -1);
+    glUniform1iv(location, rendering_properties->textures.size, textures);
 
-        int textures[20] = { 0 };
-        for (u32 i = 0; i < rendering_properties->texture_count; ++i)
-        {
-            textures[i] = (int)i;
-        }
-        int location = glGetUniformLocation(
-            rendering_properties->shader_properties.shader, "textures");
-        ftic_assert(location != -1);
-        glUniform1iv(location, rendering_properties->texture_count, textures);
+    for (u32 i = 0; i < rendering_properties->textures.size; ++i)
+    {
+        texture_bind(rendering_properties->textures.data[i], (int)i);
+    }
+    vertex_array_bind(rendering_properties->vertex_array_id);
+    index_buffer_bind(rendering_properties->index_buffer_id);
+}
 
-        for (u32 i = 0; i < rendering_properties->texture_count; ++i)
-        {
-            texture_bind(rendering_properties->textures[i], (int)i);
-        }
+void rendering_properties_draw(const u32 index_offset, const u32 index_count)
+{
+    if (index_count)
+    {
 
         /*
         const AABB* scissor = &rendering_properties->scissor;
@@ -115,18 +116,20 @@ void rendering_properties_draw(const RenderingProperties* rendering_properties,
                   (int)scissor->size.width, (int)scissor->size.height);
                   */
 
-        vertex_array_bind(rendering_properties->vertex_array_id);
-        index_buffer_bind(rendering_properties->index_buffer_id);
-        glDrawElements(GL_TRIANGLES, rendering_properties->index_count * 6,
-                       GL_UNSIGNED_INT, NULL);
-
-        for (u32 i = 0; i < rendering_properties->texture_count; ++i)
-        {
-            texture_unbind((int)i);
-        }
-        index_buffer_unbind();
-        vertex_array_unbind();
-        shader_unbind();
-
+        GLintptr offset = index_offset * sizeof(u32);
+        glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT,
+                       (void*)offset);
     }
+}
+
+void rendering_properties_end_draw(
+    const RenderingProperties* rendering_properties)
+{
+    for (u32 i = 0; i < rendering_properties->textures.size; ++i)
+    {
+        texture_unbind((int)i);
+    }
+    index_buffer_unbind();
+    vertex_array_unbind();
+    shader_unbind();
 }

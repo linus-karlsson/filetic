@@ -1,4 +1,6 @@
 #include "opengl_util.h"
+#include "texture.h"
+#include <glad/glad.h>
 #include <math.h>
 
 internal AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size,
@@ -162,7 +164,7 @@ AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices,
 
     if (num_indices)
     {
-        *num_indices += 4;
+        *num_indices += 4 * 6;
     }
     AABB out = { 0 };
     out.min = top_left;
@@ -188,7 +190,7 @@ AABB quad_border(VertexArray* vertex_array, u32* num_indices, V2 top_left,
 
     if (num_indices)
     {
-        *num_indices += 4;
+        *num_indices += 4 * 6;
     }
     AABB out = { 0 };
     out.min = top_left;
@@ -292,10 +294,47 @@ AABB quad_border_rounded(VertexArray* vertex_array, u32* num_indices,
 
     if (num_indices)
     {
-        *num_indices += 4 + (4 * samples_per_side);
+        *num_indices += (4 + (4 * samples_per_side)) * 6;
     }
     AABB out = { 0 };
     out.min = top_left;
     out.size = size;
     return out;
+}
+
+u32 create_default_texture()
+{
+    u8 pixels[4] = { UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX };
+    TextureProperties texture_properties = {
+        .width = 1,
+        .height = 1,
+        .bytes = pixels,
+    };
+    return texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+}
+
+u32 load_icon_as_white(const char* file_path)
+{
+    TextureProperties texture_properties = { 0 };
+    texture_load(file_path, &texture_properties);
+    const u32 size = texture_properties.height * texture_properties.width;
+    const u32 size_in_bytes = size * 4;
+    for (u32 i = 0; i < size_in_bytes; i += 4)
+    {
+        texture_properties.bytes[i] = UINT8_MAX;
+        texture_properties.bytes[i + 1] = UINT8_MAX;
+        texture_properties.bytes[i + 2] = UINT8_MAX;
+    }
+    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    free(texture_properties.bytes);
+    return icon_texture;
+}
+
+u32 load_icon(const char* file_path)
+{
+    TextureProperties texture_properties = { 0 };
+    texture_load(file_path, &texture_properties);
+    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    free(texture_properties.bytes);
+    return icon_texture;
 }

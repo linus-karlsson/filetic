@@ -18,3 +18,7 @@ AABB quad_gradiant_t_b(VertexArray* vertex_array, V2 position, V2 size, V4 top_c
 AABB quad_gradiant_tl_br(VertexArray* vertex_array, V2 position, V2 size, V4 top_color, V4 bottom_color, f32 texture_index);
 AABB quad_border_gradiant(VertexArray* vertex_array, u32* num_indices, V2 top_left, V2 size, V4 border_color_top_left, V4 border_color_bottom_right, f32 thickness, f32 tex_index);
 void generate_indicies(IndexArray* array, u32 offset, u32 indices_count);
+
+u32 create_default_texture();
+u32 load_icon_as_white(const char* file_path);
+u32 load_icon(const char* file_path);

@@ -78,7 +78,7 @@ u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
     {
         *x_advance = pos.x - start_x;
     }
-    return count;
+    return count * 6;
 }
 
 f32 text_x_advance(const CharacterTTF* c_ttf, const char* text, u32 text_len,

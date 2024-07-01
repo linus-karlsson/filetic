@@ -1,4 +1,5 @@
 #include "buffers.h"
+#include "util.h"
 #include <stdlib.h>
 #include <glad/glad.h>
 
@@ -73,6 +74,22 @@ void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout,
         .offset = offset,
     };
     array_push(&vertex_buffer_layout->items, item);
+}
+
+VertexBufferLayout default_vertex_buffer_layout()
+{
+    VertexBufferLayout vertex_buffer_layout = { 0 };
+    vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 4,
+                                    offsetof(Vertex, color));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 3,
+                                    offsetof(Vertex, position));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 2,
+                                    offsetof(Vertex, texture_coordinates));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 1,
+                                    offsetof(Vertex, texture_index));
+
+    return vertex_buffer_layout;
 }
 
 u32 vertex_array_create()

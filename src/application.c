@@ -29,6 +29,7 @@ u8* application_initialize(ApplicationContext* application)
     {
         font_bitmap[j] = font_bitmap_temp[i];
     }
+    free(font_bitmap_temp);
 
     array_create(&application->tabs, 10);
     application->tab_index = 0;

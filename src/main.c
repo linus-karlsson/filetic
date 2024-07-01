@@ -116,6 +116,7 @@ typedef struct SearchPage
     SafeFileArray search_result_file_array;
     SafeFileArray search_result_folder_array;
     RenderingProperties* render;
+    u32* index_count;
 
     ScrollBar scroll_bar;
 
@@ -140,6 +141,7 @@ typedef struct DropDownMenu
     AABB aabb;
     CharPtrArray options;
     RenderingProperties* render;
+    u32* index_count;
     b8 (*menu_options_selection)(u32 index, b8 hit, b8 should_close,
                                  b8 item_clicked, V4* text_color, void* data);
 } DropDownMenu;
@@ -217,7 +219,7 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
                   V4 texture_coordinates, const b8 check_collision,
                   const f64 pulse_x, DirectoryItem* item,
                   SelectedItemValues* selected_item_values, i32* hit_index,
-                  RenderingProperties* render);
+                  u32* index_count, RenderingProperties* render);
 b8 item_in_view(const f32 position_y, const f32 height,
                 const f32 window_height);
 void check_and_open_file(const b8 hit, const DirectoryItem* current_files,
@@ -226,37 +228,42 @@ b8 go_to_directory(char* path, u32 length, DirectoryHistory* directory_history);
 void check_and_open_folder(const b8 hit, const i32 index,
                            const DirectoryItem* current_folders,
                            DirectoryHistory* directory_history);
-DirectoryItemListReturnValue item_list(
-    const ApplicationContext* application, const DirectoryItemArray* items,
-    const f32 icon_index, const V4 texture_coordinates,
-    const b8 check_collision, V2 starting_position, const f32 item_width,
-    const f32 item_height, const f32 padding, const f64 pulse_x,
-    SelectedItemValues* selected_item_values, RenderingProperties* render);
+DirectoryItemListReturnValue
+item_list(const ApplicationContext* application,
+          const DirectoryItemArray* items, const f32 icon_index,
+          const V4 texture_coordinates, const b8 check_collision,
+          V2 starting_position, const f32 item_width, const f32 item_height,
+          const f32 padding, const f64 pulse_x, u32* index_count,
+          SelectedItemValues* selected_item_values,
+          RenderingProperties* render);
 DirectoryItemListReturnValue folder_item_list(
     const ApplicationContext* application, const DirectoryItemArray* folders,
     const b8 check_collision, V2 starting_position, const f32 item_width,
     const f32 item_height, const f32 padding, const f64 pulse_x,
-    SelectedItemValues* selected_item_values, RenderingProperties* render,
-    DirectoryHistory* directory_history);
-DirectoryItemListReturnValue files_item_list(
-    const ApplicationContext* application, const DirectoryItemArray* files,
-    const b8 check_collision, V2 starting_position, const f32 item_width,
-    const f32 item_height, const f32 padding, const f64 pulse_x,
-    SelectedItemValues* selected_item_values, RenderingProperties* render);
+    u32* index_count, SelectedItemValues* selected_item_values,
+    RenderingProperties* render, DirectoryHistory* directory_history);
+DirectoryItemListReturnValue
+files_item_list(const ApplicationContext* application,
+                const DirectoryItemArray* files, const b8 check_collision,
+                V2 starting_position, const f32 item_width,
+                const f32 item_height, const f32 padding, const f64 pulse_x,
+                u32* index_count, SelectedItemValues* selected_item_values,
+                RenderingProperties* render);
 DirectoryItemListReturnValue directory_item_list(
     const ApplicationContext* application,
     const DirectoryItemArray* sub_directories, const DirectoryItemArray* files,
     const b8 check_collision, V2 starting_position, const f32 item_width,
     const f32 item_height, const f32 padding, const f64 pulse_x,
-    SelectedItemValues* selected_item_values, RenderingProperties* render,
-    DirectoryHistory* directory_history);
+    u32* index_count, SelectedItemValues* selected_item_values,
+    RenderingProperties* render, DirectoryHistory* directory_history);
 f32 clampf32_low(f32 value, f32 low);
 f32 clampf32_high(f32 value, f32 high);
 void extract_only_aplha_channel(TextureProperties* texture_properties);
 u32 render_input(const FontTTF* font, const char* text, const u32 text_length,
                  const f32 scale, const V2 text_position, const f32 cursor_y,
-                 const b8 active, i32 input_index, const f64 delta_time,
-                 f64* time, AABBArray* aabbs, RenderingProperties* render);
+                 const b8 active, i32 input_index, u32* index_count,
+                 const f64 delta_time, f64* time, AABBArray* aabbs,
+                 RenderingProperties* render);
 void set_scroll_offset(const u32 item_count, const f32 item_height,
                        const f32 area_y, f32* offset);
 f32 smooth_scroll(const f64 delta_time, const f32 offset, f32 scroll_offset);
@@ -272,7 +279,7 @@ u32 load_icon(const char* file_path);
 AABB ui_add_border(RenderingProperties* render, V2 position, V2 size);
 void scroll_bar_add(ScrollBar* scroll_bar, V2 position, const f32 dimension_y,
                     const f32 area_y, const f32 item_height, f32 total_height,
-                    f32* scroll_offset, f32* offset,
+                    f32* scroll_offset, f32* offset, u32* index_count,
                     RenderingProperties* render);
 void paste_in_directory(DirectoryPage* current_directory);
 b8 is_mouse_button_clicked(i32 button);
@@ -297,10 +304,11 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
                       const ApplicationContext* application, void* option_data);
 void open_preview(const ApplicationContext* application, V2* image_dimensions,
                   char** current_path, const DirectoryItemArray* files,
-                  RenderingProperties* render);
+                  u32* index_count, RenderingProperties* render);
 b8 button_arrow_add(V2 position, const AABB* button_aabb,
                     const V4 texture_coordinates, const b8 check_collision,
-                    const b8 extra_condition, RenderingProperties* render);
+                    const b8 extra_condition, u32* index_count,
+                    RenderingProperties* render);
 void move_in_history(const i32 index_add,
                      SelectedItemValues* selected_item_values,
                      DirectoryHistory* directory_history);
@@ -310,6 +318,7 @@ void go_up_one_directory(DirectoryHistory* directory_history);
 b8 button_move_in_history_add(const AABB* button_aabb, const b8 check_collision,
                               const b8 extra_condition, const int mouse_button,
                               const i32 history_add, const V4 icon_co,
+                              u32* index_count,
                               SelectedItemValues* selected_item_values,
                               DirectoryHistory* directory_history,
                               RenderingProperties* render);
@@ -568,6 +577,7 @@ void swap_strings(char* first, char* second)
 void display_text_and_truncate_if_necissary(const FontTTF* font,
                                             const V2 position,
                                             const f32 total_width, char* text,
+                                            u32* index_count,
                                             RenderingProperties* render)
 {
     const u32 text_len = (u32)strlen(text);
@@ -580,9 +590,9 @@ void display_text_and_truncate_if_necissary(const FontTTF* font,
         i32 j = i - 3;
         swap_strings(text + j, saved_name); // Truncate
     }
-    render->index_count += text_generation(font->chars, text, 1.0f, position,
-                                           1.0f, font->pixel_height, NULL, NULL,
-                                           NULL, &render->vertices);
+    *index_count += text_generation(font->chars, text, 1.0f, position, 1.0f,
+                                    font->pixel_height, NULL, NULL, NULL,
+                                    &render->vertices);
     if (too_long)
     {
         memcpy(text + (i - 3), saved_name, sizeof(saved_name));
@@ -595,7 +605,7 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
                   V4 texture_coordinates, const b8 check_collision,
                   const f64 pulse_x, DirectoryItem* item,
                   SelectedItemValues* selected_item_values, i32* hit_index,
-                  RenderingProperties* render)
+                  u32* index_count, RenderingProperties* render)
 {
     AABB aabb = { .min = starting_position, .size = v2f(width, height) };
 
@@ -653,7 +663,7 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
     // Backdrop
     quad_gradiant_l_r(&render->vertices, aabb.min, aabb.size, color,
                       clear_color, 0.0f);
-    render->index_count++;
+    *index_count += 6;
 
     if (v4_equal(texture_coordinates, file_icon_co))
     {
@@ -676,7 +686,7 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
         quad_co(&render->vertices,
                 v2f(starting_position.x + 5.0f, starting_position.y + 3.0f),
                 v2f(20.0f, 20.0f), v4i(1.0f), texture_coordinates, icon_index);
-    render->index_count++;
+    *index_count += 6;
 
     V2 text_position = v2_s_add(starting_position, padding_top);
 
@@ -691,14 +701,14 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
                                    (u32)strlen(buffer), 1.0f);
         V2 size_text_position = text_position;
         size_text_position.x = starting_position.x + width - x_advance - 5.0f;
-        render->index_count += text_generation(
+        *index_count += text_generation(
             appliction->font.chars, buffer, 1.0f, size_text_position, 1.0f,
             appliction->font.pixel_height, NULL, NULL, NULL, &render->vertices);
     }
     display_text_and_truncate_if_necissary(
         &appliction->font, text_position,
         (width - aabb.size.x - padding_top - x_advance - 10.0f), item->name,
-        render);
+        index_count, render);
     return hit;
 }
 
@@ -782,7 +792,7 @@ item_list(const ApplicationContext* application,
           const DirectoryItemArray* items, const f32 icon_index,
           const V4 texture_coordinates, const b8 check_collision,
           V2 starting_position, const f32 item_width, const f32 item_height,
-          const f32 padding, const f64 pulse_x,
+          const f32 padding, const f64 pulse_x, u32* index_count,
           SelectedItemValues* selected_item_values, RenderingProperties* render)
 {
     double x, y;
@@ -802,7 +812,7 @@ item_list(const ApplicationContext* application,
                                  item_width, item_height, icon_index,
                                  texture_coordinates, check_collision, pulse_x,
                                  &items->data[i], selected_item_values,
-                                 &hit_index, render);
+                                 &hit_index, index_count, render);
 
 #if 0
             quad_gradiant_l_r(&render->vertices,
@@ -828,13 +838,13 @@ DirectoryItemListReturnValue folder_item_list(
     const ApplicationContext* application, const DirectoryItemArray* folders,
     const b8 check_collision, V2 starting_position, const f32 item_width,
     const f32 item_height, const f32 padding, const f64 pulse_x,
-    SelectedItemValues* selected_item_values, RenderingProperties* render,
-    DirectoryHistory* directory_history)
+    u32* index_count, SelectedItemValues* selected_item_values,
+    RenderingProperties* render, DirectoryHistory* directory_history)
 {
     DirectoryItemListReturnValue list_return =
         item_list(application, folders, 2.0f, folder_icon_co, check_collision,
                   starting_position, item_width, item_height, padding, pulse_x,
-                  selected_item_values, render);
+                  index_count, selected_item_values, render);
 
     check_and_open_folder(list_return.hit, list_return.hit_index, folders->data,
                           directory_history);
@@ -842,16 +852,18 @@ DirectoryItemListReturnValue folder_item_list(
     return list_return;
 }
 
-DirectoryItemListReturnValue files_item_list(
-    const ApplicationContext* application, const DirectoryItemArray* files,
-    const b8 check_collision, V2 starting_position, const f32 item_width,
-    const f32 item_height, const f32 padding, const f64 pulse_x,
-    SelectedItemValues* selected_item_values, RenderingProperties* render)
+DirectoryItemListReturnValue
+files_item_list(const ApplicationContext* application,
+                const DirectoryItemArray* files, const b8 check_collision,
+                V2 starting_position, const f32 item_width,
+                const f32 item_height, const f32 padding, const f64 pulse_x,
+                u32* index_count, SelectedItemValues* selected_item_values,
+                RenderingProperties* render)
 {
     DirectoryItemListReturnValue list_return =
         item_list(application, files, 2.0f, file_icon_co, check_collision,
                   starting_position, item_width, item_height, padding, pulse_x,
-                  selected_item_values, render);
+                  index_count, selected_item_values, render);
 
     check_and_open_file(list_return.hit, files->data, list_return.hit_index);
 
@@ -860,15 +872,15 @@ DirectoryItemListReturnValue files_item_list(
 }
 
 void display_full_path(const FontTTF* font, const V2 position, const V2 size,
-                       const f32 padding, char* path,
+                       const f32 padding, u32* index_count, char* path,
                        RenderingProperties* render)
 {
     quad(&render->vertices, position, size, high_light_color, 0.0f);
-    render->index_count++;
+    *index_count += 6;
     V2 text_position = v2_s_add(position, padding);
     text_position.y += font->pixel_height;
     display_text_and_truncate_if_necissary(font, text_position, size.width,
-                                           path, render);
+                                           path, index_count, render);
 }
 
 DirectoryItemListReturnValue directory_item_list(
@@ -876,16 +888,16 @@ DirectoryItemListReturnValue directory_item_list(
     const DirectoryItemArray* sub_directories, const DirectoryItemArray* files,
     const b8 check_collision, V2 starting_position, const f32 item_width,
     const f32 item_height, const f32 padding, const f64 pulse_x,
-    SelectedItemValues* selected_item_values, RenderingProperties* render,
-    DirectoryHistory* directory_history)
+    u32* index_count, SelectedItemValues* selected_item_values,
+    RenderingProperties* render, DirectoryHistory* directory_history)
 {
     b8 should_show_full_path =
         application_get_last_mouse_move_time(application) >= 1.0f;
 
     DirectoryItemListReturnValue folder_list_return = folder_item_list(
         application, sub_directories, check_collision, starting_position,
-        item_width, item_height, padding, pulse_x, selected_item_values, render,
-        directory_history);
+        item_width, item_height, padding, pulse_x, index_count,
+        selected_item_values, render, directory_history);
 
     /*
     if (should_show_full_path && folder_list_return.hit_index > 0)
@@ -903,9 +915,10 @@ DirectoryItemListReturnValue directory_item_list(
 
     starting_position.y += folder_list_return.total_height;
 
-    DirectoryItemListReturnValue files_list_return = files_item_list(
-        application, files, check_collision, starting_position, item_width,
-        item_height, padding, pulse_x, selected_item_values, render);
+    DirectoryItemListReturnValue files_list_return =
+        files_item_list(application, files, check_collision, starting_position,
+                        item_width, item_height, padding, pulse_x, index_count,
+                        selected_item_values, render);
 
     if (should_show_full_path && files_list_return.hit_index > 0)
     {
@@ -950,8 +963,9 @@ void extract_only_aplha_channel(TextureProperties* texture_properties)
 
 u32 render_input(const FontTTF* font, const char* text, const u32 text_length,
                  const f32 scale, const V2 text_position, const f32 cursor_y,
-                 const b8 active, i32 input_index, const f64 delta_time,
-                 f64* time, AABBArray* aabbs, RenderingProperties* render)
+                 const b8 active, i32 input_index, u32* index_count,
+                 const f64 delta_time, f64* time, AABBArray* aabbs,
+                 RenderingProperties* render)
 {
     // Blinking cursor
     if (active)
@@ -983,16 +997,16 @@ u32 render_input(const FontTTF* font, const char* text, const u32 text_length,
             quad(&render->vertices,
                  v2f(text_position.x + x_advance + 1.0f, cursor_y + 2.0f),
                  v2f(2.0f, 16.0f), v4i(1.0f), 0.0f);
-            render->index_count++;
+            *index_count += 6;
 
             *time = *time >= 0.8f ? 0 : *time;
         }
     }
     if (text_length)
     {
-        render->index_count += text_generation(
-            font->chars, text, 1.0f, text_position, scale, font->line_height,
-            NULL, NULL, aabbs, &render->vertices);
+        *index_count += text_generation(font->chars, text, 1.0f, text_position,
+                                        scale, font->line_height, NULL, NULL,
+                                        aabbs, &render->vertices);
     }
     return input_index;
 }
@@ -1169,43 +1183,9 @@ u32 load_icon_as_only_red(const char* file_path)
     return icon_texture;
 }
 
-u32 load_icon_as_white(const char* file_path)
-{
-    TextureProperties texture_properties = { 0 };
-    texture_load(file_path, &texture_properties);
-    const u32 size = texture_properties.height * texture_properties.width;
-    const u32 size_in_bytes = size * 4;
-    for (u32 i = 0; i < size_in_bytes; i += 4)
-    {
-        texture_properties.bytes[i] = UINT8_MAX;
-        texture_properties.bytes[i + 1] = UINT8_MAX;
-        texture_properties.bytes[i + 2] = UINT8_MAX;
-    }
-    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
-    free(texture_properties.bytes);
-    return icon_texture;
-}
-
-u32 load_icon(const char* file_path)
-{
-    TextureProperties texture_properties = { 0 };
-    texture_load(file_path, &texture_properties);
-    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
-    free(texture_properties.bytes);
-    return icon_texture;
-}
-
-AABB ui_add_border(RenderingProperties* render, V2 position, V2 size)
-{
-    AABB border_aabb =
-        quad(&render->vertices, position, size, border_color, 0.0f);
-    render->index_count++;
-    return border_aabb;
-}
-
 void scroll_bar_add(ScrollBar* scroll_bar, V2 position, const f32 dimension_y,
                     const f32 area_y, const f32 item_height, f32 total_height,
-                    f32* scroll_offset, f32* offset,
+                    f32* scroll_offset, f32* offset, u32* index_count,
                     RenderingProperties* render)
 {
     const f32 scroll_bar_width = 8.0f;
@@ -1213,7 +1193,7 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position, const f32 dimension_y,
 
     quad(&render->vertices, position, v2f(scroll_bar_width, area_y),
          high_light_color, 0.0f);
-    render->index_count++;
+    *index_count += 6;
 
     total_height += item_height;
     if (area_y < total_height)
@@ -1240,14 +1220,14 @@ void scroll_bar_add(ScrollBar* scroll_bar, V2 position, const f32 dimension_y,
         {
             quad(&render->vertices, position, scroll_bar_dimensions,
                  bright_color, 0.0f);
-            render->index_count++;
+            *index_count += 6;
         }
         else
         {
             quad_gradiant_t_b(&render->vertices, position,
                               scroll_bar_dimensions, lighter_color, v4ic(0.45f),
                               0.0f);
-            render->index_count++;
+            *index_count += 6;
         }
 
         const MouseButtonEvent* mouse_button_event =
@@ -1340,33 +1320,6 @@ void search_page_initialize(SearchPage* search_page)
     search_page->last_running_id = 0;
 }
 
-VertexBufferLayout default_vertex_buffer_layout()
-{
-    VertexBufferLayout vertex_buffer_layout = { 0 };
-    vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 4,
-                                    offsetof(Vertex, color));
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 3,
-                                    offsetof(Vertex, position));
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 2,
-                                    offsetof(Vertex, texture_coordinates));
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 1,
-                                    offsetof(Vertex, texture_index));
-
-    return vertex_buffer_layout;
-}
-
-u32 create_default_texture()
-{
-    u8 pixels[4] = { UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX };
-    TextureProperties texture_properties = {
-        .width = 1,
-        .height = 1,
-        .bytes = pixels,
-    };
-    return texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
-}
-
 void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
                                            RenderingPropertiesArray* array)
 {
@@ -1401,23 +1354,25 @@ void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
     array_create(&rendering_properties, 2);
 
     const u32 main_texture_count = 4;
-    u32* main_textures = (u32*)calloc(main_texture_count, sizeof(u32));
-    main_textures[0] = default_texture;
-    main_textures[1] = font_texture;
-    main_textures[2] = file_icon_texture;
-    main_textures[3] = arrow_icon_texture;
+    U32Array main_textures = { 0 };
+    array_create(&main_textures, main_texture_count);
+    array_push(&main_textures, default_texture);
+    array_push(&main_textures, font_texture);
+    array_push(&main_textures, file_icon_texture);
+    array_push(&main_textures, arrow_icon_texture);
 
     array_push(&rendering_properties,
-               rendering_properties_initialize(
-                   main_shader, main_textures, main_texture_count,
-                   &vertex_buffer_layout, 100 * 4, 100 * 6));
+               rendering_properties_initialize(main_shader, main_textures,
+                                               &vertex_buffer_layout, 100 * 4,
+                                               100 * 6));
 
-    u32* preview_textures = (u32*)calloc(2, sizeof(u32));
-    preview_textures[0] = default_texture;
+    U32Array preview_textures = { 0 };
+    array_create(&preview_textures, 2);
+    array_push(&preview_textures, default_texture);
     array_push(&rendering_properties,
                rendering_properties_initialize(preview_shader, preview_textures,
-                                               1, &vertex_buffer_layout,
-                                               100 * 4, 100 * 6));
+                                               &vertex_buffer_layout, 100 * 4,
+                                               100 * 6));
     *array = rendering_properties;
 
     free(vertex_buffer_layout.items.data);
@@ -1575,17 +1530,17 @@ void search_page_top_bar_update(SearchPage* page,
 
     quad(&page->render->vertices, page->search_bar_aabb.min,
          page->search_bar_aabb.size, high_light_color, 0.0f);
-    page->render->index_count++;
+    *page->index_count += 6;
 
     // Search bar
-    page->search_bar_cursor_index =
-        render_input(&application->font, page->search_buffer.data,
-                     page->search_buffer.size, scale, search_input_position,
-                     search_bar_position.y + 10.0f, page->search_bar_hit,
-                     page->search_bar_cursor_index, application->delta_time,
-                     &page->search_blinking_time, NULL, page->render);
+    page->search_bar_cursor_index = render_input(
+        &application->font, page->search_buffer.data, page->search_buffer.size,
+        scale, search_input_position, search_bar_position.y + 10.0f,
+        page->search_bar_hit, page->search_bar_cursor_index, page->index_count,
+        application->delta_time, &page->search_blinking_time, NULL,
+        page->render);
 
-    quad_border_rounded(&page->render->vertices, &page->render->index_count,
+    quad_border_rounded(&page->render->vertices, page->index_count,
                         page->search_bar_aabb.min, page->search_bar_aabb.size,
                         border_color, border_width, 0.4f, 3, 0.0f);
 
@@ -1595,7 +1550,8 @@ void search_page_top_bar_update(SearchPage* page,
     const f32 total_height = item_count * quad_height;
     scroll_bar_add(&page->scroll_bar, scroll_bar_position,
                    application->dimensions.y, area_y, total_height, quad_height,
-                   &page->scroll_offset, &page->offset, page->render);
+                   &page->scroll_offset, &page->offset, page->index_count,
+                   page->render);
 }
 
 DirectoryItemListReturnValue
@@ -1644,8 +1600,8 @@ search_page_update(SearchPage* page, const ApplicationContext* application,
             application, &page->search_result_folder_array.array,
             &page->search_result_file_array.array, check_collision,
             search_result_position, search_result_width, quad_height,
-            padding_top, page->result_pulse_x, selected_item_values,
-            page->render, directory_history);
+            padding_top, page->result_pulse_x, page->index_count,
+            selected_item_values, page->render, directory_history);
 
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
         platform_mutex_unlock(&page->search_result_file_array.mutex);
@@ -1813,7 +1769,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
     }
 
     drop_down_menu->aabb = quad_border_gradiant(
-        &drop_down_menu->render->vertices, &drop_down_menu->render->index_count,
+        &drop_down_menu->render->vertices, drop_down_menu->index_count,
         v2f(drop_down_menu->position.x - drop_down_border_width,
             drop_down_menu->position.y - drop_down_border_width),
         v2f(drop_down_width + border_extra_padding,
@@ -1873,7 +1829,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
 
         quad(&drop_down_menu->render->vertices, promt_item_position,
              drop_down_item_aabb.size, drop_down_color, 0.0f);
-        drop_down_menu->render->index_count++;
+        *drop_down_menu->index_count += 6;
 
         V2 promt_item_text_position = promt_item_position;
         promt_item_text_position.y +=
@@ -1885,7 +1841,7 @@ b8 drop_down_menu_add(DropDownMenu* drop_down_menu,
             i, drop_down_item_hit, should_close, item_clicked, &text_color,
             option_data);
 
-        drop_down_menu->render->index_count += text_generation_color(
+        *drop_down_menu->index_count += text_generation_color(
             application->font.chars, drop_down_menu->options.data[i], 1.0f,
             promt_item_text_position, 1.0f,
             application->font.pixel_height * precent, text_color, NULL, NULL,
@@ -1914,7 +1870,7 @@ b8 check_and_load_image(const i32 index, V2* image_dimensions,
 
 void open_preview(const ApplicationContext* application, V2* image_dimensions,
                   char** current_path, const DirectoryItemArray* files,
-                  RenderingProperties* render)
+                  u32* index_count, RenderingProperties* render)
 {
     b8 right_key = is_key_pressed_repeat(FTIC_KEY_RIGHT);
     b8 left_key = is_key_pressed_repeat(FTIC_KEY_LEFT);
@@ -1983,27 +1939,27 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
     scissor->size.height += border_width;
 
     AABB preview_aabb = quad_border_gradiant(
-        &render->vertices, &render->index_count, preview_position,
-        preview_dimensions, bright_color, lighter_color, border_width, 0.0f);
+        &render->vertices, index_count, preview_position, preview_dimensions,
+        bright_color, lighter_color, border_width, 0.0f);
     v2_s_add_equal(&preview_position, border_width);
     v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
 
     quad(&render->vertices, preview_position, preview_dimensions, clear_color,
          0.0f);
-    render->index_count++;
+    *index_count += 6;
 
     quad(&render->vertices, preview_position, preview_dimensions, v4i(1.0f),
          1.0f);
-    render->index_count++;
+    *index_count += 6;
 
     const MouseButtonEvent* event = event_get_mouse_button_event();
     if (!collision_point_in_aabb(application->mouse_position, &preview_aabb) &&
         event->activated && event->action == 0 &&
         event->button == FTIC_MOUSE_BUTTON_1)
     {
-        if (render->texture_count > 1)
+        if (render->textures.size > 1)
         {
-            texture_delete(render->textures[--render->texture_count]);
+            texture_delete(render->textures.data[--render->textures.size]);
             if (*current_path) free(*current_path);
             *current_path = NULL;
         }
@@ -2013,7 +1969,8 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
 
 b8 button_arrow_add(V2 position, const AABB* button_aabb,
                     const V4 texture_coordinates, const b8 check_collision,
-                    const b8 extra_condition, RenderingProperties* render)
+                    const b8 extra_condition, u32* index_count,
+                    RenderingProperties* render)
 {
     V4 button_color = v4ic(1.0f);
     b8 collision = false;
@@ -2034,7 +1991,7 @@ b8 button_arrow_add(V2 position, const AABB* button_aabb,
     {
         quad(&render->vertices, position, button_aabb->size, high_light_color,
              0.0f);
-        render->index_count++;
+        *index_count += 6;
     }
 
     position.x += 9.0f;
@@ -2042,7 +1999,7 @@ b8 button_arrow_add(V2 position, const AABB* button_aabb,
 
     quad_co(&render->vertices, position, v2i(20.0f), button_color,
             texture_coordinates, 3.0f);
-    render->index_count++;
+    *index_count += 6;
 
     return extra_condition && collision;
 }
@@ -2099,13 +2056,14 @@ void go_up_one_directory(DirectoryHistory* directory_history)
 b8 button_move_in_history_add(const AABB* button_aabb, const b8 check_collision,
                               const b8 extra_condition, const int mouse_button,
                               const i32 history_add, const V4 icon_co,
+                              u32* index_count,
                               SelectedItemValues* selected_item_values,
                               DirectoryHistory* directory_history,
                               RenderingProperties* render)
 {
     b8 result = false;
     if (button_arrow_add(button_aabb->min, button_aabb, icon_co,
-                         check_collision, extra_condition, render))
+                         check_collision, extra_condition, index_count, render))
     {
         if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
         {
@@ -2286,9 +2244,9 @@ b8 load_preview_image(const char* path, V2* image_dimensions,
     const char* extension = get_file_extension(path, (u32)strlen(path));
     if (extension && (!strcmp(extension, ".png") || !strcmp(extension, ".jpg")))
     {
-        if (render->texture_count > 1)
+        if (render->textures.size > 1)
         {
-            texture_delete(render->textures[--render->texture_count]);
+            texture_delete(render->textures.data[--render->textures.size]);
         }
         TextureProperties texture_properties = { 0 };
         texture_load(path, &texture_properties);
@@ -2297,7 +2255,7 @@ b8 load_preview_image(const char* path, V2* image_dimensions,
 
         ftic_assert(texture_properties.bytes);
         u32 texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
-        render->textures[render->texture_count++] = texture;
+        array_push(&render->textures, texture);
         free(texture_properties.bytes);
         result = true;
     }
@@ -2306,7 +2264,7 @@ b8 load_preview_image(const char* path, V2* image_dimensions,
 
 void set_sorting_buttons(const ApplicationContext* application,
                          const char* text, const AABB* aabb,
-                         const SortBy sort_by, const b8 hover,
+                         const SortBy sort_by, const b8 hover, u32* index_count,
                          DirectoryTab* tab, RenderingProperties* render)
 {
     V4 name_button_color = clear_color;
@@ -2334,13 +2292,13 @@ void set_sorting_buttons(const ApplicationContext* application,
         }
     }
     quad(&render->vertices, aabb->min, aabb->size, name_button_color, 0.0f);
-    render->index_count++;
-    quad_border(&render->vertices, &render->index_count, aabb->min, aabb->size,
+    *index_count += 6;
+    quad_border(&render->vertices, index_count, aabb->min, aabb->size,
                 border_color, border_width, 0.0f);
     const V2 name_text_position =
         v2f(aabb->min.x + 10.0f,
             aabb->min.y + application->font.pixel_height + 9.0f);
-    render->index_count += text_generation(
+    *index_count += text_generation(
         application->font.chars, text, 1.0f, name_text_position, 1.0f,
         application->font.pixel_height, NULL, NULL, NULL, &render->vertices);
 }
@@ -2362,34 +2320,20 @@ int main(int argc, char** argv)
     rendering_properties_array_initialize(&application.font, font_bitmap,
                                           &rendering_properties);
     RenderingProperties* main_render = rendering_properties.data;
+    u32 main_index_count = 0;
     RenderingProperties* preview_render = rendering_properties.data + 1;
+    u32 preview_index_count = 0;
 
     search_page.render = main_render;
+    search_page.index_count = &main_index_count;
 
-    UiContext ui = { 0 };
     U32Array windows = { 0 };
     array_create(&windows, 10);
     {
-
-        ui_context_create(&ui);
-
-        VertexBufferLayout vertex_buffer_layout =
-            default_vertex_buffer_layout();
-
-        u32 shader = shader_create("./res/shaders/vertex.glsl",
-                                   "./res/shaders/fragment.glsl");
-        ftic_assert(shader);
-        for (u32 i = 0; i < 1; ++i)
+        ui_context_create();
+        for (u32 i = 0; i < 5; ++i)
         {
-            u32 default_texture = create_default_texture();
-            u32* textures = (u32*)calloc(1, sizeof(u32));
-            textures[0] = default_texture;
-            array_push(&windows,
-                       ui_window_create(&ui, rendering_properties_initialize(
-                                                 shader, textures, 1,
-                                                 &vertex_buffer_layout, 100 * 4,
-                                                 100 * 6)));
-            ui.windows.data[i].dimensions = v2f(100.0f, 100.0f);
+            array_push(&windows, ui_window_create());
         }
     }
 
@@ -2399,6 +2343,7 @@ int main(int argc, char** argv)
     b8 right_clicked = false;
 
     DropDownMenu drop_down_menu = {
+        .index_count = &main_index_count,
         .tab_index = -1,
         .menu_options_selection = main_drop_down_selection,
         .render = main_render,
@@ -2435,6 +2380,7 @@ int main(int argc, char** argv)
     CharArray parent_directory = { 0 };
     array_create(&parent_directory, 100);
     DropDownMenu suggestions = {
+        .index_count = &main_index_count,
         .tab_index = -1,
         .menu_options_selection = suggestion_selection,
         .render = main_render,
@@ -2464,11 +2410,15 @@ int main(int argc, char** argv)
 
     enable_gldebugging();
     glEnable(GL_BLEND);
-    //glEnable(GL_SCISSOR_TEST);
+    // glEnable(GL_SCISSOR_TEST);
     glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (!window_should_close(application.window))
     {
+        application_begin_frame(&application);
+#if 0
+        main_index_count = 0;
+        preview_index_count = 0;
         if (is_ctrl_and_key_pressed(FTIC_KEY_T))
         {
             array_push(&application.tabs, tab_add());
@@ -2530,7 +2480,7 @@ int main(int argc, char** argv)
         rendering_properties_array_clear(&rendering_properties);
         main_render->scissor.size = application.dimensions;
 
-        b8 check_collision = preview_render->texture_count == 1;
+        b8 check_collision = preview_render->textures.size == 1;
         if (check_collision &&
             (collision_point_in_aabb(application.mouse_position,
                                      &drop_down_menu.aabb) ||
@@ -2587,7 +2537,7 @@ int main(int argc, char** argv)
             &main_render->vertices, v2f(starting_position.x, top_bar_height),
             v2f(border_width, application.dimensions.y - top_bar_height),
             border_color, 0.0f);
-        main_render->index_count++;
+        main_index_count += 6;
 
         AABB resize_aabb = rect;
         resize_aabb.min.x -= 2.0f;
@@ -2736,8 +2686,8 @@ int main(int argc, char** argv)
                              check_collision,
                              v2f(10.0f, side_under_border_aabb.min.y + 8.0f),
                              rect.min.x - 10.0f, quad_height, padding_top,
-                             quick_access_pulse_x, NULL, main_render,
-                             &tab->directory_history);
+                             quick_access_pulse_x, &main_index_count, NULL,
+                             main_render, &tab->directory_history);
 
         text_starting_position.y +=
             current_directory(&tab->directory_history)->scroll_offset;
@@ -2751,17 +2701,17 @@ int main(int argc, char** argv)
                 &application, &current->directory.sub_directories,
                 &current->directory.files, check_collision,
                 text_starting_position, width - 10.0f, quad_height, padding_top,
-                current->pulse_x, &tab->selected_item_values, main_render,
-                &tab->directory_history);
+                current->pulse_x, &main_index_count, &tab->selected_item_values,
+                main_render, &tab->directory_history);
         }
 
         set_sorting_buttons(&application, "Name", &directory_name_aabb,
-                            SORT_NAME, sort_by_name_highlighted, tab,
-                            main_render);
+                            SORT_NAME, sort_by_name_highlighted,
+                            &main_index_count, tab, main_render);
 
         set_sorting_buttons(&application, "Size", &directory_size_aabb,
-                            SORT_SIZE, sort_by_size_highlighted, tab,
-                            main_render);
+                            SORT_SIZE, sort_by_size_highlighted,
+                            &main_index_count, tab, main_render);
 
         AABB parent_directory_path_aabb = { 0 };
         parent_directory_path_aabb.min = parent_directory_path_position;
@@ -2814,7 +2764,7 @@ int main(int argc, char** argv)
         quad_gradiant_t_b(&main_render->vertices, v2d(),
                           v2f(application.dimensions.width, top_bar_height),
                           v4ic(0.16f), v4ic(0.14f), 0.0f);
-        main_render->index_count++;
+        main_index_count += 6;
 
         search_page_top_bar_update(
             &search_page, &application, check_collision, search_bar_position,
@@ -2823,16 +2773,16 @@ int main(int argc, char** argv)
 
         quad(&main_render->vertices, parent_directory_path_aabb.min,
              parent_directory_path_aabb.size, high_light_color, 0.0f);
-        main_render->index_count++;
+        main_index_count += 6;
 
-        quad_border_rounded(&main_render->vertices, &main_render->index_count,
+        quad_border_rounded(&main_render->vertices, &main_index_count,
                             parent_directory_path_aabb.min,
                             parent_directory_path_aabb.size, border_color,
                             border_width, 0.4f, 3, 0.0f);
 
         quad(&main_render->vertices, right_border_aabb.min,
              right_border_aabb.size, border_color, 0.0f);
-        main_render->index_count++;
+        main_index_count += 6;
 
         parent_directory_path_position.y += application.font.pixel_height;
         parent_directory_path_position.y +=
@@ -2848,7 +2798,7 @@ int main(int argc, char** argv)
         main_list_return_value.hit |= button_move_in_history_add(
             &button_aabb, check_collision,
             tab->directory_history.current_index > 0, FTIC_MOUSE_BUTTON_4, -1,
-            arrow_back_icon_co, &tab->selected_item_values,
+            arrow_back_icon_co, &main_index_count, &tab->selected_item_values,
             &tab->directory_history, main_render);
 
         button_aabb.min.x += button_aabb.size.x;
@@ -2857,8 +2807,8 @@ int main(int argc, char** argv)
                              tab->directory_history.current_index + 1;
         main_list_return_value.hit |= button_move_in_history_add(
             &button_aabb, check_collision, extra_condition, FTIC_MOUSE_BUTTON_5,
-            1, arrow_right_icon_co, &tab->selected_item_values,
-            &tab->directory_history, main_render);
+            1, arrow_right_icon_co, &main_index_count,
+            &tab->selected_item_values, &tab->directory_history, main_render);
 
         button_aabb.min.x += button_aabb.size.x;
 
@@ -2867,7 +2817,7 @@ int main(int argc, char** argv)
                              can_go_up_one_directory(
                                  current_directory(&tab->directory_history)
                                      ->directory.parent),
-                             main_render))
+                             &main_index_count, main_render))
         {
             if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
             {
@@ -2880,7 +2830,7 @@ int main(int argc, char** argv)
 
         quad(&main_render->vertices, side_under_border_aabb.min,
              side_under_border_aabb.size, border_color, 0.0f);
-        main_render->index_count++;
+        main_index_count += 6;
 
         V2 scroll_bar_position = v2f(
             directory_aabb.min.x + directory_aabb.size.x, directory_aabb.min.y);
@@ -2890,7 +2840,8 @@ int main(int argc, char** argv)
             &main_scroll_bar, scroll_bar_position, application.dimensions.y,
             area_y, total_height, quad_height,
             &current_directory(&tab->directory_history)->scroll_offset,
-            &current_directory(&tab->directory_history)->offset, main_render);
+            &current_directory(&tab->directory_history)->offset,
+            &main_index_count, main_render);
 
         if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
         {
@@ -2950,12 +2901,12 @@ int main(int argc, char** argv)
 
             quad(&main_render->vertices, tab_position,
                  v2f(area_width, tab_height), clear_color, 0.0f);
-            main_render->index_count++;
+            main_index_count += 6;
 
             quad(&main_render->vertices,
                  v2f(tab_position.x, tab_position.y + tab_height),
                  v2f(area_width, border_width), border_color, 0.0f);
-            main_render->index_count++;
+            main_index_count += 6;
 
             tab_position.y += 5.0f;
             tab_position.x += 5.0f;
@@ -2985,16 +2936,15 @@ int main(int argc, char** argv)
 
                 quad(&main_render->vertices, tab_aabb.min, tab_aabb.size,
                      tab_color, 0.0f);
-                main_render->index_count++;
-                quad_border_rounded(&main_render->vertices,
-                                    &main_render->index_count, tab_aabb.min,
-                                    tab_aabb.size, lighter_color, border_width,
-                                    0.4f, 3, 0.0f);
+                main_index_count += 6;
+                quad_border_rounded(&main_render->vertices, &main_index_count,
+                                    tab_aabb.min, tab_aabb.size, lighter_color,
+                                    border_width, 0.4f, 3, 0.0f);
 
                 char* parent = current_directory(
                                    &application.tabs.data[i].directory_history)
                                    ->directory.parent;
-                main_render->index_count += text_generation(
+                main_index_count += text_generation(
                     application.font.chars,
                     parent + get_path_length(parent, (u32)strlen(parent)), 1.0f,
                     v2f(tab_position.x + 10.0f,
@@ -3098,7 +3048,7 @@ int main(int argc, char** argv)
                 scale, parent_directory_path_position,
                 parent_directory_path_position.y -
                     application.font.pixel_height,
-                true, input_index, application.delta_time,
+                true, input_index, &main_index_count, application.delta_time,
                 &parent_directory_clicked_time, &parent_directory_aabbs,
                 main_render);
             if (suggestion_data.change_directory ||
@@ -3130,7 +3080,7 @@ int main(int argc, char** argv)
         else
         {
             parent_directory_aabbs.size = 0;
-            main_render->index_count += text_generation(
+            main_index_count += text_generation(
                 application.font.chars,
                 current_directory(&tab->directory_history)->directory.parent,
                 1.0f, parent_directory_path_position, scale,
@@ -3138,16 +3088,16 @@ int main(int argc, char** argv)
                 &parent_directory_aabbs, &main_render->vertices);
         }
 
-        if (preview_render->texture_count > 1)
+        if (preview_render->textures.size > 1)
         {
             open_preview(
                 &application, &preview_image_dimensions, &current_path,
                 &current_directory(&tab->directory_history)->directory.files,
-                preview_render);
+                &preview_index_count, preview_render);
         }
 
-        rendering_properties_check_and_grow_buffers(main_render);
-        rendering_properties_check_and_grow_buffers(preview_render);
+        rendering_properties_check_and_grow_buffers(main_render, main_index_count);
+        rendering_properties_check_and_grow_buffers(preview_render, preview_index_count);
 
         buffer_set_sub_data(main_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                             sizeof(Vertex) * main_render->vertices.size,
@@ -3187,18 +3137,20 @@ int main(int argc, char** argv)
         }
         for (u32 i = 0; i < rendering_properties.size; ++i)
         {
-            rendering_properties_draw(&rendering_properties.data[i],
-                                      &application.mvp);
+            rendering_properties_begin_draw(rendering_properties.data + i, &application.mvp);
+            rendering_properties_draw(0, main_index_count);
+            rendering_properties_end_draw(rendering_properties.data + i);
         }
+#endif
 
-        ui_context_begin(&ui, application.dimensions, application.delta_time,
+        ui_context_begin(application.dimensions, application.delta_time,
                          true);
 
-        UiWindow* window = ui_window_begin(windows.data[0], &ui);
+        ui_window_begin(windows.data[0], true);
 
-        ui_window_end(window, &ui, application.delta_time);
+        ui_window_end(application.delta_time);
 
-        ui_context_end(&ui);
+        ui_context_end();
 
         application_end_frame(&application);
     }
@@ -3212,11 +3164,11 @@ int main(int argc, char** argv)
         RenderingProperties* rp = rendering_properties.data + i;
         buffer_delete(rp->vertex_buffer_id);
         buffer_delete(rp->index_buffer_id);
-        for (u32 j = 0; j < rp->texture_count; ++j)
+        for (u32 j = 0; j < rp->textures.size; ++j)
         {
-            texture_delete(rp->textures[i]);
+            texture_delete(rp->textures.data[i]);
         }
-        free(rp->textures);
+        free(rp->textures.data);
     }
     // TODO: Cleanup of all
 
