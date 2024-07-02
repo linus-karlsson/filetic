@@ -2200,6 +2200,12 @@ int main(int argc, char** argv)
     render_node(root, 0);
     printf("\n");
     printf("\n");
+
+    dock_node_resize_from_root(root, v2f(1000.0f, 800.0f));
+
+    render_node(root, 0);
+    printf("\n");
+    printf("\n");
 #else
     ApplicationContext application = { 0 };
     u8* font_bitmap = application_initialize(&application);
@@ -3185,6 +3191,30 @@ int main(int argc, char** argv)
             ui_window_end();
 
             ui_window_begin(windows.data[1], true);
+            {
+
+            }
+            ui_window_end();
+
+            ui_window_begin(windows.data[2], true);
+            {
+
+            }
+            ui_window_end();
+
+            ui_window_begin(windows.data[3], true);
+            {
+
+            }
+            ui_window_end();
+
+            ui_window_begin(windows.data[4], true);
+            {
+
+            }
+            ui_window_end();
+
+            ui_window_begin(windows.data[5], true);
             {
 
             }
