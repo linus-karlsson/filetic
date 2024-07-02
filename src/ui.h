@@ -27,7 +27,6 @@ typedef struct DockNode DockNode;
 typedef struct UiWindow
 {
     u32 id;
-    i32 docking_id;
     V2 size;
     V2 position;
     V2 first_item_position;
@@ -48,6 +47,8 @@ typedef struct UiWindow
     ScrollBar scroll_bar;
 
     DockNode* dock_node;
+
+    b8 docked;
 
     b8 area_hit;
     b8 top_bar;

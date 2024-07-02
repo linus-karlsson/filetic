@@ -101,6 +101,7 @@ typedef struct UiContext
 {
     MVP mvp;
 
+    u32 window_in_focus;
     u32 current_window_id;
     u32 current_index_offset;
     U32Array id_to_index;
@@ -175,8 +176,8 @@ internal b8 is_mouse_button_clicked(i32 button)
         (array)->data[0] = temp;                                               \
     } while (0)
 
-internal void change_window_order(UiContext* context,
-                                  const u32 window_in_focus_index)
+internal void push_window_to_front(UiContext* context,
+                                   const u32 window_in_focus_index)
 {
     if (window_in_focus_index == 0)
     {
@@ -191,6 +192,36 @@ internal void change_window_order(UiContext* context,
     }
     move_to_front(AABBArray, &context->window_aabbs, window_in_focus_index);
     move_to_front(HoverClickedIndex, &context->window_hover_clicked_indices,
+                  window_in_focus_index);
+}
+
+#define move_to_back(type, array, index)                                      \
+    do                                                                         \
+    {                                                                          \
+        type temp = (array)->data[(index)];                                    \
+        for (u32 i = (index); i < (array)->size - 1; ++i)                      \
+        {                                                                      \
+            (array)->data[i] = (array)->data[i + 1];                           \
+        }                                                                      \
+        (array)->data[(array)->size - 1] = temp;                               \
+    } while (0)
+
+internal void push_window_to_back(UiContext* context,
+                                  const u32 window_in_focus_index)
+{
+    if (window_in_focus_index == context->windows.size - 1)
+    {
+        return;
+    }
+    move_to_back(UiWindow, &context->windows, window_in_focus_index);
+    for (u32 i = 0; i < context->windows.size; ++i)
+    {
+        context->id_to_index.data[context->windows.data[i].id] = i;
+        context->windows.data[i].index = i;
+        context->windows.data[i].dock_node->window = context->windows.data + i;
+    }
+    move_to_back(AABBArray, &context->window_aabbs, window_in_focus_index);
+    move_to_back(HoverClickedIndex, &context->window_hover_clicked_indices,
                   window_in_focus_index);
 }
 
@@ -524,7 +555,15 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
                     {
                         hover_clicked_index->pressed = mouse_button_pressed;
                         hover_clicked_index->clicked = mouse_button_clicked;
-                        change_window_order(&ui_context, window_index);
+                        if (!ui_context.windows.data[window_index].docked)
+                        {
+                            push_window_to_front(&ui_context, window_index);
+                            ui_context.window_in_focus = 0;
+                        }
+                        else
+                        {
+                            ui_context.window_in_focus = window_index;
+                        }
                     }
                     goto collision_check_done;
                 }
@@ -617,53 +656,44 @@ void ui_context_end()
     }
     else
     {
-        i32 hit_index = -1;
-        for (u32 i = 0; i < 4; ++i)
-        {
-            if (ui_context.docking_hit[i])
-            {
-                hit_index = i;
-                break;
-            }
-        }
+        b8 any_hit = false;
         UiWindow* focused_window = ui_context.windows.data;
-        if (hit_index == 0)
+        if (ui_context.docking_hit[0])
         {
             dock_node_dock_window(ui_context.dock_tree,
                                   focused_window->dock_node, SPLIT_HORIZONTAL,
                                   DOCK_SIDE_TOP);
+            any_hit = true;
         }
-        else if (hit_index == 1)
+        else if (ui_context.docking_hit[1])
         {
             dock_node_dock_window(ui_context.dock_tree,
                                   focused_window->dock_node, SPLIT_VERTICAL,
                                   DOCK_SIDE_RIGHT);
+            any_hit = true;
         }
-        else if (hit_index == 2)
+        else if (ui_context.docking_hit[2])
         {
             dock_node_dock_window(ui_context.dock_tree,
                                   focused_window->dock_node, SPLIT_HORIZONTAL,
                                   DOCK_SIDE_BOTTOM);
+            any_hit = true;
         }
-        else if (hit_index == 3)
+        else if (ui_context.docking_hit[3])
         {
             dock_node_dock_window(ui_context.dock_tree,
                                   focused_window->dock_node, SPLIT_VERTICAL,
                                   DOCK_SIDE_LEFT);
+            any_hit = true;
+        }
+        if(any_hit)
+        {
+            focused_window->docked = true;
+            push_window_to_back(&ui_context, 0);
         }
         memset(ui_context.docking_hit, 0, sizeof(ui_context.docking_hit));
     }
 #endif
-
-    if (event_get_key_event()->activated &&
-        event_get_key_event()->action == FTIC_PRESS)
-    {
-        u32 key = event_get_key_event()->key - FTIC_KEY_0;
-        if(closed_interval(1, key, 5))
-        {
-            change_window_order(&ui_context, key);
-        }
-    }
 
     rendering_properties_check_and_grow_buffers(
         &ui_context.render, ui_context.current_index_offset);
@@ -696,7 +726,6 @@ u32 ui_window_create()
 
     UiWindow window = {
         .id = id,
-        .docking_id = -1,
         .index = ui_context.windows.size,
         .size = v2f(100.0f, 100.0f),
         .top_color = clear_color,
@@ -731,15 +760,6 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
     if (window->hide) return false;
 
     ui_context.current_window_id = window_id;
-
-    if (window->docking_id >= 0 && !window->top_bar_hold)
-    {
-        const Dock* dock = ui_context.docks.data +
-                           ui_context.dock_id_to_index.data[window->docking_id];
-
-        window->position = dock->aabb.min;
-        window->size = dock->aabb.size;
-    }
 
     window->rendering_index_offset = ui_context.current_index_offset;
     aabbs->size = 0;
@@ -928,7 +948,7 @@ void ui_window_end()
                           window->current_scroll_offset);
     }
 
-    const b8 in_focus = window_index == 0;
+    const b8 in_focus = window_index == ui_context.window_in_focus;
     V4 color = border_color;
     if (in_focus)
     {
