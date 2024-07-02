@@ -2140,8 +2140,67 @@ void show_directory_window(const u32 window, const f32 list_item_height,
     ui_window_end(delta_time);
 }
 
+void render_node(DockNode* node, int depth)
+{
+    if (!node) return;
+    for (int i = 0; i < depth; i++)
+    {
+        printf("  ");
+    }
+    if (node->type == NODE_LEAF)
+    {
+        printf("Leaf: %u (Size: %.2f, %.2f, Position: %.2f, %.2f)\n",
+               node->window->id, node->window->size.width, node->window->size.height,
+               node->window->position.x, node->window->position.y);
+    }
+    else
+    {
+        printf("Parent (%s):\n", node->split_axis == SPLIT_HORIZONTAL
+                                     ? "Horizontal"
+                                     : "Vertical");
+        for (int i = 0; i < 2; i++)
+        {
+            render_node(node->children[i], depth + 1);
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
+#if 0
+    DockNode* root = dock_node_create(NODE_ROOT, SPLIT_NONE, NULL);
+    root->size = v2f(800, 600);
+    UiWindow window0 = { .id = 0 };
+    root->children[0] = dock_node_create(NODE_LEAF, SPLIT_NONE, &window0);
+    root->children[0]->size = v2f(800, 600);
+
+    UiWindow window1 = { .id = 1 };
+    dock_node_dock_window(root,
+                          dock_node_create(NODE_LEAF, SPLIT_NONE, &window1),
+                          SPLIT_HORIZONTAL, DOCK_SIDE_TOP);
+
+    render_node(root, 0);
+    printf("\n");
+    printf("\n");
+
+    UiWindow window2 = { .id = 2 };
+    dock_node_dock_window(root,
+                          dock_node_create(NODE_LEAF, SPLIT_NONE, &window2),
+                          SPLIT_VERTICAL, DOCK_SIDE_LEFT);
+
+    render_node(root, 0);
+    printf("\n");
+    printf("\n");
+
+    UiWindow window3 = { .id = 3 };
+    dock_node_dock_window(root,
+                          dock_node_create(NODE_LEAF, SPLIT_NONE, &window3),
+                          SPLIT_VERTICAL, DOCK_SIDE_LEFT);
+
+    render_node(root, 0);
+    printf("\n");
+    printf("\n");
+#else
     ApplicationContext application = { 0 };
     u8* font_bitmap = application_initialize(&application);
 
@@ -2975,6 +3034,7 @@ int main(int argc, char** argv)
         }
 #else
 
+#if 0
         static b8 test = false;
         ui_context_begin(application.dimensions, application.delta_time, true);
         {
@@ -2982,25 +3042,25 @@ int main(int argc, char** argv)
 
             const f32 top_bar_height = 60.0f;
 
-            UiWindow* top_bar = ui_window_get(windows.data[3]);
+            UiWindow* top_bar = ui_window_get(windows.data[0]);
             top_bar->dimensions =
                 v2f(application.dimensions.width, top_bar_height);
             top_bar->top_color = v4ic(0.2f);
             top_bar->bottom_color = v4ic(0.15f);
 
-            ui_window_begin(windows.data[3], false);
+            ui_window_begin(windows.data[0], false);
             {
                 AABB button_aabb = { 0 };
                 button_aabb.size = v2i(40.0f),
                 button_aabb.min = v2f(10.0f, middle(top_bar->dimensions.height,
                                                     button_aabb.size.height));
+                ui_window_row_begin(0.0f);
                 b8 disable = tab->directory_history.current_index <= 0;
                 add_move_in_history_button(&button_aabb, arrow_back_icon_co,
                                            disable, FTIC_MOUSE_BUTTON_4, -1,
                                            &tab->selected_item_values,
                                            &tab->directory_history);
 
-                button_aabb.min.x += button_aabb.size.width;
                 disable = tab->directory_history.history.size <=
                           tab->directory_history.current_index + 1;
                 add_move_in_history_button(&button_aabb, arrow_right_icon_co,
@@ -3008,7 +3068,6 @@ int main(int argc, char** argv)
                                            &tab->selected_item_values,
                                            &tab->directory_history);
 
-                button_aabb.min.x += button_aabb.size.width;
                 disable = !can_go_up_one_directory(
                     current_directory(&tab->directory_history)
                         ->directory.parent);
@@ -3018,17 +3077,18 @@ int main(int argc, char** argv)
                     go_up_one_directory(&tab->directory_history);
                 }
 
-                button_aabb.min.x += button_aabb.size.width + 10.0f;
+                button_aabb.min.x += ui_window_row_end() + 10.0f;
                 button_aabb.size.x = (application.dimensions.width -
                                       (search_bar_width + 20.0f)) -
                                      button_aabb.min.x;
+
+                ui_window_row_begin(10.0f);
                 if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
                                               application.delta_time,
                                               &parent_directory_input))
                 {
                 }
 
-                button_aabb.min.x += button_aabb.size.width + 10.0f;
                 button_aabb.size.x = search_bar_width;
                 if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
                                               application.delta_time,
@@ -3037,17 +3097,18 @@ int main(int argc, char** argv)
                     search_page_search(&search_page, &tab->directory_history,
                                        &thread_queue.task_queue);
                 }
+                ui_window_row_end();
             }
             ui_window_end(application.delta_time);
 
-            UiWindow* quick_access = ui_window_get(windows.data[0]);
+            UiWindow* quick_access = ui_window_get(windows.data[1]);
             quick_access->position = v2f(top_bar->position.x, top_bar_height);
             quick_access->dimensions =
                 v2f(starting_position.x,
                     application.dimensions.height - top_bar_height);
             quick_access->resizeable = RESIZE_RIGHT;
 
-            ui_window_begin(windows.data[0], false);
+            ui_window_begin(windows.data[1], false);
             {
                 V2 list_position = v2i(10.0f);
                 i32 selected_item = -1;
@@ -3065,7 +3126,7 @@ int main(int argc, char** argv)
                                     search_page.input.buffer.size;
             search_result_width = open_search_result_width * search_result_open;
 
-            UiWindow* directory = ui_window_get(windows.data[1]);
+            UiWindow* directory = ui_window_get(windows.data[2]);
             if (search_result_open)
             {
                 if (search_result_open_presist)
@@ -3092,12 +3153,12 @@ int main(int argc, char** argv)
                     application.dimensions.height - top_bar_height);
             directory->resizeable = RESIZE_RIGHT;
 
-            show_directory_window(windows.data[1], list_item_height,
+            show_directory_window(windows.data[2], list_item_height,
                                   application.delta_time, tab);
 
             if (search_result_open)
             {
-                UiWindow* search_result = ui_window_get(windows.data[2]);
+                UiWindow* search_result = ui_window_get(windows.data[3]);
                 search_result->position =
                     v2f(directory->position.x + directory->dimensions.width,
                         directory->position.y);
@@ -3105,7 +3166,7 @@ int main(int argc, char** argv)
                     application.dimensions.width - search_result->position.x,
                     application.dimensions.height - top_bar_height);
                 show_search_result_window(
-                    &search_page, windows.data[2], list_item_height,
+                    &search_page, windows.data[3], list_item_height,
                     application.delta_time, &tab->directory_history);
             }
             else
@@ -3114,6 +3175,24 @@ int main(int argc, char** argv)
             }
         }
         ui_context_end();
+#else 
+        ui_context_begin(application.dimensions, application.delta_time, true);
+        {
+            ui_window_begin(windows.data[0], true);
+            {
+
+            }
+            ui_window_end();
+
+            ui_window_begin(windows.data[1], true);
+            {
+
+            }
+            ui_window_end();
+            
+        }
+        ui_context_end();
+#endif
 #endif
 
         application_end_frame(&application);
@@ -3139,4 +3218,5 @@ int main(int argc, char** argv)
     threads_destroy(&thread_queue);
     platform_uninit_drag_drop();
     application_uninitialize(&application);
+#endif
 }

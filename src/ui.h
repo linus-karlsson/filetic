@@ -19,6 +19,8 @@ typedef struct HoverClickedIndex
     b8 double_clicked;
 } HoverClickedIndex;
 
+typedef struct DockNode DockNode;
+
 #define RESIZE_NONE 0
 #define RESIZE_RIGHT BIT_1
 
@@ -26,7 +28,7 @@ typedef struct UiWindow
 {
     u32 id;
     i32 docking_id;
-    V2 dimensions;
+    V2 size;
     V2 position;
     V2 first_item_position;
     V2 top_bar_offset;
@@ -45,6 +47,8 @@ typedef struct UiWindow
     f32 current_scroll_offset;
     ScrollBar scroll_bar;
 
+    DockNode* dock_node;
+
     b8 area_hit;
     b8 top_bar;
     b8 top_bar_pressed;
@@ -54,6 +58,36 @@ typedef struct UiWindow
     u8 resizeable;
 
 } UiWindow;
+
+#define DOCK_SIDE_RIGHT 0
+#define DOCK_SIDE_LEFT 1
+
+#define DOCK_SIDE_BOTTOM 0
+#define DOCK_SIDE_TOP 1
+
+typedef enum
+{
+    NODE_ROOT,
+    NODE_PARENT,
+    NODE_LEAF
+} NodeType;
+
+typedef enum
+{
+    SPLIT_NONE,
+    SPLIT_HORIZONTAL,
+    SPLIT_VERTICAL
+} SplitAxis;
+
+struct DockNode
+{
+    NodeType type;
+    SplitAxis split_axis;
+    UiWindow* window;
+    DockNode* children[2];
+    V2 size;
+    V2 position;
+};
 
 typedef struct InputBuffer
 {
@@ -75,9 +109,16 @@ void ui_dock_space_end();
 u32 ui_window_create();
 UiWindow* ui_window_get(u32 window_id);
 b8 ui_window_begin(u32 window_id, b8 top_bar);
-void ui_window_end(const f64 delta_time);
+void ui_window_end();
+
+void ui_window_row_begin(const f32 padding);
+f32 ui_window_row_end();
+
 b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index, const b8 disable);
 void ui_window_add_directory_list(V2 position);
 b8 ui_window_add_folder_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
 b8 ui_window_add_file_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
-b8 ui_window_add_input_field(V2 position, const V2 size, const f64 delta_time, InputBuffer* input);
+b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
+
+DockNode* dock_node_create(NodeType type, SplitAxis split_axis, UiWindow* window);
+void dock_node_dock_window(DockNode* root, DockNode* window, SplitAxis split_axis, u8 where);
