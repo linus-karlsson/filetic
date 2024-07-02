@@ -105,20 +105,20 @@ void rendering_properties_begin_draw(
     index_buffer_bind(rendering_properties->index_buffer_id);
 }
 
-void rendering_properties_draw(const u32 index_offset, const u32 index_count)
+void rendering_properties_draw(const u32 index_offset, const u32 index_count, const AABB* scissor)
 {
     if (index_count)
     {
+        glEnable(GL_SCISSOR_TEST);
 
-        /*
-        const AABB* scissor = &rendering_properties->scissor;
         glScissor((int)scissor->min.x, (int)scissor->min.y,
                   (int)scissor->size.width, (int)scissor->size.height);
-                  */
 
         GLintptr offset = index_offset * sizeof(u32);
         glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT,
                        (void*)offset);
+
+        glDisable(GL_SCISSOR_TEST);
     }
 }
 

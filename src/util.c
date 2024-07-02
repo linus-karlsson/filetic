@@ -88,6 +88,48 @@ void file_write(const char* file_path, const char* content, u32 size)
     fclose(file);
 }
 
+const char* file_get_extension(const char* path, const u32 path_length)
+{
+    for (i32 i = path_length - 1; i >= 0; --i)
+    {
+        char current_char = path[i];
+        if (current_char == '\\' || current_char == '/')
+        {
+            return NULL;
+        }
+        else if (current_char == '.')
+        {
+            return path + i;
+        }
+    }
+    return NULL;
+}
+
+
+void file_format_size(u64 size_in_bytes, char* output, size_t output_size)
+{
+    const u64 KB = 1024;
+    const u64 MB = 1024 * KB;
+    const u64 GB = 1024 * MB;
+
+    if (size_in_bytes >= GB)
+    {
+        sprintf_s(output, output_size, "%.2f GB", (double)size_in_bytes / GB);
+    }
+    else if (size_in_bytes >= MB)
+    {
+        sprintf_s(output, output_size, "%.2f MB", (double)size_in_bytes / MB);
+    }
+    else if (size_in_bytes >= KB)
+    {
+        sprintf_s(output, output_size, "%.2f KB", (double)size_in_bytes / KB);
+    }
+    else
+    {
+        sprintf_s(output, output_size, "%llu B", size_in_bytes);
+    }
+}
+
 f32 lerp_f32(const f32 a, const f32 b, const f32 t)
 {
     return a + (t * (b - a));
@@ -172,6 +214,15 @@ b8 string_contains_case_insensitive(const char* string, const char* value)
         string++;
     }
     return !(*value);
+}
+
+void string_swap(char* first, char* second)
+{
+    char temp[4] = { 0 };
+    const size_t length = sizeof(temp);
+    memcpy(temp, first, length);
+    memcpy(first, second, length);
+    memcpy(second, temp, length);
 }
 
 f32 clampf32_low(f32 value, f32 low)

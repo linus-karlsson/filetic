@@ -7,12 +7,6 @@
 #include "event.h"
 #include "shader.h"
 
-typedef struct SelectedItemValues
-{
-    CharPtrArray paths;
-    HashTableCharU32 selected_items;
-} SelectedItemValues;
-
 typedef enum SortBy
 {
     SORT_NONE = 0,

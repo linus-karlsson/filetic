@@ -32,5 +32,5 @@ void rendering_properties_clear(RenderingProperties* rendering_properties);
 void rendering_properties_array_clear(RenderingPropertiesArray* rendering_properties);
 void rendering_properties_check_and_grow_buffers(RenderingProperties* rendering_properties, u32 total_index_count);
 void rendering_properties_begin_draw(const RenderingProperties* rendering_properties, const MVP* mvp);
-void rendering_properties_draw(const u32 index_offset, const u32 index_count);
+void rendering_properties_draw(const u32 index_offset, const u32 index_count, const AABB* scissor);
 void rendering_properties_end_draw(const RenderingProperties* rendering_properties);

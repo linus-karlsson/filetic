@@ -104,34 +104,13 @@ typedef struct FindingCallbackAttribute
 
 typedef struct SearchPage
 {
-    f32 offset;
-    f32 scroll_offset;
-    f64 search_blinking_time;
-    f64 result_pulse_x;
-
-    AABB search_bar_aabb;
-    AABB search_result_aabb;
-
-    CharArray search_buffer;
+    InputBuffer input;
     SafeFileArray search_result_file_array;
     SafeFileArray search_result_folder_array;
-    RenderingProperties* render;
-    u32* index_count;
-
-    ScrollBar scroll_bar;
 
     u32 running_id;
     u32 last_running_id;
-
-    i32 search_bar_cursor_index;
-    b8 search_bar_hit;
 } SearchPage;
-
-b8 search_page_has_result(const SearchPage* search_page)
-{
-    return search_page->search_result_file_array.array.size > 0 ||
-           search_page->search_result_folder_array.array.size > 0;
-}
 
 typedef struct DropDownMenu
 {
@@ -197,7 +176,6 @@ void enable_gldebugging();
 void log_f32(const char* message, const f32 value);
 void log_u64(const char* message, const u64 value);
 f32 ease_out_elastic(const f32 x);
-const char* get_file_extension(const char* path, const u32 path_length);
 void parse_all_subdirectories(const char* start_directory, const u32 length);
 b8 string_contains(const char* string, const u32 string_length,
                    const char* value, const u32 value_length);
@@ -211,7 +189,6 @@ void find_matching_string(const char* start_directory, const u32 length,
                           const u32 string_to_match_length);
 void clear_search_result(SafeFileArray* files);
 void search_page_clear_search_result(SearchPage* page);
-void format_file_size(u64 size_in_bytes, char* output, size_t output_size);
 void swap_strings(char* first, char* second);
 b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
                   V2 starting_position, const f32 padding_top, f32 width,
@@ -406,23 +383,6 @@ f32 ease_out_elastic(const f32 x)
     return powf(2.0f, -10.0f * x) * sinf((x * 10.0f - 0.75f) * c4) + 1.0f;
 }
 
-const char* get_file_extension(const char* path, const u32 path_length)
-{
-    for (i32 i = path_length - 1; i >= 0; --i)
-    {
-        char current_char = path[i];
-        if (current_char == '\\' || current_char == '/')
-        {
-            return NULL;
-        }
-        else if (current_char == '.')
-        {
-            return path + i;
-        }
-    }
-    return NULL;
-}
-
 void parse_all_subdirectories(const char* start_directory, const u32 length)
 {
     Directory directory = platform_get_directory(start_directory, length);
@@ -522,58 +482,6 @@ void finding_callback(void* data)
     free(data);
 }
 
-void clear_search_result(SafeFileArray* files)
-{
-    platform_mutex_lock(&files->mutex);
-    for (u32 j = 0; j < files->array.size; ++j)
-    {
-        free(files->array.data[j].path);
-    }
-    memset(files->array.data, 0,
-           files->array.size * sizeof(files->array.data[0]));
-    files->array.size = 0;
-    platform_mutex_unlock(&files->mutex);
-}
-
-void search_page_clear_search_result(SearchPage* page)
-{
-    clear_search_result(&page->search_result_file_array);
-    clear_search_result(&page->search_result_folder_array);
-}
-
-void format_file_size(u64 size_in_bytes, char* output, size_t output_size)
-{
-    const u64 KB = 1024;
-    const u64 MB = 1024 * KB;
-    const u64 GB = 1024 * MB;
-
-    if (size_in_bytes >= GB)
-    {
-        sprintf_s(output, output_size, "%.2f GB", (double)size_in_bytes / GB);
-    }
-    else if (size_in_bytes >= MB)
-    {
-        sprintf_s(output, output_size, "%.2f MB", (double)size_in_bytes / MB);
-    }
-    else if (size_in_bytes >= KB)
-    {
-        sprintf_s(output, output_size, "%.2f KB", (double)size_in_bytes / KB);
-    }
-    else
-    {
-        sprintf_s(output, output_size, "%llu B", size_in_bytes);
-    }
-}
-
-void swap_strings(char* first, char* second)
-{
-    char temp[4] = { 0 };
-    const size_t length = sizeof(temp);
-    memcpy(temp, first, length);
-    memcpy(first, second, length);
-    memcpy(second, temp, length);
-}
-
 void display_text_and_truncate_if_necissary(const FontTTF* font,
                                             const V2 position,
                                             const f32 total_width, char* text,
@@ -588,7 +496,7 @@ void display_text_and_truncate_if_necissary(const FontTTF* font,
     if (too_long)
     {
         i32 j = i - 3;
-        swap_strings(text + j, saved_name); // Truncate
+        string_swap(text + j, saved_name); // Truncate
     }
     *index_count += text_generation(font->chars, text, 1.0f, position, 1.0f,
                                     font->pixel_height, NULL, NULL, NULL,
@@ -668,7 +576,7 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
     if (v4_equal(texture_coordinates, file_icon_co))
     {
         const char* extension =
-            get_file_extension(item->name, (u32)strlen(item->name));
+            file_get_extension(item->name, (u32)strlen(item->name));
         if (extension)
         {
             if (!strcmp(extension, ".png"))
@@ -696,7 +604,7 @@ b8 directory_item(const ApplicationContext* appliction, b8 hit, i32 index,
     if (item->size) // NOTE(Linus): Add the size text to the right side
     {
         char buffer[100] = { 0 };
-        format_file_size(item->size, buffer, 100);
+        file_format_size(item->size, buffer, 100);
         x_advance = text_x_advance(appliction->font.chars, buffer,
                                    (u32)strlen(buffer), 1.0f);
         V2 size_text_position = text_position;
@@ -766,6 +674,17 @@ b8 go_to_directory(char* path, u32 length, DirectoryHistory* directory_history)
     return result;
 }
 
+void open_folder(char* folder_path, DirectoryHistory* directory_history)
+{
+    if (strcmp(folder_path,
+               current_directory(directory_history)->directory.parent) == 0)
+    {
+        return;
+    }
+    u32 length = (u32)strlen(folder_path);
+    go_to_directory(folder_path, length, directory_history);
+}
+
 void check_and_open_folder(const b8 hit, const i32 index,
                            const DirectoryItem* current_folders,
                            DirectoryHistory* directory_history)
@@ -776,13 +695,7 @@ void check_and_open_folder(const b8 hit, const i32 index,
         if (hit)
         {
             char* path = current_folders[index].path;
-            if (strcmp(path, current_directory(directory_history)
-                                 ->directory.parent) == 0)
-            {
-                return;
-            }
-            u32 length = (u32)strlen(path);
-            go_to_directory(path, length, directory_history);
+            open_folder(path, directory_history);
         }
     }
 }
@@ -1303,21 +1216,36 @@ b8 is_mouse_button_clicked(i32 button)
 
 void search_page_initialize(SearchPage* search_page)
 {
-    search_page->search_result_file_array = (SafeFileArray){ 0 };
     safe_array_create(&search_page->search_result_file_array, 10);
-    search_page->search_result_folder_array = (SafeFileArray){ 0 };
     safe_array_create(&search_page->search_result_folder_array, 10);
-
-    search_page->search_buffer = (CharArray){ 0 };
-    array_create(&search_page->search_buffer, 30);
-    search_page->search_bar_hit = false;
-    search_page->search_blinking_time = 0.4f;
-
-    search_page->offset = 0.0f;
-    search_page->scroll_offset = 0.0f;
-
+    search_page->input = ui_input_buffer_create();
     search_page->running_id = 0;
     search_page->last_running_id = 0;
+}
+
+void clear_search_result(SafeFileArray* files)
+{
+    platform_mutex_lock(&files->mutex);
+    for (u32 j = 0; j < files->array.size; ++j)
+    {
+        free(files->array.data[j].path);
+    }
+    memset(files->array.data, 0,
+           files->array.size * sizeof(files->array.data[0]));
+    files->array.size = 0;
+    platform_mutex_unlock(&files->mutex);
+}
+
+void search_page_clear_search_result(SearchPage* page)
+{
+    clear_search_result(&page->search_result_file_array);
+    clear_search_result(&page->search_result_folder_array);
+}
+
+b8 search_page_has_result(const SearchPage* search_page)
+{
+    return search_page->search_result_file_array.array.size > 0 ||
+           search_page->search_result_folder_array.array.size > 0;
 }
 
 void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
@@ -1409,209 +1337,41 @@ void add_from_key_buffer(const FontTTF* font, const f32 width, i32* input_index,
     }
 }
 
-void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
-                                  const FontTTF* font,
-                                  const b8 reload_search_result,
-                                  DirectoryHistory* directory_history,
-                                  ThreadTaskQueue* thread_task_queue)
+void search_page_search(SearchPage* page, DirectoryHistory* directory_history,
+                        ThreadTaskQueue* thread_task_queue)
 {
-    add_from_key_buffer(font, search_bar_width, &page->search_bar_cursor_index,
-                        &page->search_buffer);
-    const CharArray* key_buffer = event_get_key_buffer();
-    if (key_buffer->size || reload_search_result)
+    search_page_clear_search_result(page);
+
+    running_callbacks[page->last_running_id] = false;
+
+    if (page->input.buffer.size)
     {
-        search_page_clear_search_result(page);
+        page->last_running_id = page->running_id;
+        running_callbacks[page->running_id++] = true;
+        page->running_id %= 100;
 
-        running_callbacks[page->last_running_id] = false;
+        const char* parent =
+            current_directory(directory_history)->directory.parent;
+        size_t parent_length = strlen(parent);
+        char* dir2 = (char*)calloc(parent_length + 3, sizeof(char));
+        memcpy(dir2, parent, parent_length);
+        dir2[parent_length++] = '\\';
+        dir2[parent_length++] = '*';
 
-        if (page->search_buffer.size)
-        {
-            page->last_running_id = page->running_id;
-            running_callbacks[page->running_id++] = true;
-            page->running_id %= 100;
+        const char* string_to_match = page->input.buffer.data;
 
-            const char* parent =
-                current_directory(directory_history)->directory.parent;
-            size_t parent_length = strlen(parent);
-            char* dir2 = (char*)calloc(parent_length + 3, sizeof(char));
-            memcpy(dir2, parent, parent_length);
-            dir2[parent_length++] = '\\';
-            dir2[parent_length++] = '*';
-
-            const char* string_to_match = page->search_buffer.data;
-
-            FindingCallbackAttribute* arguments =
-                (FindingCallbackAttribute*)calloc(
-                    1, sizeof(FindingCallbackAttribute));
-            arguments->thread_queue = thread_task_queue;
-            arguments->file_array = &page->search_result_file_array;
-            arguments->folder_array = &page->search_result_folder_array;
-            arguments->start_directory = dir2;
-            arguments->start_directory_length = (u32)parent_length;
-            arguments->string_to_match = string_to_match;
-            arguments->string_to_match_length = page->search_buffer.size;
-            arguments->running_id = page->last_running_id;
-            finding_callback(arguments);
-            page->offset = 0.0f;
-        }
+        FindingCallbackAttribute* arguments = (FindingCallbackAttribute*)calloc(
+            1, sizeof(FindingCallbackAttribute));
+        arguments->thread_queue = thread_task_queue;
+        arguments->file_array = &page->search_result_file_array;
+        arguments->folder_array = &page->search_result_folder_array;
+        arguments->start_directory = dir2;
+        arguments->start_directory_length = (u32)parent_length;
+        arguments->string_to_match = string_to_match;
+        arguments->string_to_match_length = page->input.buffer.size;
+        arguments->running_id = page->last_running_id;
+        finding_callback(arguments);
     }
-}
-
-b8 erase_char(i32* cursor_index, CharArray* buffer)
-{
-    const KeyEvent* key_event = event_get_key_event();
-    if (key_event->activated &&
-        (key_event->action == FTIC_PRESS || key_event->action == FTIC_REPEAT) &&
-        (key_event->key == FTIC_KEY_BACKSPACE ||
-         (key_event->ctrl_pressed && key_event->key == FTIC_KEY_H)))
-    {
-        if ((*cursor_index) > 0)
-        {
-            (*cursor_index)--;
-            for (u32 i = *cursor_index; i < buffer->size; ++i)
-            {
-                buffer->data[i] = buffer->data[i + 1];
-            }
-            *array_back(buffer) = '\0';
-            buffer->size--;
-            return true;
-        }
-    }
-    return false;
-}
-
-void search_page_top_bar_update(SearchPage* page,
-                                const ApplicationContext* application,
-                                const b8 check_collision,
-                                const V2 search_bar_position,
-                                const u32 item_count,
-                                DirectoryHistory* directory_history,
-                                ThreadTaskQueue* thread_task_queue)
-{
-    const f32 search_bar_input_text_padding = 10.0f;
-    const f32 scale = 1.0f;
-    const f32 padding_top = 2.0f;
-    const f32 quad_height =
-        scale * application->font.pixel_height + padding_top * 5.0f;
-
-    V2 search_result_position = search_bar_position;
-    search_result_position.y += page->search_bar_aabb.size.y + 20.0f;
-    const f32 search_page_header_size_y = search_result_position.y;
-
-    if (event_get_mouse_button_event()->activated)
-    {
-        if (check_collision &&
-            collision_point_in_aabb(application->mouse_position,
-                                    &page->search_bar_aabb))
-        {
-            page->search_bar_hit = true;
-        }
-        else
-        {
-            page->search_bar_hit = false;
-            page->search_blinking_time = 0.4f;
-        }
-    }
-
-    if (page->search_bar_hit)
-    {
-        b8 reload_search_result =
-            erase_char(&page->search_bar_cursor_index, &page->search_buffer);
-        search_page_parse_key_buffer(page,
-                                     page->search_bar_aabb.size.width -
-                                         (search_bar_input_text_padding * 2),
-                                     &application->font, reload_search_result,
-                                     directory_history, thread_task_queue);
-    }
-
-    V2 search_input_position = page->search_bar_aabb.min;
-    search_input_position.x += search_bar_input_text_padding;
-    search_input_position.y += scale * application->font.pixel_height + 8.0f;
-
-    quad(&page->render->vertices, page->search_bar_aabb.min,
-         page->search_bar_aabb.size, high_light_color, 0.0f);
-    *page->index_count += 6;
-
-    // Search bar
-    page->search_bar_cursor_index = render_input(
-        &application->font, page->search_buffer.data, page->search_buffer.size,
-        scale, search_input_position, search_bar_position.y + 10.0f,
-        page->search_bar_hit, page->search_bar_cursor_index, page->index_count,
-        application->delta_time, &page->search_blinking_time, NULL,
-        page->render);
-
-    quad_border_rounded(&page->render->vertices, page->index_count,
-                        page->search_bar_aabb.min, page->search_bar_aabb.size,
-                        border_color, border_width, 0.4f, 3, 0.0f);
-
-    const V2 scroll_bar_position = v2f(application->dimensions.width,
-                                       page->search_result_aabb.min.y - 8.0f);
-    const f32 area_y = page->search_result_aabb.size.y + 8.0f;
-    const f32 total_height = item_count * quad_height;
-    scroll_bar_add(&page->scroll_bar, scroll_bar_position,
-                   application->dimensions.y, area_y, total_height, quad_height,
-                   &page->scroll_offset, &page->offset, page->index_count,
-                   page->render);
-}
-
-DirectoryItemListReturnValue
-search_page_update(SearchPage* page, const ApplicationContext* application,
-                   const b8 check_collision, const V2 search_bar_position,
-                   DirectoryHistory* directory_history,
-                   ThreadTaskQueue* thread_task_queue,
-                   SelectedItemValues* selected_item_values)
-{
-    const f32 search_bar_width = 250.0f;
-    page->search_bar_aabb = (AABB){
-        .min = v2f(application->dimensions.width - (search_bar_width + 10.0f),
-                   search_bar_position.y),
-        .size = v2f(search_bar_width, 40.0f),
-    };
-
-    const f32 scale = 1.0f;
-    const f32 padding_top = 2.0f;
-    const f32 quad_height =
-        scale * application->font.pixel_height + padding_top * 5.0f;
-
-    V2 search_result_position = search_bar_position;
-    search_result_position.y += page->search_bar_aabb.size.y + 20.0f;
-    const f32 search_page_header_size_y = search_result_position.y;
-
-    page->search_result_aabb = (AABB){
-        .min = search_result_position,
-    };
-    page->search_result_aabb.size =
-        v2_sub(application->dimensions, page->search_result_aabb.min);
-    search_result_position.y += page->scroll_offset;
-
-    // Rendered first to go behind search bar when scrolling
-    DirectoryItemListReturnValue search_list_return_value = { 0 };
-    if (search_page_has_result(page) && page->search_buffer.size)
-    {
-        const f32 search_result_width =
-            (application->dimensions.x - search_result_position.x) - 10.0f;
-
-        platform_mutex_lock(&page->search_result_file_array.mutex);
-        platform_mutex_lock(&page->search_result_folder_array.mutex);
-
-        page->result_pulse_x += application->delta_time * 6.0f;
-
-        search_list_return_value = directory_item_list(
-            application, &page->search_result_folder_array.array,
-            &page->search_result_file_array.array, check_collision,
-            search_result_position, search_result_width, quad_height,
-            padding_top, page->result_pulse_x, page->index_count,
-            selected_item_values, page->render, directory_history);
-
-        platform_mutex_unlock(&page->search_result_folder_array.mutex);
-        platform_mutex_unlock(&page->search_result_file_array.mutex);
-    }
-    else
-    {
-        search_page_clear_search_result(page);
-    }
-
-    return search_list_return_value;
 }
 
 b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
@@ -2253,7 +2013,7 @@ b8 load_preview_image(const char* path, V2* image_dimensions,
                       RenderingProperties* render)
 {
     b8 result = false;
-    const char* extension = get_file_extension(path, (u32)strlen(path));
+    const char* extension = file_get_extension(path, (u32)strlen(path));
     if (extension && (!strcmp(extension, ".png") || !strcmp(extension, ".jpg")))
     {
         if (render->textures.size > 1)
@@ -2315,6 +2075,71 @@ void set_sorting_buttons(const ApplicationContext* application,
         application->font.pixel_height, NULL, NULL, NULL, &render->vertices);
 }
 
+void show_search_result_window(SearchPage* page, const u32 window,
+                               const f32 list_item_height, const f64 delta_time,
+                               DirectoryHistory* directory_history)
+{
+    ui_window_begin(window, false);
+    {
+        platform_mutex_lock(&page->search_result_file_array.mutex);
+        platform_mutex_lock(&page->search_result_folder_array.mutex);
+
+        V2 list_position = v2f(10.0f, 10.0f);
+        i32 selected_item = -1;
+        if (ui_window_add_folder_list(list_position, list_item_height,
+                                      &page->search_result_folder_array.array,
+                                      NULL, &selected_item))
+        {
+            open_folder(
+                page->search_result_folder_array.array.data[selected_item].path,
+                directory_history);
+        }
+        list_position.y +=
+            list_item_height * page->search_result_folder_array.array.size;
+        if (ui_window_add_file_list(list_position, list_item_height,
+                                    &page->search_result_file_array.array, NULL,
+                                    &selected_item))
+        {
+            platform_open_file(
+                page->search_result_file_array.array.data[selected_item].path);
+        }
+
+        platform_mutex_unlock(&page->search_result_file_array.mutex);
+        platform_mutex_unlock(&page->search_result_folder_array.mutex);
+    }
+    ui_window_end(delta_time);
+}
+
+void show_directory_window(const u32 window, const f32 list_item_height,
+                           const f64 delta_time, DirectoryTab* tab)
+{
+    ui_window_begin(window, false);
+    {
+        DirectoryPage* current = current_directory(&tab->directory_history);
+        V2 list_position = v2f(10.0f, 10.0f);
+        i32 selected_item = -1;
+        if (ui_window_add_folder_list(list_position, list_item_height,
+                                      &current->directory.sub_directories,
+                                      &tab->selected_item_values,
+                                      &selected_item))
+        {
+            open_folder(
+                current->directory.sub_directories.data[selected_item].path,
+                &tab->directory_history);
+        }
+        list_position.y +=
+            list_item_height * current->directory.sub_directories.size;
+        if (ui_window_add_file_list(list_position, list_item_height,
+                                    &current->directory.files,
+                                    &tab->selected_item_values, &selected_item))
+        {
+            platform_open_file(
+                current->directory.files.data[selected_item].path);
+        }
+    }
+    ui_window_end(delta_time);
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext application = { 0 };
@@ -2335,9 +2160,6 @@ int main(int argc, char** argv)
     u32 main_index_count = 0;
     RenderingProperties* preview_render = rendering_properties.data + 1;
     u32 preview_index_count = 0;
-
-    search_page.render = main_render;
-    search_page.index_count = &main_index_count;
 
     U32Array windows = { 0 };
     array_create(&windows, 10);
@@ -2386,17 +2208,7 @@ int main(int argc, char** argv)
     quick_access_load(&quick_access_folders);
     f64 quick_access_pulse_x = 0.0f;
 
-    InputBuffer parent_directory_input = {
-        .input_index = -1,
-        .time = 0.4f,
-    };
-    array_create(&parent_directory_input.buffer, 20);
-
-    InputBuffer search_input = {
-        .input_index = -1,
-        .time = 0.4f,
-    };
-    array_create(&search_input.buffer, 20);
+    InputBuffer parent_directory_input = ui_input_buffer_create();
 
     b8 parent_directory_clicked = false;
     f64 parent_directory_clicked_time = 0.4f;
@@ -2421,7 +2233,9 @@ int main(int argc, char** argv)
 
     V2 starting_position = v2f(150.0f, 0.0f);
     const f32 search_bar_width = 250.0f;
-    f32 search_result_width = search_bar_width + 10.0f;
+    f32 open_search_result_width = search_bar_width + 10.0f;
+    f32 search_result_width = 0.0f;
+    b8 search_result_open_presist = true;
 
     i32 side_resize = -1;
     b8 resize_dragging = false;
@@ -2434,7 +2248,6 @@ int main(int argc, char** argv)
 
     enable_gldebugging();
     glEnable(GL_BLEND);
-    // glEnable(GL_SCISSOR_TEST);
     glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (!window_should_close(application.window))
@@ -3161,36 +2974,24 @@ int main(int argc, char** argv)
             rendering_properties_end_draw(rendering_properties.data + i);
         }
 #else
-        const f32 top_bar_height = 60.0f;
-
-        UiWindow* top_bar = ui_window_get(windows.data[0]);
-        top_bar->position = v2d();
-        top_bar->dimensions = v2f(application.dimensions.width, top_bar_height);
-        top_bar->top_color = v4ic(0.2f);
-        top_bar->bottom_color = v4ic(0.15f);
-
-        UiWindow* quick_access = ui_window_get(windows.data[1]);
-        quick_access->position = v2f(top_bar->position.x, top_bar_height);
-        quick_access->dimensions =
-            v2f(starting_position.x,
-                application.dimensions.height - top_bar_height);
-
-        UiWindow* directory = ui_window_get(windows.data[2]);
-        directory->position =
-            v2f(quick_access->position.x + quick_access->dimensions.width,
-                quick_access->position.y);
-        directory->dimensions =
-            v2f(application.dimensions.width - directory->position.x,
-                application.dimensions.height - top_bar_height);
 
         static b8 test = false;
         ui_context_begin(application.dimensions, application.delta_time, true);
         {
-            ui_window_begin(windows.data[0], false);
+            const f32 list_item_height = application.font.pixel_height + 10.0f;
+
+            const f32 top_bar_height = 60.0f;
+
+            UiWindow* top_bar = ui_window_get(windows.data[3]);
+            top_bar->dimensions =
+                v2f(application.dimensions.width, top_bar_height);
+            top_bar->top_color = v4ic(0.2f);
+            top_bar->bottom_color = v4ic(0.15f);
+
+            ui_window_begin(windows.data[3], false);
             {
-                AABB button_aabb = {
-                    .size = v2i(40.0f),
-                };
+                AABB button_aabb = { 0 };
+                button_aabb.size = v2i(40.0f),
                 button_aabb.min = v2f(10.0f, middle(top_bar->dimensions.height,
                                                     button_aabb.size.height));
                 b8 disable = tab->directory_history.current_index <= 0;
@@ -3218,9 +3019,9 @@ int main(int argc, char** argv)
                 }
 
                 button_aabb.min.x += button_aabb.size.width + 10.0f;
-                button_aabb.size.x =
-                    (application.dimensions.width - (search_bar_width + 20.0f)) -
-                    button_aabb.min.x;
+                button_aabb.size.x = (application.dimensions.width -
+                                      (search_bar_width + 20.0f)) -
+                                     button_aabb.min.x;
                 if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
                                               application.delta_time,
                                               &parent_directory_input))
@@ -3231,21 +3032,86 @@ int main(int argc, char** argv)
                 button_aabb.size.x = search_bar_width;
                 if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
                                               application.delta_time,
-                                              &search_input))
+                                              &search_page.input))
                 {
+                    search_page_search(&search_page, &tab->directory_history,
+                                       &thread_queue.task_queue);
                 }
             }
             ui_window_end(application.delta_time);
 
-            ui_window_begin(windows.data[1], false);
+            UiWindow* quick_access = ui_window_get(windows.data[0]);
+            quick_access->position = v2f(top_bar->position.x, top_bar_height);
+            quick_access->dimensions =
+                v2f(starting_position.x,
+                    application.dimensions.height - top_bar_height);
+            quick_access->resizeable = RESIZE_RIGHT;
+
+            ui_window_begin(windows.data[0], false);
             {
+                V2 list_position = v2i(10.0f);
+                i32 selected_item = -1;
+                if (ui_window_add_folder_list(list_position, list_item_height,
+                                              &quick_access_folders, NULL,
+                                              &selected_item))
+                {
+                    open_folder(quick_access_folders.data[selected_item].path,
+                                &tab->directory_history);
+                }
             }
             ui_window_end(application.delta_time);
 
-            ui_window_begin(windows.data[2], false);
+            b8 search_result_open = search_page_has_result(&search_page) &&
+                                    search_page.input.buffer.size;
+            search_result_width = open_search_result_width * search_result_open;
+
+            UiWindow* directory = ui_window_get(windows.data[1]);
+            if (search_result_open)
             {
+                if (search_result_open_presist)
+                {
+                    f32 diff =
+                        (directory->position.x + directory->dimensions.width) -
+                        application.dimensions.width;
+
+                    search_result_width += diff;
+                }
+                search_result_open_presist = false;
             }
-            ui_window_end(application.delta_time);
+            else
+            {
+                search_result_open_presist = true;
+            }
+
+            directory->position =
+                v2f(quick_access->position.x + quick_access->dimensions.width,
+                    quick_access->position.y);
+            directory->dimensions =
+                v2f((application.dimensions.width - search_result_width) -
+                        directory->position.x,
+                    application.dimensions.height - top_bar_height);
+            directory->resizeable = RESIZE_RIGHT;
+
+            show_directory_window(windows.data[1], list_item_height,
+                                  application.delta_time, tab);
+
+            if (search_result_open)
+            {
+                UiWindow* search_result = ui_window_get(windows.data[2]);
+                search_result->position =
+                    v2f(directory->position.x + directory->dimensions.width,
+                        directory->position.y);
+                search_result->dimensions = v2f(
+                    application.dimensions.width - search_result->position.x,
+                    application.dimensions.height - top_bar_height);
+                show_search_result_window(
+                    &search_page, windows.data[2], list_item_height,
+                    application.delta_time, &tab->directory_history);
+            }
+            else
+            {
+                search_page_clear_search_result(&search_page);
+            }
         }
         ui_context_end();
 #endif
