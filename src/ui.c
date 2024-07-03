@@ -252,14 +252,6 @@ internal u32 get_id(const u32 size, U32Array* free_indices,
     return id;
 }
 
-internal b8 is_key_pressed_repeat(i32 key)
-{
-    const KeyEvent* event = event_get_key_event();
-    return event->activated &&
-           (event->action == FTIC_PRESS || event->action == FTIC_REPEAT) &&
-           event->key == key;
-}
-
 internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
                         const V2 expanded_position, const V2 expanded_size,
                         u32* index_count)
@@ -1268,8 +1260,10 @@ void ui_window_end(const char* title)
             }
         }
 
-        array_push(aabbs, quad(&ui_context.render.vertices, window->position,
-                               top_bar_dimensions, high_light_color, 0.0f));
+        array_push(aabbs,
+                   quad_gradiant_t_b(&ui_context.render.vertices,
+                                     window->position, top_bar_dimensions,
+                                     v4ic(0.25f), v4ic(0.2f), 0.0f));
         window->rendering_index_count += 6;
 
         quad_border(&ui_context.render.vertices, &window->rendering_index_count,
@@ -1794,4 +1788,106 @@ b8 ui_window_add_file_list(V2 position, const f32 item_height,
         position, items, 2.0f, file_icon_co, item_height, selected_item_values);
     if (item_selected) *item_selected = selected_index;
     return selected_index != -1;
+}
+
+b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
+                                void* option_data)
+{
+    const u32 drop_down_item_count = drop_down_menu->options.size;
+    if (drop_down_item_count == 0) return true;
+
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+    HoverClickedIndex hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data[window_index];
+
+    v2_add_equal(&position, window->first_item_position);
+
+    drop_down_menu->x += (f32)(ui_context.delta_time * 2.0f);
+    const f32 drop_down_item_height = 40.0f;
+    const f32 end_height = drop_down_item_count * drop_down_item_height;
+    const f32 current_y = ease_out_elastic(drop_down_menu->x) * end_height;
+    const f32 precent = current_y / end_height;
+    const f32 drop_down_width = 200.0f;
+    const f32 drop_down_border_width = 1.0f;
+    const f32 border_extra_padding = drop_down_border_width * 2.0f;
+    const f32 drop_down_outer_padding = 10.0f + border_extra_padding;
+
+    quad_border_gradiant(
+        &ui_context.render.vertices, &window->rendering_index_count,
+        v2f(position.x - drop_down_border_width,
+            position.y - drop_down_border_width),
+        v2f(drop_down_width + border_extra_padding,
+            current_y + border_extra_padding),
+        lighter_color, lighter_color, drop_down_border_width, 0.0f);
+
+    b8 in_focus = window_index == ui_context.window_in_focus;
+    if (in_focus && is_key_pressed_repeat(FTIC_KEY_TAB))
+    {
+        if (event_get_key_event()->shift_pressed)
+        {
+            if (--drop_down_menu->tab_index < 0)
+            {
+                drop_down_menu->tab_index = drop_down_item_count - 1;
+            }
+        }
+        else
+        {
+            drop_down_menu->tab_index++;
+            drop_down_menu->tab_index %= drop_down_item_count;
+        }
+    }
+
+    b8 mouse_button_clicked = is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
+    b8 enter_clicked = is_key_clicked(FTIC_KEY_ENTER);
+    b8 item_clicked = false;
+    b8 any_drop_down_item_hit = false;
+    b8 should_close = false;
+    const f32 promt_item_text_padding = 5.0f;
+    V2 promt_item_position = position;
+    for (u32 i = 0; i < drop_down_item_count; ++i)
+    {
+        b8 drop_down_item_hit = drop_down_menu->tab_index == (i32)i;
+        if (drop_down_item_hit) item_clicked = enter_clicked;
+
+        b8 collision = hover_clicked_index.index == (i32)aabbs->size;
+        if (collision && (drop_down_menu->tab_index == -1 ||
+                          event_get_mouse_move_event()->activated))
+        {
+            drop_down_item_hit = true;
+            drop_down_menu->tab_index = -1;
+            any_drop_down_item_hit = true;
+            item_clicked = mouse_button_clicked;
+        }
+
+        const V4 drop_down_color =
+            drop_down_item_hit ? border_color : high_light_color;
+        V2 size = v2f(drop_down_width, drop_down_item_height * precent);
+        array_push(aabbs, quad(&ui_context.render.vertices, promt_item_position,
+                               size, drop_down_color, 0.0f));
+        window->rendering_index_count += 6;
+
+        V2 promt_item_text_position = promt_item_position;
+        promt_item_text_position.y +=
+            ui_context.font.pixel_height + promt_item_text_padding + 3.0f;
+        promt_item_text_position.x += promt_item_text_padding;
+
+        V4 text_color = v4i(1.0f);
+        should_close = drop_down_menu->menu_options_selection(
+            i, drop_down_item_hit, should_close, item_clicked, &text_color,
+            option_data);
+
+        window->rendering_index_count += text_generation_color(
+            ui_context.font.chars, drop_down_menu->options.data[i], 1.0f,
+            promt_item_text_position, 1.0f,
+            ui_context.font.pixel_height * precent, text_color, NULL, NULL,
+            NULL, &ui_context.render.vertices);
+
+        promt_item_position.y += size.y;
+    }
+    return should_close ||
+           ((!any_drop_down_item_hit) && mouse_button_clicked) ||
+           is_key_clicked(FTIC_KEY_ESCAPE);
 }

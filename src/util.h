@@ -67,3 +67,8 @@ f32 clampf32_low(f32 value, f32 low);
 f32 clampf32_high(f32 value, f32 high);
 
 f32 middle(const f32 area_size, const f32 object_size);
+
+void log_f32(const char* message, const f32 value);
+void log_u64(const char* message, const u64 value);
+
+f32 ease_out_elastic(const f32 x);

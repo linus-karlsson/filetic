@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <math.h>
 
 b8 file_end_of_file(const FileAttrib* file)
 {
@@ -238,4 +239,29 @@ f32 clampf32_high(f32 value, f32 high)
 f32 middle(const f32 area_size, const f32 object_size)
 {
     return (area_size * 0.5f) - (object_size * 0.5f);
+}
+
+void log_f32(const char* message, const f32 value)
+{
+    char buffer[100] = { 0 };
+    sprintf_s(buffer, 100, "%s%f", message, value);
+    log_message(buffer, strlen(buffer));
+}
+
+void log_u64(const char* message, const u64 value)
+{
+    char buffer[100] = { 0 };
+    sprintf_s(buffer, 100, "%s%llu", message, value);
+    log_message(buffer, strlen(buffer));
+}
+
+f32 ease_out_elastic(const f32 x)
+{
+    if (x == 0 || x == 1)
+    {
+        return x;
+    }
+    const f32 c4 = (2.0f * PI) / 3.0f;
+
+    return powf(2.0f, -10.0f * x) * sinf((x * 10.0f - 0.75f) * c4) + 1.0f;
 }

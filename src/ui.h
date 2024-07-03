@@ -99,6 +99,15 @@ typedef struct InputBuffer
     b8 active;
 } InputBuffer;
 
+typedef struct DropDownMenu
+{
+    f32 x;
+    i32 tab_index;
+    CharPtrArray options;
+    b8 (*menu_options_selection)(u32 index, b8 hit, b8 should_close,
+                                 b8 item_clicked, V4* text_color, void* data);
+} DropDownMenu;
+
 InputBuffer ui_input_buffer_create();
 
 void ui_context_create(FTicWindow* window);
@@ -121,6 +130,7 @@ void ui_window_add_directory_list(V2 position);
 b8 ui_window_add_folder_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
 b8 ui_window_add_file_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
+b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
 
 DockNode* dock_node_create(NodeType type, SplitAxis split_axis, UiWindow* window);
 void dock_node_dock_window(DockNode* root, DockNode* window, SplitAxis split_axis, u8 where);

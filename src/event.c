@@ -193,3 +193,32 @@ const CharPtrArray* event_get_drop_buffer()
 {
     return &event_context.drop_paths;
 }
+
+b8 is_ctrl_and_key_pressed(i32 key)
+{
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == 1 && event->ctrl_pressed &&
+           event->key == key;
+}
+
+b8 is_ctrl_and_key_range_pressed(i32 key_low, i32 key_high)
+{
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == 1 && event->ctrl_pressed &&
+           (closed_interval(key_low, event->key, key_high));
+}
+
+b8 is_key_clicked(i32 key)
+{
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == FTIC_RELEASE &&
+           event->key == key;
+}
+
+b8 is_key_pressed_repeat(i32 key)
+{
+    const KeyEvent* event = event_get_key_event();
+    return event->activated &&
+           (event->action == FTIC_PRESS || event->action == FTIC_REPEAT) &&
+           event->key == key;
+}

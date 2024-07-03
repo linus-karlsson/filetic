@@ -193,3 +193,8 @@ V2 event_get_mouse_position();
 
 const CharArray* event_get_key_buffer();
 const CharPtrArray* event_get_drop_buffer();
+
+b8 is_ctrl_and_key_pressed(i32 key);
+b8 is_ctrl_and_key_range_pressed(i32 key_low, i32 key_high);
+b8 is_key_clicked(i32 key);
+b8 is_key_pressed_repeat(i32 key);
