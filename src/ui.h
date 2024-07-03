@@ -86,8 +86,7 @@ struct DockNode
     SplitAxis split_axis;
     UiWindow* window;
     DockNode* children[2];
-    V2 size;
-    V2 position;
+    AABB aabb;
 };
 
 typedef struct InputBuffer
