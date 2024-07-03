@@ -119,6 +119,7 @@ void ui_dock_space_end();
 
 u32 ui_window_create();
 UiWindow* ui_window_get(u32 window_id);
+u32 ui_window_in_focus();
 b8 ui_window_begin(u32 window_id, b8 top_bar);
 void ui_window_end(const char* title);
 

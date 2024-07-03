@@ -1808,7 +1808,6 @@ int main(int argc, char** argv)
         preview_index_count = 0;
 
         rendering_properties_array_clear(&rendering_properties);
-#if 0
         if (is_ctrl_and_key_pressed(FTIC_KEY_T))
         {
             array_push(&application.tabs, tab_add());
@@ -1823,6 +1822,8 @@ int main(int argc, char** argv)
                 application.tab_index = index;
             }
         }
+
+#if 0
 
 
         const MouseButtonEvent* mouse_button_event =
@@ -2623,11 +2624,21 @@ int main(int argc, char** argv)
             }
             ui_window_end("Quick access");
 
-            show_directory_window(windows.data[2], list_item_height, tab);
-
-            show_search_result_window(&search_page, windows.data[3],
+            show_search_result_window(&search_page, windows.data[2],
                                       list_item_height,
                                       &tab->directory_history);
+
+            const u32 tab_count = application.tabs.size;
+            for (u32 i = 0; i < tab_count; ++i)
+            {
+                const u32 window_id = windows.data[3 + i];
+                if (ui_window_in_focus() == window_id)
+                {
+                    application.tab_index = i;
+                }
+                show_directory_window(window_id, list_item_height,
+                                      application.tabs.data + i);
+            }
 
             b8 search_result_open = search_page_has_result(&search_page) &&
                                     search_page.input.buffer.size;

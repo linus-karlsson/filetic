@@ -859,6 +859,15 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
             const AABBArray* aabbs =
                 ui_context.window_aabbs.data + window_index;
 
+            if(aabbs->size)
+            {
+                // NOTE: the first aabb is the window area
+                if (!collision_point_in_aabb(mouse_position, &aabbs->data[0]))
+                {
+                    continue;
+                }
+            }
+
             for (i32 aabb_index = aabbs->size; aabb_index >= 0; --aabb_index)
             {
                 const AABB* aabb = aabbs->data + aabb_index;
@@ -1027,6 +1036,35 @@ void ui_context_end()
                         sizeof(Vertex) * ui_context.render.vertices.size,
                         ui_context.render.vertices.data);
 
+#if 1
+    // TODO: make sure all docked windows is always at the back
+    u32 first_docked_window = ui_context.window_count;
+    for (u32 i = 0; i < ui_context.window_count; ++i)
+    {
+        UiWindow* window = ui_context.windows.data + i;
+        if (window->docked)
+        {
+            if(first_docked_window == ui_context.window_count)
+            {
+                first_docked_window = i;
+            }
+        }
+        else if (i > first_docked_window)
+        {
+            log_message("h",1);
+            for (u32 j = first_docked_window; j < ui_context.window_count; ++j)
+            {
+                window = ui_context.windows.data + j;
+                if (window->docked)
+                {
+                    push_window_to_back(&ui_context, j);
+                }
+            }
+            break;
+        }
+    }
+#endif
+
     rendering_properties_begin_draw(&ui_context.render, &ui_context.mvp);
     for (i32 i = ui_context.window_count - 1; i >= 0; --i)
     {
@@ -1055,7 +1093,7 @@ u32 ui_window_create()
     UiWindow window = {
         .id = id,
         .index = ui_context.windows.size,
-        .size = v2f(100.0f, 100.0f),
+        .size = v2f(200.0f, 200.0f),
         .top_color = clear_color,
         .bottom_color = clear_color,
     };
@@ -1077,6 +1115,11 @@ u32 ui_window_create()
 UiWindow* ui_window_get(u32 window_id)
 {
     return ui_context.windows.data + ui_context.id_to_index.data[window_id];
+}
+
+u32 ui_window_in_focus()
+{
+    return ui_context.windows.data[ui_context.window_in_focus].id;
 }
 
 b8 ui_window_begin(u32 window_id, b8 top_bar)
@@ -1253,6 +1296,9 @@ void ui_window_end(const char* title)
                     window->docked = false;
                     dock_node_remove_node(ui_context.dock_tree,
                                           window->dock_node);
+
+                    window->size = v2f(200.0f, 200.0f);
+                    window->dock_node->aabb.size = window->size;
                 }
                 window->top_bar_hold = true;
                 window->top_bar_offset =
@@ -1739,7 +1785,7 @@ i32 ui_window_add_directory_item_item_list(
     i32 hit_index = -1;
     for (i32 i = 0; i < (i32)items->size; ++i)
     {
-        if (item_in_view(position.y, item_height, ui_context.dimensions.height))
+        if (item_in_view(position.y, item_height, position.y + window->size.height))
         {
             V2 item_dimensions =
                 v2f(window->size.width - relative_position.x, item_height);
