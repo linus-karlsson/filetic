@@ -37,7 +37,6 @@ typedef struct UiWindow
     V2 resize_pointer_offset;
     V4 top_color;
     V4 bottom_color;
-    u32 index;
 
     u32 rendering_index_offset;
     u32 rendering_index_count;
@@ -113,6 +112,7 @@ InputBuffer ui_input_buffer_create();
 void ui_context_create(FTicWindow* window);
 void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 delta_time, const b8 check_collisions);
 void ui_context_end();
+void ui_context_destroy();
 
 void ui_dock_space_begin(V2 position, V2 dimensions, u32* windows, u32 window_count);
 void ui_dock_space_end();

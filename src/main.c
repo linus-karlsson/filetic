@@ -2111,6 +2111,7 @@ int main(int argc, char** argv)
     memset(running_callbacks, 0, sizeof(running_callbacks));
     if (current_path) free(current_path);
 
+    ui_context_destroy();
     quick_access_save(&quick_access_folders);
 
     for (u32 i = 0; i < rendering_properties.size; ++i)

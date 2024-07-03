@@ -196,7 +196,6 @@ internal void push_window_to_front(UiContext* context,
     for (u32 i = 0; i < context->windows.size; ++i)
     {
         context->id_to_index.data[context->windows.data[i].id] = i;
-        context->windows.data[i].index = i;
         context->windows.data[i].dock_node->window = context->windows.data + i;
     }
     move_to_front(AABBArray, &context->window_aabbs, window_in_focus_index);
@@ -226,7 +225,6 @@ internal void push_window_to_back(UiContext* context,
     for (u32 i = 0; i < context->windows.size; ++i)
     {
         context->id_to_index.data[context->windows.data[i].id] = i;
-        context->windows.data[i].index = i;
         context->windows.data[i].dock_node->window = context->windows.data + i;
     }
     move_to_back(AABBArray, &context->window_aabbs, window_in_focus_index);
@@ -723,6 +721,120 @@ InputBuffer ui_input_buffer_create()
     return input;
 }
 
+internal void insert_window(DockNode* node, const u32 id)
+{
+    UiWindow window = {
+        .position = v2f(200.0f, 200.0f),
+        .id = id,
+        .size = v2f(200.0f, 200.0f),
+        .top_color = clear_color,
+        .bottom_color = clear_color,
+    };
+    b8 update_window_pointers = ui_context.windows.size >= ui_context.windows.capacity;
+    array_push(&ui_context.windows, window);
+    UiWindow* added_window = array_back(&ui_context.windows);
+    added_window->dock_node = node;
+    node->window = added_window;
+    if(update_window_pointers)
+    {
+        for(u32 i = 0; i < ui_context.windows.size; ++i)
+        {
+            UiWindow* win = ui_context.windows.data + i;
+            win->dock_node->window = win;
+        }
+    }
+
+    AABBArray aabbs = { 0 };
+    array_create(&aabbs, 10);
+    array_push(&ui_context.window_aabbs, aabbs);
+
+    HoverClickedIndex hover_clicked_index = { .index = -1 };
+    array_push(&ui_context.window_hover_clicked_indices, hover_clicked_index);
+}
+
+internal void write_node(FILE* file, DockNode* node)
+{
+    if (node == NULL)
+    {
+        b8 is_null = true;
+        fwrite(&is_null, sizeof(is_null), 1, file);
+        return;
+    }
+
+    b8 is_null = false;
+    fwrite(&is_null, sizeof(is_null), 1, file);
+    fwrite(&node->type, sizeof(node->type), 1, file);
+    fwrite(&node->split_axis, sizeof(node->split_axis), 1, file);
+
+    b8 is_window_null = (node->window == NULL);
+    u32 window_id = is_window_null ? 0 : node->window->id;
+    fwrite(&is_window_null, sizeof(is_window_null), 1, file);
+    fwrite(&window_id, sizeof(window_id), 1, file);
+
+    fwrite(&node->size_ratio, sizeof(node->size_ratio), 1, file);
+
+    write_node(file, node->children[0]);
+    write_node(file, node->children[1]);
+}
+
+internal void save_layout()
+{
+    FILE* file = fopen("saved/ui_layout.txt", "wb");
+    if (file == NULL)
+    {
+        log_file_error("saved/ui_layout.txt");
+        return;
+    }
+    write_node(file, ui_context.dock_tree);
+    fclose(file);
+}
+
+DockNode* read_node(FILE* file)
+{
+    b8 is_null = false;
+    size_t count = fread(&is_null, sizeof(uint8_t), 1, file);
+    if (is_null || !count)
+    {
+        return NULL;
+    }
+
+    DockNode* node = (DockNode*)calloc(1, sizeof(DockNode));
+    ftic_assert(fread(&node->type, sizeof(node->type), 1, file));
+    ftic_assert(fread(&node->split_axis, sizeof(node->split_axis), 1, file));
+
+    b8 is_window_null;
+    u32 window_id;
+    ftic_assert(fread(&is_window_null, sizeof(is_window_null), 1, file));
+    ftic_assert(fread(&window_id, sizeof(window_id), 1, file));
+
+    if (!is_window_null)
+    {
+        insert_window(node, window_id);
+        node->window->docked = true;
+    }
+
+    ftic_assert(fread(&node->size_ratio, sizeof(node->size_ratio), 1, file));
+
+    node->children[0] = read_node(file);
+    node->children[1] = read_node(file);
+
+    return node;
+}
+
+internal DockNode* load_layout()
+{
+    FILE* file = fopen("saved/ui_layout.txt", "rb");
+    if (file == NULL)
+    {
+        log_file_error("saved/ui_layout.txt");
+        return NULL;
+    }
+
+    DockNode* root = read_node(file);
+    fclose(file);
+    return root;
+}
+
 void ui_context_create(FTicWindow* window)
 {
     ui_context.window = window;
@@ -733,7 +845,15 @@ void ui_context_create(FTicWindow* window)
     array_create(&ui_context.window_aabbs, 10);
     array_create(&ui_context.window_hover_clicked_indices, 10);
 
-    ui_context.dock_tree = dock_node_create(NODE_ROOT, SPLIT_NONE, NULL);
+    DockNode* saved_tree = load_layout();
+    if (saved_tree)
+    {
+        ui_context.dock_tree = saved_tree;
+    }
+    else
+    {
+        ui_context.dock_tree = dock_node_create(NODE_ROOT, SPLIT_NONE, NULL);
+    }
     ui_context.dock_side_hit = -1;
 
     VertexBufferLayout vertex_buffer_layout = default_vertex_buffer_layout();
@@ -859,7 +979,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
             const AABBArray* aabbs =
                 ui_context.window_aabbs.data + window_index;
 
-            if(aabbs->size)
+            if (aabbs->size)
             {
                 // NOTE: the first aabb is the window area
                 if (!collision_point_in_aabb(mouse_position, &aabbs->data[0]))
@@ -1036,6 +1156,7 @@ void ui_context_end()
                         sizeof(Vertex) * ui_context.render.vertices.size,
                         ui_context.render.vertices.data);
 
+    ui_context.window_count_last = ui_context.window_count;
 #if 1
     // TODO: make sure all docked windows is always at the back
     u32 first_docked_window = ui_context.window_count;
@@ -1044,14 +1165,13 @@ void ui_context_end()
         UiWindow* window = ui_context.windows.data + i;
         if (window->docked)
         {
-            if(first_docked_window == ui_context.window_count)
+            if (first_docked_window == ui_context.window_count)
             {
                 first_docked_window = i;
             }
         }
         else if (i > first_docked_window)
         {
-            log_message("h",1);
             for (u32 j = first_docked_window; j < ui_context.window_count; ++j)
             {
                 window = ui_context.windows.data + j;
@@ -1085,31 +1205,26 @@ void ui_context_end()
     rendering_properties_end_draw(&ui_context.render);
 }
 
+void ui_context_destroy()
+{
+    save_layout();
+}
+
 u32 ui_window_create()
 {
     u32 id = get_id(ui_context.windows.size, &ui_context.free_indices,
                     &ui_context.id_to_index);
 
-    UiWindow window = {
-        .position = v2f(200.0f, 200.0f),
-        .id = id,
-        .index = ui_context.windows.size,
-        .size = v2f(200.0f, 200.0f),
-        .top_color = clear_color,
-        .bottom_color = clear_color,
-    };
-    array_push(&ui_context.windows, window);
-    UiWindow* added_window = array_back(&ui_context.windows);
-    added_window->dock_node =
-        dock_node_create(NODE_LEAF, SPLIT_NONE, added_window);
-
-    AABBArray aabbs = { 0 };
-    array_create(&aabbs, 10);
-    array_push(&ui_context.window_aabbs, aabbs);
-
-    HoverClickedIndex hover_clicked_index = { .index = -1 };
-    array_push(&ui_context.window_hover_clicked_indices, hover_clicked_index);
-
+    for (u32 i = 0; i < ui_context.windows.size; ++i)
+    {
+        UiWindow* window = ui_context.windows.data + i;
+        if (window->id == id)
+        {
+            ui_context.id_to_index.data[id] = i;
+            return id;
+        }
+    }
+    insert_window(dock_node_create(NODE_LEAF, SPLIT_NONE, NULL), id);
     return id;
 }
 
@@ -1786,7 +1901,8 @@ i32 ui_window_add_directory_item_item_list(
     i32 hit_index = -1;
     for (i32 i = 0; i < (i32)items->size; ++i)
     {
-        if (item_in_view(position.y, item_height, position.y + window->size.height))
+        if (item_in_view(position.y, item_height,
+                         position.y + window->size.height))
         {
             V2 item_dimensions =
                 v2f(window->size.width - relative_position.x, item_height);
