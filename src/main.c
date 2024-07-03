@@ -1391,7 +1391,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
         platform_mutex_unlock(&page->search_result_file_array.mutex);
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
     }
-    ui_window_end(page->input.buffer.data);
+    ui_window_end("Search result");
 }
 
 char* get_parent_directory_name(DirectoryPage* current)
@@ -1648,52 +1648,6 @@ void set_input_buffer_to_current_directory(const char* path, InputBuffer* input)
 
 int main(int argc, char** argv)
 {
-#if 0
-    DockNode* root = dock_node_create(NODE_ROOT, SPLIT_NONE, NULL);
-    root->size = v2f(800, 600);
-    UiWindow window0 = { .id = 0 };
-    root->children[0] = dock_node_create(NODE_LEAF, SPLIT_NONE, &window0);
-    root->children[0]->size = v2f(800, 600);
-
-    UiWindow window1 = { .id = 1 };
-    dock_node_dock_window(root,
-                          dock_node_create(NODE_LEAF, SPLIT_NONE, &window1),
-                          SPLIT_HORIZONTAL, DOCK_SIDE_TOP);
-
-    render_node(root, 0);
-    printf("\n");
-    printf("\n");
-
-    UiWindow window2 = { .id = 2 };
-    DockNode* dock_node2 = dock_node_create(NODE_LEAF, SPLIT_NONE, &window2);
-    dock_node_dock_window(root, dock_node2, SPLIT_VERTICAL, DOCK_SIDE_LEFT);
-
-    render_node(root, 0);
-    printf("\n");
-    printf("\n");
-
-
-    UiWindow window3 = { .id = 3 };
-    dock_node_dock_window(root,
-                          dock_node_create(NODE_LEAF, SPLIT_NONE, &window3),
-                          SPLIT_VERTICAL, DOCK_SIDE_LEFT);
-
-    render_node(root, 0);
-    printf("\n");
-    printf("\n");
-
-    dock_node_remove_node(root, dock_node2);
-
-    render_node(root, 0);
-    printf("\n");
-    printf("\n");
-
-    dock_node_resize_from_root(root, v2f(1000.0f, 800.0f));
-
-    render_node(root, 0);
-    printf("\n");
-    printf("\n");
-#else
     ApplicationContext application = { 0 };
     u8* font_bitmap = application_initialize(&application);
 
@@ -1714,10 +1668,10 @@ int main(int argc, char** argv)
     u32 preview_index_count = 0;
 
     U32Array windows = { 0 };
-    array_create(&windows, 10);
+    array_create(&windows, 20);
     {
         ui_context_create(application.window);
-        for (u32 i = 0; i < 10; ++i)
+        for (u32 i = 0; i < 20; ++i)
         {
             array_push(&windows, ui_window_create());
         }
@@ -1823,9 +1777,6 @@ int main(int argc, char** argv)
             }
         }
 
-#if 0
-
-
         const MouseButtonEvent* mouse_button_event =
             event_get_mouse_button_event();
         const MouseMoveEvent* mouse_move_event = event_get_mouse_move_event();
@@ -1851,17 +1802,12 @@ int main(int argc, char** argv)
                 v2_distance(last_mouse_position, application.mouse_position);
             if (distance >= 10.0f)
             {
-                platform_start_drag_drop(&tab->selected_item_values.paths);
+                //platform_start_drag_drop(&tab->selected_item_values.paths);
                 activated = false;
             }
         }
-
-        application_begin_frame(&application);
-
-        rendering_properties_array_clear(&rendering_properties);
-        main_render->scissor.size = application.dimensions;
-
         b8 check_collision = preview_render->textures.size == 1;
+
         if (check_collision &&
             (collision_point_in_aabb(application.mouse_position,
                                      &drop_down_menu.aabb) ||
@@ -1910,322 +1856,6 @@ int main(int argc, char** argv)
         {
             paste_in_directory(current_directory(&tab->directory_history));
         }
-
-        const f32 top_bar_height = 60.0f;
-        const f32 tab_height = 45.0f;
-
-        AABB rect = quad(
-            &main_render->vertices, v2f(starting_position.x, top_bar_height),
-            v2f(border_width, application.dimensions.y - top_bar_height),
-            border_color, 0.0f);
-        main_index_count += 6;
-
-        AABB resize_aabb = rect;
-        resize_aabb.min.x -= 2.0f;
-        resize_aabb.size.x += 4.0f;
-
-        b8 left_side_resize =
-            collision_point_in_aabb(application.mouse_position, &resize_aabb);
-
-        AABB right_border_aabb = {
-            .min = v2f(application.dimensions.x, top_bar_height),
-            .size =
-                v2f(border_width, application.dimensions.y - top_bar_height),
-        };
-        b8 right_side_resize = false;
-        if (search_page_has_result(&search_page))
-        {
-            right_border_aabb.min.x -= search_result_width + 10.0f;
-
-            right_border_aabb = (AABB){
-                .min =
-                    v2f(application.dimensions.x - search_result_width - 10.0f,
-                        top_bar_height),
-                .size = v2f(border_width,
-                            application.dimensions.y - top_bar_height),
-            };
-
-            resize_aabb = right_border_aabb;
-            resize_aabb.min.x -= 2.0f;
-            resize_aabb.size.x += 4.0f;
-            right_side_resize = collision_point_in_aabb(
-                application.mouse_position, &resize_aabb);
-        }
-
-        if (left_side_resize || right_side_resize)
-        {
-            window_set_cursor(application.window, FTIC_RESIZE_H_CURSOR);
-            if (mouse_button_event->activated)
-            {
-                if (left_side_resize)
-                {
-                    resize_offset = rect.min.x - application.mouse_position.x;
-                    side_resize = 0;
-                }
-                else
-                {
-                    resize_offset =
-                        right_border_aabb.min.x - application.mouse_position.x;
-                    side_resize = 1;
-                }
-                resize_dragging = true;
-            }
-        }
-        else if (!resize_dragging)
-        {
-            window_set_cursor(application.window, FTIC_NORMAL_CURSOR);
-        }
-        if (mouse_button_event->action == FTIC_RELEASE)
-        {
-            resize_dragging = false;
-        }
-        if (resize_dragging)
-        {
-            if (side_resize == 0)
-            {
-                starting_position.x =
-                    application.mouse_position.x + resize_offset;
-
-                starting_position.x = max(150.0f, starting_position.x);
-                starting_position.x =
-                    min(right_border_aabb.min.x - 200.0f, starting_position.x);
-            }
-            else
-            {
-                search_result_width = application.dimensions.x -
-                                      application.mouse_position.x +
-                                      resize_offset;
-                search_result_width -= 10.0f;
-                search_result_width = max(150.0f, search_result_width);
-                search_result_width =
-                    min(application.dimensions.x - rect.min.x - 200.0f,
-                        search_result_width);
-            }
-            check_collision = false;
-        }
-        V2 search_bar_position = v2f(
-            application.dimensions.x - search_result_width,
-            middle(top_bar_height, search_page.search_bar_aabb.size.height));
-
-        const f32 back_drop_height = 40.0f;
-
-        V2 parent_directory_path_position =
-            v2f(150.0f, middle(top_bar_height, back_drop_height));
-
-        V2 text_starting_position;
-        text_starting_position.x = rect.min.x + border_width + 10.0f;
-        text_starting_position.y = top_bar_height + border_width;
-        text_starting_position.y += tab_height * (application.tabs.size > 1);
-
-        const f32 width = (right_border_aabb.min.x - text_starting_position.x);
-
-        AABB directory_name_aabb = {
-            .min = v2f(text_starting_position.x,
-                       text_starting_position.y - border_width),
-            .size = v2f(100.0f, 40.0f),
-        };
-
-        text_starting_position.y += directory_name_aabb.size.y;
-
-        AABB directory_aabb = {
-            .min = text_starting_position,
-            .size =
-                v2f(width, application.dimensions.y - text_starting_position.y),
-        };
-        text_starting_position.y += 8.0f;
-
-        AABB directory_size_aabb = {
-            .min = v2f(directory_aabb.min.x + directory_aabb.size.x -
-                           directory_name_aabb.size.x - 15.0f,
-                       directory_name_aabb.min.y),
-            .size = directory_name_aabb.size,
-        };
-
-        b8 sort_by_name_highlighted = collision_point_in_aabb(
-            application.mouse_position, &directory_name_aabb);
-        b8 sort_by_size_highlighted = collision_point_in_aabb(
-            application.mouse_position, &directory_size_aabb);
-
-        if (sort_by_name_highlighted || sort_by_size_highlighted)
-        {
-            check_collision = false;
-        }
-
-        AABB side_under_border_aabb = {
-            .min = v2f(0.0f, top_bar_height),
-            .size = v2f(application.dimensions.x, border_width),
-        };
-
-
-
-        const f32 scale = 1.0f;
-        const f32 padding_top = 2.0f;
-        const f32 quad_height =
-            scale * application.font.pixel_height + padding_top * 5.0f;
-
-        quick_access_pulse_x += application.delta_time * 6.0f;
-        DirectoryItemListReturnValue quick_access_list_return_value =
-            folder_item_list(&application, &quick_access_folders,
-                             check_collision,
-                             v2f(10.0f, side_under_border_aabb.min.y + 8.0f),
-                             rect.min.x - 10.0f, quad_height, padding_top,
-                             quick_access_pulse_x, &main_index_count, NULL,
-                             main_render, &tab->directory_history);
-
-        text_starting_position.y +=
-            current_directory(&tab->directory_history)->scroll_offset;
-
-        DirectoryItemListReturnValue main_list_return_value;
-        {
-            DirectoryPage* current = current_directory(&tab->directory_history);
-            current->pulse_x += application.delta_time * 6.0f;
-
-            main_list_return_value = directory_item_list(
-                &application, &current->directory.sub_directories,
-                &current->directory.files, check_collision,
-                text_starting_position, width - 10.0f, quad_height, padding_top,
-                current->pulse_x, &main_index_count, &tab->selected_item_values,
-                main_render, &tab->directory_history);
-        }
-
-        set_sorting_buttons(&application, "Name", &directory_name_aabb,
-                            SORT_NAME, sort_by_name_highlighted,
-                            &main_index_count, tab, main_render);
-
-        set_sorting_buttons(&application, "Size", &directory_size_aabb,
-                            SORT_SIZE, sort_by_size_highlighted,
-                            &main_index_count, tab, main_render);
-
-        AABB parent_directory_path_aabb = { 0 };
-        parent_directory_path_aabb.min = parent_directory_path_position;
-        parent_directory_path_aabb.size =
-            v2f(search_page.search_bar_aabb.min.x -
-                    parent_directory_path_aabb.min.x - 10.0f,
-                back_drop_height);
-
-        if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
-        {
-            if (collision_point_in_aabb(application.mouse_position,
-                                        &parent_directory_path_aabb))
-            {
-                if (!parent_directory_clicked)
-                {
-                    parent_directory_clicked_time = 0.4f;
-                    parent_directory.size = 0;
-                    const char* path =
-                        current_directory(&tab->directory_history)
-                            ->directory.parent;
-                    const u32 parent_length = (u32)strlen(path);
-                    for (u32 i = 0; i < parent_length; ++i)
-                    {
-                        array_push(&parent_directory, path[i]);
-                    }
-                    array_push(&parent_directory, '\0');
-                    array_push(&parent_directory, '\0');
-                    array_push(&parent_directory, '\0');
-                    parent_directory.size -= 3;
-                    parent_directory_clicked = true;
-                }
-            }
-            else if (!collision_point_in_aabb(application.mouse_position,
-                                              &suggestions.aabb))
-            {
-                suggestions.aabb = (AABB){ 0 };
-                suggestions.x = 0;
-                parent_directory_clicked = false;
-                parent_directory_clicked_time = 0.4f;
-                parent_directory.size = 0;
-            }
-        }
-
-        DirectoryItemListReturnValue search_list_return_value =
-            search_page_update(&search_page, &application, check_collision,
-                               search_bar_position, &tab->directory_history,
-                               &thread_queue.task_queue,
-                               &tab->selected_item_values);
-
-        quad_gradiant_t_b(&main_render->vertices, v2d(),
-                          v2f(application.dimensions.width, top_bar_height),
-                          v4ic(0.16f), v4ic(0.14f), 0.0f);
-        main_index_count += 6;
-
-        search_page_top_bar_update(
-            &search_page, &application, check_collision, search_bar_position,
-            search_list_return_value.count, &tab->directory_history,
-            &thread_queue.task_queue);
-
-        quad(&main_render->vertices, parent_directory_path_aabb.min,
-             parent_directory_path_aabb.size, high_light_color, 0.0f);
-        main_index_count += 6;
-
-        quad_border_rounded(&main_render->vertices, &main_index_count,
-                            parent_directory_path_aabb.min,
-                            parent_directory_path_aabb.size, border_color,
-                            border_width, 0.4f, 3, 0.0f);
-
-        quad(&main_render->vertices, right_border_aabb.min,
-             right_border_aabb.size, border_color, 0.0f);
-        main_index_count += 6;
-
-        parent_directory_path_position.y += application.font.pixel_height;
-        parent_directory_path_position.y +=
-            middle(back_drop_height, application.font.pixel_height) - 3.0f;
-        parent_directory_path_position.x += 10.0f;
-
-        AABB button_aabb = {
-            .min = v2i(10.0f),
-            .size = v2i(search_page.search_bar_aabb.size.y),
-        };
-        button_aabb.min.y = middle(top_bar_height, button_aabb.size.height);
-
-        main_list_return_value.hit |= button_move_in_history_add(
-            &button_aabb, check_collision,
-            tab->directory_history.current_index > 0, FTIC_MOUSE_BUTTON_4, -1,
-            arrow_back_icon_co, &main_index_count, &tab->selected_item_values,
-            &tab->directory_history, main_render);
-
-        button_aabb.min.x += button_aabb.size.x;
-
-        b8 extra_condition = tab->directory_history.history.size >
-                             tab->directory_history.current_index + 1;
-        main_list_return_value.hit |= button_move_in_history_add(
-            &button_aabb, check_collision, extra_condition, FTIC_MOUSE_BUTTON_5,
-            1, arrow_right_icon_co, &main_index_count,
-            &tab->selected_item_values, &tab->directory_history, main_render);
-
-        button_aabb.min.x += button_aabb.size.x;
-
-        if (button_arrow_add(button_aabb.min, &button_aabb, arrow_up_icon_co,
-                             check_collision,
-                             can_go_up_one_directory(
-                                 current_directory(&tab->directory_history)
-                                     ->directory.parent),
-                             &main_index_count, main_render))
-        {
-            if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
-            {
-                go_up_one_directory(&tab->directory_history);
-            }
-        }
-
-        V2 back_button_border_position =
-            v2f(0.0f, side_under_border_aabb.min.y);
-
-        quad(&main_render->vertices, side_under_border_aabb.min,
-             side_under_border_aabb.size, border_color, 0.0f);
-        main_index_count += 6;
-
-        V2 scroll_bar_position = v2f(
-            directory_aabb.min.x + directory_aabb.size.x, directory_aabb.min.y);
-        f32 area_y = directory_aabb.size.y;
-        f32 total_height = main_list_return_value.count * quad_height;
-        scroll_bar_add(
-            &main_scroll_bar, scroll_bar_position, application.dimensions.y,
-            area_y, total_height, quad_height,
-            &current_directory(&tab->directory_history)->scroll_offset,
-            &current_directory(&tab->directory_history)->offset,
-            &main_index_count, main_render);
-
         if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
         {
             right_clicked = true;
@@ -2247,7 +1877,7 @@ int main(int argc, char** argv)
         {
             drop_down_menu.aabb = (AABB){ 0 };
         }
-
+#if 0
         const char* directory_to_drop_in = NULL;
         if (main_list_return_value.hit_index >= 0 &&
             main_list_return_value.type == TYPE_FOLDER)
@@ -2268,208 +1898,6 @@ int main(int argc, char** argv)
         look_for_dropped_files(current_directory(&tab->directory_history),
                                directory_to_drop_in);
 
-        const u32 tab_count = application.tabs.size;
-        if (tab_count > 1)
-        {
-            V2 tab_position =
-                v2f(rect.min.x + border_width, top_bar_height + border_width);
-
-            const f32 area_width =
-                (directory_aabb.min.x + directory_aabb.size.x) - tab_position.x;
-            const f32 max_tab_width = 200.0f;
-            const f32 padding = 5.0f;
-            const f32 tab_width =
-                min(max_tab_width,
-                    ((area_width - 5.0f) - (padding * tab_count)) / tab_count);
-
-            quad(&main_render->vertices, tab_position,
-                 v2f(area_width, tab_height), clear_color, 0.0f);
-            main_index_count += 6;
-
-            quad(&main_render->vertices,
-                 v2f(tab_position.x, tab_position.y + tab_height),
-                 v2f(area_width, border_width), border_color, 0.0f);
-            main_index_count += 6;
-
-            tab_position.y += 5.0f;
-            tab_position.x += 5.0f;
-
-            for (u32 i = 0; i < tab_count; ++i)
-            {
-                AABB tab_aabb = {
-                    .min = tab_position,
-                    .size = v2f(tab_width, tab_height - 5.0f),
-                };
-
-                V4 tab_color = high_light_color;
-                if (collision_point_in_aabb(application.mouse_position,
-                                            &tab_aabb))
-                {
-                    tab_color = v4ic(0.3f);
-                    if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
-                    {
-                        application.tab_index = i;
-                    }
-                }
-
-                if (application.tab_index == i)
-                {
-                    tab_color = v4ic(0.4f);
-                }
-
-                quad(&main_render->vertices, tab_aabb.min, tab_aabb.size,
-                     tab_color, 0.0f);
-                main_index_count += 6;
-                quad_border_rounded(&main_render->vertices, &main_index_count,
-                                    tab_aabb.min, tab_aabb.size, lighter_color,
-                                    border_width, 0.4f, 3, 0.0f);
-
-                char* parent = current_directory(
-                                   &application.tabs.data[i].directory_history)
-                                   ->directory.parent;
-                main_index_count += text_generation(
-                    application.font.chars,
-                    parent + get_path_length(parent, (u32)strlen(parent)), 1.0f,
-                    v2f(tab_position.x + 10.0f,
-                        tab_position.y + application.font.pixel_height + 9.0f),
-                    scale, application.font.pixel_height, NULL, NULL, NULL,
-                    &main_render->vertices);
-
-                tab_position.x += tab_width + padding;
-            }
-        }
-
-        /*
-        if (quick_access_list_return_value.hit || main_list_return_value.hit ||
-            search_list_return_value.hit)
-        {
-            window_set_cursor(application.window, FTIC_HAND_CURSOR);
-        }
-        */
-
-        if (parent_directory_clicked)
-        {
-            b8 backspace_pressed = erase_char(&input_index, &parent_directory);
-            if (backspace_pressed)
-            {
-                suggestions.tab_index = -1;
-            }
-            b8 reload_results = backspace_pressed;
-            add_from_key_buffer(&application.font,
-                                parent_directory_path_aabb.size.x, &input_index,
-                                &parent_directory);
-            const CharArray* key_buffer = event_get_key_buffer();
-            reload_results |= key_buffer->size > 0;
-
-            if (reload_results)
-            {
-                DirectoryPage* current =
-                    current_directory(&tab->directory_history);
-
-                char* path = parent_directory.data;
-                u32 current_directory_len =
-                    get_path_length(path, parent_directory.size);
-                if (current_directory_len != 0) current_directory_len--;
-
-                Directory directory = { 0 };
-                char saved_chars[3];
-                saved_chars[0] = path[current_directory_len];
-                path[current_directory_len] = '\0';
-                if (platform_directory_exists(path))
-                {
-                    path[current_directory_len++] = '\\';
-                    saved_chars[1] = path[current_directory_len];
-                    path[current_directory_len++] = '*';
-                    saved_chars[2] = path[current_directory_len];
-                    path[current_directory_len] = '\0';
-                    directory =
-                        platform_get_directory(path, current_directory_len);
-                    path[current_directory_len--] = saved_chars[2];
-                    path[current_directory_len--] = saved_chars[1];
-
-                    suggestions.tab_index = -1;
-                }
-                path[current_directory_len] = saved_chars[0];
-
-                // TODO: Make it not case sensitive
-                for (u32 i = 0; i < directory.sub_directories.size; ++i)
-                {
-                    DirectoryItem* dir_item =
-                        directory.sub_directories.data + i;
-                    dir_item->size = string_span_case_insensitive(
-                        dir_item->name, path + current_directory_len);
-                }
-                directory_sort_by_size(&directory.sub_directories);
-                directory_flip_array(&directory.sub_directories);
-
-                suggestions.options.size = 0;
-                const u32 item_count = min(directory.sub_directories.size, 6);
-                for (u32 i = 0; i < item_count; ++i)
-                {
-                    array_push(&suggestions.options,
-                               directory.sub_directories.data[i].name);
-                }
-                suggestion_data.items = &directory.sub_directories;
-
-                const f32 x_advance = text_x_advance(
-                    application.font.chars, parent_directory.data,
-                    parent_directory.size, scale);
-
-                suggestions.position =
-                    v2f(parent_directory_path_position.x + x_advance,
-                        parent_directory_path_position.y + 5.0f);
-            }
-            suggestion_data.change_directory = false;
-            if (drop_down_menu_add(&suggestions, &application,
-                                   &suggestion_data))
-            {
-            }
-
-            input_index = render_input(
-                &application.font, parent_directory.data, parent_directory.size,
-                scale, parent_directory_path_position,
-                parent_directory_path_position.y -
-                    application.font.pixel_height,
-                true, input_index, &main_index_count, application.delta_time,
-                &parent_directory_clicked_time, &parent_directory_aabbs,
-                main_render);
-            if (suggestion_data.change_directory ||
-                is_key_clicked(FTIC_KEY_ENTER))
-            {
-                char* last_char = array_back(&parent_directory);
-                char saved = *last_char;
-                b8 should_restore = *last_char == '\\' || *last_char == '/';
-                if (should_restore)
-                {
-                    *last_char = '\0';
-                    parent_directory.size--;
-                }
-                if (!go_to_directory(parent_directory.data,
-                                     parent_directory.size,
-                                     &tab->directory_history))
-                {
-                }
-                if (should_restore)
-                {
-                    *last_char = saved;
-                    parent_directory.size++;
-                }
-                input_index = parent_directory.size;
-                suggestions.tab_index = -1;
-                suggestions.options.size = 0;
-            }
-        }
-        else
-        {
-            parent_directory_aabbs.size = 0;
-            main_index_count += text_generation(
-                application.font.chars,
-                current_directory(&tab->directory_history)->directory.parent,
-                1.0f, parent_directory_path_position, scale,
-                application.font.pixel_height, NULL, NULL,
-                &parent_directory_aabbs, &main_render->vertices);
-        }
-
         if (preview_render->textures.size > 1)
         {
             open_preview(
@@ -2478,7 +1906,6 @@ int main(int argc, char** argv)
                 &preview_index_count, preview_render);
         }
 #else
-#if 1
         const f32 top_bar_height = 60.0f;
 
         AABB dock_space = { .min = v2f(0.0f, top_bar_height) };
@@ -2489,6 +1916,7 @@ int main(int argc, char** argv)
             const f32 list_item_height = application.font.pixel_height + 10.0f;
 
             UiWindow* top_bar = ui_window_get(windows.data[0]);
+            top_bar->position = v2d();
             top_bar->size = v2f(application.dimensions.width, top_bar_height);
             top_bar->top_color = v4ic(0.2f);
             top_bar->bottom_color = v4ic(0.15f);
@@ -2634,6 +2062,10 @@ int main(int argc, char** argv)
                 const u32 window_id = windows.data[3 + i];
                 if (ui_window_in_focus() == window_id)
                 {
+                    if(i != application.tab_index)
+                    {
+                        reset_selected_items(&tab->selected_item_values);
+                    }
                     application.tab_index = i;
                 }
                 show_directory_window(window_id, list_item_height,
@@ -2673,44 +2105,6 @@ int main(int argc, char** argv)
 
             rendering_properties_end_draw(rendering_properties.data + i);
         }
-#else
-        AABB dock_space = { .min = v2f(0.0f, 100.0f) };
-        dock_space.size = v2_sub(application.dimensions, dock_space.min);
-        ui_context_begin(application.dimensions, &dock_space,
-                         application.delta_time, true);
-        {
-            ui_window_begin(windows.data[0], true);
-            {
-            }
-            ui_window_end();
-
-            ui_window_begin(windows.data[1], true);
-            {
-            }
-            ui_window_end();
-
-            ui_window_begin(windows.data[2], true);
-            {
-            }
-            ui_window_end();
-
-            ui_window_begin(windows.data[3], true);
-            {
-            }
-            ui_window_end();
-
-            ui_window_begin(windows.data[4], true);
-            {
-            }
-            ui_window_end();
-
-            ui_window_begin(windows.data[5], true);
-            {
-            }
-            ui_window_end();
-        }
-        ui_context_end();
-#endif
 #endif
 
         application_end_frame(&application);
@@ -2736,5 +2130,4 @@ int main(int argc, char** argv)
     threads_destroy(&thread_queue);
     platform_uninit_drag_drop();
     application_uninitialize(&application);
-#endif
 }

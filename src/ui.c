@@ -1091,6 +1091,7 @@ u32 ui_window_create()
                     &ui_context.id_to_index);
 
     UiWindow window = {
+        .position = v2f(200.0f, 200.0f),
         .id = id,
         .index = ui_context.windows.size,
         .size = v2f(200.0f, 200.0f),
