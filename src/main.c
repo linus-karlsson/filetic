@@ -1762,6 +1762,7 @@ int main(int argc, char** argv)
         preview_index_count = 0;
 
         rendering_properties_array_clear(&rendering_properties);
+
         if (is_ctrl_and_key_pressed(FTIC_KEY_T))
         {
             array_push(&application.tabs, tab_add());
@@ -1802,7 +1803,7 @@ int main(int argc, char** argv)
                 v2_distance(last_mouse_position, application.mouse_position);
             if (distance >= 10.0f)
             {
-                //platform_start_drag_drop(&tab->selected_item_values.paths);
+                // platform_start_drag_drop(&tab->selected_item_values.paths);
                 activated = false;
             }
         }
@@ -1877,8 +1878,8 @@ int main(int argc, char** argv)
         {
             drop_down_menu.aabb = (AABB){ 0 };
         }
-#if 0
         const char* directory_to_drop_in = NULL;
+#if 0
         if (main_list_return_value.hit_index >= 0 &&
             main_list_return_value.type == TYPE_FOLDER)
         {
@@ -1895,6 +1896,7 @@ int main(int argc, char** argv)
                     .data[quick_access_list_return_value.hit_index]
                     .path;
         }
+#else
         look_for_dropped_files(current_directory(&tab->directory_history),
                                directory_to_drop_in);
 
@@ -1905,13 +1907,12 @@ int main(int argc, char** argv)
                 &current_directory(&tab->directory_history)->directory.files,
                 &preview_index_count, preview_render);
         }
-#else
         const f32 top_bar_height = 60.0f;
 
         AABB dock_space = { .min = v2f(0.0f, top_bar_height) };
         dock_space.size = v2_sub(application.dimensions, dock_space.min);
         ui_context_begin(application.dimensions, &dock_space,
-                         application.delta_time, true);
+                         application.delta_time, check_collision);
         {
             const f32 list_item_height = application.font.pixel_height + 10.0f;
 
@@ -2062,7 +2063,7 @@ int main(int argc, char** argv)
                 const u32 window_id = windows.data[3 + i];
                 if (ui_window_in_focus() == window_id)
                 {
-                    if(i != application.tab_index)
+                    if (i != application.tab_index)
                     {
                         reset_selected_items(&tab->selected_item_values);
                     }
@@ -2094,17 +2095,15 @@ int main(int argc, char** argv)
                             0, sizeof(Vertex) * preview_render->vertices.size,
                             preview_render->vertices.data);
 
-        for (u32 i = 0; i < rendering_properties.size; ++i)
-        {
-            rendering_properties_begin_draw(rendering_properties.data + i,
-                                            &application.mvp);
+        AABB whole_screen_scissor = { .size = application.dimensions };
 
-            AABB whole_screen_scissor = { .size = application.dimensions };
-            rendering_properties_draw(0, main_index_count,
-                                      &whole_screen_scissor);
-
-            rendering_properties_end_draw(rendering_properties.data + i);
-        }
+        rendering_properties_begin_draw(main_render, &application.mvp);
+        rendering_properties_draw(0, main_index_count, &whole_screen_scissor);
+        rendering_properties_end_draw(main_render);
+        
+        rendering_properties_begin_draw(preview_render, &application.mvp);
+        rendering_properties_draw(0, preview_index_count, &whole_screen_scissor);
+        rendering_properties_end_draw(preview_render);
 #endif
 
         application_end_frame(&application);
