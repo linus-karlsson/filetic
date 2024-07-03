@@ -124,3 +124,4 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 DockNode* dock_node_create(NodeType type, SplitAxis split_axis, UiWindow* window);
 void dock_node_dock_window(DockNode* root, DockNode* window, SplitAxis split_axis, u8 where);
 void dock_node_resize_from_root(DockNode* root, const V2 size);
+void dock_node_remove_node(DockNode* root, DockNode* node_to_remove);

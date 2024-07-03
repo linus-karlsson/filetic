@@ -2150,8 +2150,9 @@ void render_node(DockNode* node, int depth)
     if (node->type == NODE_LEAF)
     {
         printf("Leaf: %u (Size: %.2f, %.2f, Position: %.2f, %.2f)\n",
-               node->window->id, node->window->size.width, node->window->size.height,
-               node->window->position.x, node->window->position.y);
+               node->window->id, node->window->size.width,
+               node->window->size.height, node->window->position.x,
+               node->window->position.y);
     }
     else
     {
@@ -2184,18 +2185,24 @@ int main(int argc, char** argv)
     printf("\n");
 
     UiWindow window2 = { .id = 2 };
+    DockNode* dock_node2 = dock_node_create(NODE_LEAF, SPLIT_NONE, &window2);
+    dock_node_dock_window(root, dock_node2, SPLIT_VERTICAL, DOCK_SIDE_LEFT);
+
+    render_node(root, 0);
+    printf("\n");
+    printf("\n");
+
+
+    UiWindow window3 = { .id = 3 };
     dock_node_dock_window(root,
-                          dock_node_create(NODE_LEAF, SPLIT_NONE, &window2),
+                          dock_node_create(NODE_LEAF, SPLIT_NONE, &window3),
                           SPLIT_VERTICAL, DOCK_SIDE_LEFT);
 
     render_node(root, 0);
     printf("\n");
     printf("\n");
 
-    UiWindow window3 = { .id = 3 };
-    dock_node_dock_window(root,
-                          dock_node_create(NODE_LEAF, SPLIT_NONE, &window3),
-                          SPLIT_VERTICAL, DOCK_SIDE_LEFT);
+    dock_node_remove_node(root, dock_node2);
 
     render_node(root, 0);
     printf("\n");
@@ -3181,45 +3188,38 @@ int main(int argc, char** argv)
             }
         }
         ui_context_end();
-#else 
+#else
         ui_context_begin(application.dimensions, application.delta_time, true);
         {
             ui_window_begin(windows.data[0], true);
             {
-
             }
             ui_window_end();
 
             ui_window_begin(windows.data[1], true);
             {
-
             }
             ui_window_end();
 
             ui_window_begin(windows.data[2], true);
             {
-
             }
             ui_window_end();
 
             ui_window_begin(windows.data[3], true);
             {
-
             }
             ui_window_end();
 
             ui_window_begin(windows.data[4], true);
             {
-
             }
             ui_window_end();
 
             ui_window_begin(windows.data[5], true);
             {
-
             }
             ui_window_end();
-            
         }
         ui_context_end();
 #endif

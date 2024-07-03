@@ -104,6 +104,8 @@ typedef struct UiContext
     u32 window_in_focus;
     u32 current_window_id;
     u32 current_index_offset;
+    u32 window_count_last;
+    u32 window_count;
     U32Array id_to_index;
     U32Array free_indices;
     UiWindowArray windows;
@@ -195,15 +197,15 @@ internal void push_window_to_front(UiContext* context,
                   window_in_focus_index);
 }
 
-#define move_to_back(type, array, index)                                      \
+#define move_to_back(type, array, index)                                       \
     do                                                                         \
     {                                                                          \
         type temp = (array)->data[(index)];                                    \
-        for (u32 i = (index); i < (array)->size - 1; ++i)                      \
+        for (u32 i = (index); i < ui_context.window_count_last - 1; ++i)       \
         {                                                                      \
             (array)->data[i] = (array)->data[i + 1];                           \
         }                                                                      \
-        (array)->data[(array)->size - 1] = temp;                               \
+        (array)->data[ui_context.window_count_last - 1] = temp;                \
     } while (0)
 
 internal void push_window_to_back(UiContext* context,
@@ -222,7 +224,7 @@ internal void push_window_to_back(UiContext* context,
     }
     move_to_back(AABBArray, &context->window_aabbs, window_in_focus_index);
     move_to_back(HoverClickedIndex, &context->window_hover_clicked_indices,
-                  window_in_focus_index);
+                 window_in_focus_index);
 }
 
 internal u32 get_id(const u32 size, U32Array* free_indices,
@@ -409,6 +411,71 @@ void dock_node_resize_from_root(DockNode* root, const V2 size)
     }
 }
 
+DockNode* find_node(DockNode* root, DockNode* node_before, DockNode* node)
+{
+    if (root->type == NODE_LEAF && root->window->id == node->window->id)
+    {
+        return node_before;
+    }
+    if (root->type != NODE_LEAF)
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            if (root->children[i])
+            {
+                DockNode* found = find_node(root->children[i], root, node);
+                if (found)
+                {
+                    return found;
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
+void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
+{
+    if (root->children[0]->type == NODE_LEAF &&
+        root->children[0]->window->id == node_to_remove->window->id)
+    {
+        root->children[0] = NULL;
+        return;
+    }
+    DockNode* node_before = find_node(root->children[0], root, node_to_remove);
+    DockNode* left = node_before->children[0];
+    DockNode* right = node_before->children[1];
+    if (left->type == NODE_LEAF &&
+        left->window->id == node_to_remove->window->id)
+    {
+        node_before->type = right->type;
+        node_before->split_axis = right->split_axis;
+        node_before->window = right->window;
+        node_before->children[0] = right->children[0];
+        node_before->children[1] = right->children[1];
+        if (right->type == NODE_LEAF)
+        {
+            node_before->window->dock_node = node_before;
+        }
+        free(right);
+    }
+    else if (right->type == NODE_LEAF &&
+             right->window->id == node_to_remove->window->id)
+    {
+        node_before->type = left->type;
+        node_before->split_axis = left->split_axis;
+        node_before->window = left->window;
+        node_before->children[0] = left->children[0];
+        node_before->children[1] = left->children[1];
+        if (left->type == NODE_LEAF)
+        {
+            node_before->window->dock_node = node_before;
+        }
+        free(left);
+    }
+    dock_node_resize_from_root(root, root->size);
+}
+
 InputBuffer ui_input_buffer_create()
 {
     InputBuffer input = {
@@ -486,6 +553,8 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
     }
     ui_context.delta_time = delta_time;
     ui_context.dimensions = dimensions;
+    ui_context.window_count_last = ui_context.window_count;
+    ui_context.window_count = 0;
 
     ui_context.mvp.projection =
         ortho(0.0f, dimensions.width, dimensions.height, 0.0f, -1.0f, 1.0f);
@@ -511,6 +580,7 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
     }
     ui_context.any_window_hold = false;
     b8 any_top_bar_pressed = false;
+    i32 index_window_dragging = -1;
     for (u32 i = 0; i < ui_context.windows.size; ++i)
     {
         UiWindow* window = ui_context.windows.data + i;
@@ -519,6 +589,15 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
         ui_context.any_window_hold |=
             window->top_bar_hold || window->resize_dragging;
         any_top_bar_pressed |= window->top_bar_pressed;
+        if (window->top_bar_hold)
+        {
+            index_window_dragging = i;
+        }
+    }
+    if (index_window_dragging != -1)
+    {
+        push_window_to_front(&ui_context, index_window_dragging);
+        ui_context.window_in_focus = 0;
     }
     if (check_collisions && !ui_context.any_window_hold && !any_top_bar_pressed)
     {
@@ -686,7 +765,7 @@ void ui_context_end()
                                   DOCK_SIDE_LEFT);
             any_hit = true;
         }
-        if(any_hit)
+        if (any_hit)
         {
             focused_window->docked = true;
             push_window_to_back(&ui_context, 0);
@@ -703,7 +782,7 @@ void ui_context_end()
                         ui_context.render.vertices.data);
 
     rendering_properties_begin_draw(&ui_context.render, &ui_context.mvp);
-    for (i32 i = ui_context.windows.size - 1; i >= 0; --i)
+    for (i32 i = ui_context.window_count - 1; i >= 0; --i)
     {
         const UiWindow* window = ui_context.windows.data + i;
         AABB scissor = { 0 };
@@ -902,6 +981,7 @@ void ui_window_end()
                 window->top_bar_pressed = true;
             }
         }
+
         if (event_get_mouse_button_event()->action == FTIC_RELEASE)
         {
             window->top_bar_pressed = false;
@@ -918,6 +998,12 @@ void ui_window_end()
             if (v2_distance(window->top_bar_offset,
                             event_get_mouse_position()) >= 10.0f)
             {
+                if (window->docked)
+                {
+                    window->docked = false;
+                    dock_node_remove_node(ui_context.dock_tree,
+                                          window->dock_node);
+                }
                 window->top_bar_hold = true;
                 window->top_bar_offset =
                     v2_sub(window->position, event_get_mouse_position());
@@ -1002,6 +1088,7 @@ void ui_window_end()
     // NOTE(Linus): += also works
     ui_context.current_index_offset =
         window->rendering_index_offset + window->rendering_index_count;
+    ui_context.window_count++;
 }
 
 void ui_window_row_begin(const f32 padding)
