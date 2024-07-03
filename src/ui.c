@@ -101,6 +101,8 @@ typedef struct UiContext
 {
     MVP mvp;
 
+    FTicWindow* window;
+
     u32 window_in_focus;
     u32 current_window_id;
     u32 current_index_offset;
@@ -122,7 +124,6 @@ typedef struct UiContext
     DockNode* dock_hit_node;
 
     AABB dock_resize_aabb;
-    V2 dock_resize_offset;
 
     FontTTF font;
 
@@ -664,31 +665,33 @@ i32 dock_node_docking_display_traverse(DockNode* root)
     return -1;
 }
 
+AABB dock_node_set_resize_aabb(DockNode* node)
+{
+    DockNode* right = node->children[1];
+    AABB resize_aabb = { .min = right->aabb.min };
+    if (node->split_axis == SPLIT_HORIZONTAL)
+    {
+        resize_aabb.min.y -= 3.0f;
+        resize_aabb.size.width = right->aabb.size.width;
+        resize_aabb.size.height = 5.0f;
+    }
+    else // SPLIT_VERTICAL
+    {
+        resize_aabb.min.x -= 3.0f;
+        resize_aabb.size.width = 5.0f;
+        resize_aabb.size.height = right->aabb.size.height;
+    }
+    return resize_aabb;
+}
+
 b8 look_for_resize_collisions(DockNode* parent)
 {
     const V2 mouse_position = event_get_mouse_position();
 
-    DockNode* right = parent->children[1];
-
-    AABB resize_aabb = { .min = right->aabb.min };
-    if (parent->split_axis == SPLIT_HORIZONTAL)
-    {
-        resize_aabb.min.y -= 2.0f;
-        resize_aabb.size.width = right->aabb.size.width;
-        resize_aabb.size.height = 4.0f;
-    }
-    else // SPLIT_VERTICAL
-    {
-        resize_aabb.min.x -= 2.0f;
-        resize_aabb.size.width = 4.0f;
-        resize_aabb.size.height = right->aabb.size.height;
-    }
+    AABB resize_aabb = dock_node_set_resize_aabb(parent);
     if (collision_point_in_aabb(mouse_position, &resize_aabb))
     {
         ui_context.dock_resize_aabb = resize_aabb;
-        quad(&ui_context.render.vertices, resize_aabb.min, resize_aabb.size,
-             secondary_color, 0.0f);
-        ui_context.extra_index_count += 6;
         ui_context.dock_hit_node = parent;
         return true;
     }
@@ -699,6 +702,7 @@ b8 look_for_resize_collisions(DockNode* parent)
         b8 hit = look_for_resize_collisions(left);
         if (hit) return hit;
     }
+    DockNode* right = parent->children[1];
     if (right->type == NODE_PARENT)
     {
         b8 hit = look_for_resize_collisions(right);
@@ -726,8 +730,10 @@ InputBuffer ui_input_buffer_create()
     return input;
 }
 
-void ui_context_create()
+void ui_context_create(FTicWindow* window)
 {
+    ui_context.window = window;
+
     array_create(&ui_context.id_to_index, 100);
     array_create(&ui_context.free_indices, 100);
     array_create(&ui_context.windows, 10);
@@ -951,6 +957,7 @@ void ui_context_end()
         if (event->action == FTIC_RELEASE)
         {
             ui_context.dock_resize = false;
+            window_set_cursor(ui_context.window, FTIC_NORMAL_CURSOR);
         }
         ui_context.dock_resize_hover = false;
 
@@ -962,15 +969,31 @@ void ui_context_end()
                 if (event->activated && event->action == FTIC_PRESS &&
                     event->button == FTIC_MOUSE_BUTTON_LEFT)
                 {
+
                     ui_context.dock_resize = true;
-                    ui_context.dock_resize_offset =
-                        v2_sub(ui_context.dock_resize_aabb.min,
-                               event_get_mouse_position());
                 }
+
+                if (ui_context.dock_hit_node->split_axis == SPLIT_HORIZONTAL)
+                {
+                    window_set_cursor(ui_context.window, FTIC_RESIZE_V_CURSOR);
+                }
+                else
+                {
+                    window_set_cursor(ui_context.window, FTIC_RESIZE_H_CURSOR);
+                }
+                quad(&ui_context.render.vertices,
+                     ui_context.dock_resize_aabb.min,
+                     ui_context.dock_resize_aabb.size, v4_s_multi(secondary_color, 0.8f), 0.0f);
+                ui_context.extra_index_count += 6;
+            }
+            else
+            {
+                window_set_cursor(ui_context.window, FTIC_NORMAL_CURSOR);
             }
         }
         else
         {
+
             const V2 relative_mouse_position = v2_sub(
                 event_get_mouse_position(), ui_context.dock_hit_node->aabb.min);
 
@@ -990,6 +1013,10 @@ void ui_context_end()
                 ui_context.dock_hit_node->size_ratio = new_ratio;
                 dock_node_resize_traverse(ui_context.dock_hit_node);
             }
+            ui_context.dock_resize_aabb = dock_node_set_resize_aabb(ui_context.dock_hit_node);
+            quad(&ui_context.render.vertices, ui_context.dock_resize_aabb.min,
+                 ui_context.dock_resize_aabb.size, secondary_color, 0.0f);
+            ui_context.extra_index_count += 6;
         }
     }
 

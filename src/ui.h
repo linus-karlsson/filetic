@@ -3,6 +3,7 @@
 #include "rendering.h"
 #include "hash_table.h"
 #include "platform/platform.h"
+#include "ftic_window.h"
 
 typedef struct ScrollBar
 {
@@ -100,7 +101,7 @@ typedef struct InputBuffer
 
 InputBuffer ui_input_buffer_create();
 
-void ui_context_create();
+void ui_context_create(FTicWindow* window);
 void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions);
 void ui_context_end();
 

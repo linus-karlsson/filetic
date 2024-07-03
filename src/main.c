@@ -2236,7 +2236,7 @@ int main(int argc, char** argv)
     U32Array windows = { 0 };
     array_create(&windows, 10);
     {
-        ui_context_create();
+        ui_context_create(application.window);
         for (u32 i = 0; i < 10; ++i)
         {
             array_push(&windows, ui_window_create());
