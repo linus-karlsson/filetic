@@ -1043,7 +1043,7 @@ void ui_context_end()
         scissor.min.x = window->position.x;
         scissor.min.y = ui_context.dimensions.y -
                         (window->position.y + window->size.height);
-        scissor.size = window->size; 
+        scissor.size = window->size;
         scissor.size.width += 1.0f;
         rendering_properties_draw(window->rendering_index_offset,
                                   window->rendering_index_count, &scissor);
@@ -1215,7 +1215,7 @@ internal void add_scroll_bar(UiWindow* window, AABBArray* aabbs,
     }
 }
 
-void ui_window_end()
+void ui_window_end(const char* title)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
@@ -1275,6 +1275,17 @@ void ui_window_end()
         quad_border(&ui_context.render.vertices, &window->rendering_index_count,
                     window->position, top_bar_dimensions, border_color, 1.0f,
                     0.0f);
+
+        if (title)
+        {
+            const V2 text_position =
+                v2f(window->position.x + 10.0f,
+                    window->position.y + ui_context.font.pixel_height);
+            window->rendering_index_count += text_generation(
+                ui_context.font.chars, title, 1.0f, text_position, 1.0f,
+                ui_context.font.line_height, NULL, NULL, NULL,
+                &ui_context.render.vertices);
+        }
     }
 
     add_scroll_bar(window, aabbs, hover_clicked_index);

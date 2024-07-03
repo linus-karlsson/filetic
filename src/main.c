@@ -2076,7 +2076,7 @@ void set_sorting_buttons(const ApplicationContext* application,
 }
 
 void show_search_result_window(SearchPage* page, const u32 window,
-                               const f32 list_item_height, const f64 delta_time,
+                               const f32 list_item_height,
                                DirectoryHistory* directory_history)
 {
     ui_window_begin(window, true);
@@ -2107,15 +2107,22 @@ void show_search_result_window(SearchPage* page, const u32 window,
         platform_mutex_unlock(&page->search_result_file_array.mutex);
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
     }
-    ui_window_end(delta_time);
+    ui_window_end(page->input.buffer.data);
+}
+
+char* get_parent_directory_name(DirectoryPage* current)
+{
+    return current->directory.parent +
+           get_path_length(current->directory.parent,
+                           (u32)strlen(current->directory.parent));
 }
 
 void show_directory_window(const u32 window, const f32 list_item_height,
-                           const f64 delta_time, DirectoryTab* tab)
+                           DirectoryTab* tab)
 {
+    DirectoryPage* current = current_directory(&tab->directory_history);
     ui_window_begin(window, true);
     {
-        DirectoryPage* current = current_directory(&tab->directory_history);
         V2 list_position = v2f(10.0f, 10.0f);
         i32 selected_item = -1;
         if (ui_window_add_folder_list(list_position, list_item_height,
@@ -2137,7 +2144,7 @@ void show_directory_window(const u32 window, const f32 list_item_height,
                 current->directory.files.data[selected_item].path);
         }
     }
-    ui_window_end(delta_time);
+    ui_window_end(get_parent_directory_name(current));
 }
 
 void render_node(DockNode* node, int depth)
@@ -3111,7 +3118,7 @@ int main(int argc, char** argv)
                 }
                 ui_window_row_end();
             }
-            ui_window_end();
+            ui_window_end(NULL);
 
             ui_window_begin(windows.data[1], true);
             {
@@ -3125,19 +3132,17 @@ int main(int argc, char** argv)
                                 &tab->directory_history);
                 }
             }
-            ui_window_end();
+            ui_window_end("Quick access");
 
-
-            show_directory_window(windows.data[2], list_item_height,
-                                  application.delta_time, tab);
+            show_directory_window(windows.data[2], list_item_height, tab);
 
             show_search_result_window(&search_page, windows.data[3],
-                                      list_item_height, application.delta_time,
+                                      list_item_height,
                                       &tab->directory_history);
 
             b8 search_result_open = search_page_has_result(&search_page) &&
                                     search_page.input.buffer.size;
-            if(!search_result_open)
+            if (!search_result_open)
             {
                 search_page_clear_search_result(&search_page);
             }
