@@ -1043,7 +1043,8 @@ void ui_context_end()
         scissor.min.x = window->position.x;
         scissor.min.y = ui_context.dimensions.y -
                         (window->position.y + window->size.height);
-        scissor.size = v2_s_add(window->size, 1.0f);
+        scissor.size = window->size; 
+        scissor.size.width += 1.0f;
         rendering_properties_draw(window->rendering_index_offset,
                                   window->rendering_index_count, &scissor);
     }
@@ -1122,8 +1123,8 @@ internal void add_scroll_bar(UiWindow* window, AABBArray* aabbs,
                              HoverClickedIndex hover_clicked_index)
 {
     const f32 scroll_bar_width = 8.0f;
-    V2 position =
-        v2f(window->position.x + window->size.width, window->position.y);
+    V2 position = v2f(window->first_item_position.x + window->size.width,
+                      window->first_item_position.y);
     position.x -= scroll_bar_width;
 
     const f32 area_height = window->size.height;
