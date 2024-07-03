@@ -2079,7 +2079,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
                                const f32 list_item_height, const f64 delta_time,
                                DirectoryHistory* directory_history)
 {
-    ui_window_begin(window, false);
+    ui_window_begin(window, true);
     {
         platform_mutex_lock(&page->search_result_file_array.mutex);
         platform_mutex_lock(&page->search_result_folder_array.mutex);
@@ -2113,7 +2113,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
 void show_directory_window(const u32 window, const f32 list_item_height,
                            const f64 delta_time, DirectoryTab* tab)
 {
-    ui_window_begin(window, false);
+    ui_window_begin(window, true);
     {
         DirectoryPage* current = current_directory(&tab->directory_history);
         V2 list_position = v2f(10.0f, 10.0f);
@@ -3047,17 +3047,18 @@ int main(int argc, char** argv)
         }
 #else
 
-#if 0
-        static b8 test = false;
-        ui_context_begin(application.dimensions, application.delta_time, true);
+#if 1
+        const f32 top_bar_height = 60.0f;
+
+        AABB dock_space = { .min = v2f(0.0f, top_bar_height) };
+        dock_space.size = v2_sub(application.dimensions, dock_space.min);
+        ui_context_begin(application.dimensions, &dock_space,
+                         application.delta_time, true);
         {
             const f32 list_item_height = application.font.pixel_height + 10.0f;
 
-            const f32 top_bar_height = 60.0f;
-
             UiWindow* top_bar = ui_window_get(windows.data[0]);
-            top_bar->dimensions =
-                v2f(application.dimensions.width, top_bar_height);
+            top_bar->size = v2f(application.dimensions.width, top_bar_height);
             top_bar->top_color = v4ic(0.2f);
             top_bar->bottom_color = v4ic(0.15f);
 
@@ -3065,7 +3066,7 @@ int main(int argc, char** argv)
             {
                 AABB button_aabb = { 0 };
                 button_aabb.size = v2i(40.0f),
-                button_aabb.min = v2f(10.0f, middle(top_bar->dimensions.height,
+                button_aabb.min = v2f(10.0f, middle(top_bar->size.height,
                                                     button_aabb.size.height));
                 ui_window_row_begin(0.0f);
                 b8 disable = tab->directory_history.current_index <= 0;
@@ -3097,14 +3098,12 @@ int main(int argc, char** argv)
 
                 ui_window_row_begin(10.0f);
                 if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
-                                              application.delta_time,
                                               &parent_directory_input))
                 {
                 }
 
                 button_aabb.size.x = search_bar_width;
                 if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
-                                              application.delta_time,
                                               &search_page.input))
                 {
                     search_page_search(&search_page, &tab->directory_history,
@@ -3112,16 +3111,9 @@ int main(int argc, char** argv)
                 }
                 ui_window_row_end();
             }
-            ui_window_end(application.delta_time);
+            ui_window_end();
 
-            UiWindow* quick_access = ui_window_get(windows.data[1]);
-            quick_access->position = v2f(top_bar->position.x, top_bar_height);
-            quick_access->dimensions =
-                v2f(starting_position.x,
-                    application.dimensions.height - top_bar_height);
-            quick_access->resizeable = RESIZE_RIGHT;
-
-            ui_window_begin(windows.data[1], false);
+            ui_window_begin(windows.data[1], true);
             {
                 V2 list_position = v2i(10.0f);
                 i32 selected_item = -1;
@@ -3133,63 +3125,29 @@ int main(int argc, char** argv)
                                 &tab->directory_history);
                 }
             }
-            ui_window_end(application.delta_time);
+            ui_window_end();
 
-            b8 search_result_open = search_page_has_result(&search_page) &&
-                                    search_page.input.buffer.size;
-            search_result_width = open_search_result_width * search_result_open;
-
-            UiWindow* directory = ui_window_get(windows.data[2]);
-            if (search_result_open)
-            {
-                if (search_result_open_presist)
-                {
-                    f32 diff =
-                        (directory->position.x + directory->dimensions.width) -
-                        application.dimensions.width;
-
-                    search_result_width += diff;
-                }
-                search_result_open_presist = false;
-            }
-            else
-            {
-                search_result_open_presist = true;
-            }
-
-            directory->position =
-                v2f(quick_access->position.x + quick_access->dimensions.width,
-                    quick_access->position.y);
-            directory->dimensions =
-                v2f((application.dimensions.width - search_result_width) -
-                        directory->position.x,
-                    application.dimensions.height - top_bar_height);
-            directory->resizeable = RESIZE_RIGHT;
 
             show_directory_window(windows.data[2], list_item_height,
                                   application.delta_time, tab);
 
-            if (search_result_open)
-            {
-                UiWindow* search_result = ui_window_get(windows.data[3]);
-                search_result->position =
-                    v2f(directory->position.x + directory->dimensions.width,
-                        directory->position.y);
-                search_result->dimensions = v2f(
-                    application.dimensions.width - search_result->position.x,
-                    application.dimensions.height - top_bar_height);
-                show_search_result_window(
-                    &search_page, windows.data[3], list_item_height,
-                    application.delta_time, &tab->directory_history);
-            }
-            else
+            show_search_result_window(&search_page, windows.data[3],
+                                      list_item_height, application.delta_time,
+                                      &tab->directory_history);
+
+            b8 search_result_open = search_page_has_result(&search_page) &&
+                                    search_page.input.buffer.size;
+            if(!search_result_open)
             {
                 search_page_clear_search_result(&search_page);
             }
         }
         ui_context_end();
 #else
-        ui_context_begin(application.dimensions, application.delta_time, true);
+        AABB dock_space = { .min = v2f(0.0f, 100.0f) };
+        dock_space.size = v2_sub(application.dimensions, dock_space.min);
+        ui_context_begin(application.dimensions, &dock_space,
+                         application.delta_time, true);
         {
             ui_window_begin(windows.data[0], true);
             {

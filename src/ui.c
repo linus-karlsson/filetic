@@ -124,6 +124,7 @@ typedef struct UiContext
     DockNode* dock_hit_node;
 
     AABB dock_resize_aabb;
+    AABB dock_space;
 
     FontTTF font;
 
@@ -410,13 +411,13 @@ void dock_node_dock_window(DockNode* root, DockNode* window,
     root->window = NULL;
 }
 
-void dock_node_resize_from_root(DockNode* root, const V2 size)
+void dock_node_resize_from_root(DockNode* root, const AABB* aabb)
 {
-    root->aabb.size = size;
+    root->aabb = *aabb;
     DockNode* left = root->children[0];
     if (left != NULL)
     {
-        left->aabb.size = size;
+        left->aabb = root->aabb;
         UiWindow* left_window = left->window;
         if (left_window != NULL)
         {
@@ -494,7 +495,7 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
         }
         free(left);
     }
-    dock_node_resize_from_root(root, root->aabb.size);
+    dock_node_resize_from_root(root, &root->aabb);
 }
 
 internal i32 display_docking(const AABB* dock_aabb, const V2 top_position,
@@ -788,14 +789,17 @@ void ui_context_create(FTicWindow* window)
         shader, textures, &vertex_buffer_layout, 100 * 4, 100 * 4);
 }
 
-void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
+void ui_context_begin(const V2 dimensions, const AABB* dock_space,
+                      const f64 delta_time, const b8 check_collisions)
 {
-    if (!v2_equal(ui_context.dimensions, dimensions))
+    if (!aabb_equal(&ui_context.dock_space, dock_space))
     {
-        dock_node_resize_from_root(ui_context.dock_tree, dimensions);
+        dock_node_resize_from_root(ui_context.dock_tree, dock_space);
     }
-    ui_context.delta_time = delta_time;
+    ui_context.dock_space = *dock_space;
     ui_context.dimensions = dimensions;
+
+    ui_context.delta_time = delta_time;
     ui_context.window_count_last = ui_context.window_count;
     ui_context.window_count = 0;
 
@@ -983,7 +987,8 @@ void ui_context_end()
                 }
                 quad(&ui_context.render.vertices,
                      ui_context.dock_resize_aabb.min,
-                     ui_context.dock_resize_aabb.size, v4_s_multi(secondary_color, 0.8f), 0.0f);
+                     ui_context.dock_resize_aabb.size,
+                     v4_s_multi(secondary_color, 0.8f), 0.0f);
                 ui_context.extra_index_count += 6;
             }
             else
@@ -1013,7 +1018,8 @@ void ui_context_end()
                 ui_context.dock_hit_node->size_ratio = new_ratio;
                 dock_node_resize_traverse(ui_context.dock_hit_node);
             }
-            ui_context.dock_resize_aabb = dock_node_set_resize_aabb(ui_context.dock_hit_node);
+            ui_context.dock_resize_aabb =
+                dock_node_set_resize_aabb(ui_context.dock_hit_node);
             quad(&ui_context.render.vertices, ui_context.dock_resize_aabb.min,
                  ui_context.dock_resize_aabb.size, secondary_color, 0.0f);
             ui_context.extra_index_count += 6;
@@ -1103,7 +1109,7 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
     window->top_bar = top_bar;
 
     window->first_item_position = window->position;
-    window->first_item_position.y += 20.0f;
+    window->first_item_position.y += 20.0f * top_bar;
 
     window->total_height = 0.0f;
 
@@ -1369,7 +1375,7 @@ b8 ui_window_add_icon_button(V2 position, const V2 size,
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    v2_add_equal(&position, window->position);
+    v2_add_equal(&position, window->first_item_position);
 
     if (ui_context.row)
     {
@@ -1540,7 +1546,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    v2_add_equal(&position, window->position);
+    v2_add_equal(&position, window->first_item_position);
 
     if (ui_context.row)
     {
@@ -1721,7 +1727,7 @@ i32 ui_window_add_directory_item_item_list(
         ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
     V2 relative_position = position;
-    v2_add_equal(&position, window->position);
+    v2_add_equal(&position, window->first_item_position);
 
     position.y += window->current_scroll_offset;
     i32 hit_index = -1;

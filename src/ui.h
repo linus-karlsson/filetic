@@ -102,7 +102,7 @@ typedef struct InputBuffer
 InputBuffer ui_input_buffer_create();
 
 void ui_context_create(FTicWindow* window);
-void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions);
+void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 delta_time, const b8 check_collisions);
 void ui_context_end();
 
 void ui_dock_space_begin(V2 position, V2 dimensions, u32* windows, u32 window_count);
@@ -124,5 +124,5 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 
 DockNode* dock_node_create(NodeType type, SplitAxis split_axis, UiWindow* window);
 void dock_node_dock_window(DockNode* root, DockNode* window, SplitAxis split_axis, u8 where);
-void dock_node_resize_from_root(DockNode* root, const V2 size);
+void dock_node_resize_from_root(DockNode* root, const AABB* aabb);
 void dock_node_remove_node(DockNode* root, DockNode* node_to_remove);

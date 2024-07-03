@@ -1,5 +1,11 @@
 #include "collision.h"
 
+b8 aabb_equal(const AABB* first, const AABB* second)
+{
+    return v2_equal(first->min, second->min) &&
+           v2_equal(first->size, second->size);
+}
+
 b8 collision_point_in_point(V2 point_pos, V2 target, V2 target_size)
 {
     target.x -= target_size.x * 0.5f;
