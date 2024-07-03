@@ -140,6 +140,7 @@ typedef struct UiContext
     b8 any_window_hold;
 
     b8 dock_resize;
+    b8 dock_resize_hover;
 
 } UiContext;
 
@@ -835,7 +836,9 @@ void ui_context_begin(V2 dimensions, f64 delta_time, b8 check_collisions)
         push_window_to_front(&ui_context, index_window_dragging);
         ui_context.window_in_focus = 0;
     }
-    if (check_collisions && !ui_context.any_window_hold && !any_top_bar_pressed)
+    if (check_collisions && !ui_context.dock_resize_hover &&
+        !ui_context.dock_resize && !ui_context.any_window_hold &&
+        !any_top_bar_pressed)
     {
         const b8 mouse_button_clicked =
             is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
@@ -949,11 +952,13 @@ void ui_context_end()
         {
             ui_context.dock_resize = false;
         }
+        ui_context.dock_resize_hover = false;
 
         if (!ui_context.dock_resize)
         {
             if (dock_node_resize_collision_traverse(ui_context.dock_tree))
             {
+                ui_context.dock_resize_hover = true;
                 if (event->activated && event->action == FTIC_PRESS &&
                     event->button == FTIC_MOUSE_BUTTON_LEFT)
                 {
