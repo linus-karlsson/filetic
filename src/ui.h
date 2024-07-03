@@ -87,6 +87,7 @@ struct DockNode
     UiWindow* window;
     DockNode* children[2];
     AABB aabb;
+    f32 size_ratio;
 };
 
 typedef struct InputBuffer
