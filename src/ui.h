@@ -63,6 +63,8 @@ typedef struct UiWindow
     u8 resize_dragging;
     u8 resizeable;
 
+    b8 any_holding;
+
 } UiWindow;
 
 #define DOCK_SIDE_RIGHT 0

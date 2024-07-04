@@ -106,8 +106,6 @@ typedef struct UiContext
     u32 window_in_focus;
     u32 current_window_id;
     u32 current_index_offset;
-    u32 window_count_last;
-    u32 window_count;
     U32Array id_to_index;
     U32Array free_indices;
 
@@ -143,6 +141,7 @@ typedef struct UiContext
     b8 column;
 
     // TODO: Better solution?
+    b8 any_window_top_bar_hold;
     b8 any_window_hold;
 
     b8 dock_resize;
@@ -925,8 +924,6 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
     ui_context.dimensions = dimensions;
 
     ui_context.delta_time = delta_time;
-    ui_context.window_count_last = ui_context.window_count;
-    ui_context.window_count = 0;
 
     ui_context.mvp.projection =
         ortho(0.0f, dimensions.width, dimensions.height, 0.0f, -1.0f, 1.0f);
@@ -950,8 +947,8 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
         hover_clicked_index->hover = false;
         hover_clicked_index->double_clicked = false;
     }
-    ui_context.any_window_hold = false;
-    b8 any_top_bar_pressed = false;
+    ui_context.any_window_top_bar_hold = false;
+    ui_context.any_window_hold= false;
     i32 index_window_dragging = -1;
     for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
     {
@@ -960,10 +957,9 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
         UiWindow* window = ui_context.windows.data + window_index;
         window->rendering_index_count = 0;
         window->rendering_index_offset = 0;
-        window->area_hit = false;
-        ui_context.any_window_hold |=
-            window->top_bar_hold || window->resize_dragging;
-        any_top_bar_pressed |= window->top_bar_pressed;
+        window->area_hit = window->any_holding;
+        ui_context.any_window_hold |= window->any_holding;
+        ui_context.any_window_top_bar_hold |= window->top_bar_hold;
         if (window->top_bar_hold)
         {
             index_window_dragging = i;
@@ -976,8 +972,8 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
                             index_window_dragging);
     }
     if (check_collisions && !ui_context.dock_resize_hover &&
-        !ui_context.dock_resize && !ui_context.any_window_hold &&
-        !any_top_bar_pressed)
+        !ui_context.dock_resize && !ui_context.any_window_top_bar_hold &&
+        !ui_context.any_window_hold)
     {
         const b8 mouse_button_clicked =
             is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
@@ -1084,7 +1080,7 @@ void ui_context_end()
     ui_context.extra_index_count = 0;
 
 #if 1
-    if (ui_context.any_window_hold)
+    if (ui_context.any_window_top_bar_hold)
     {
         i32 hit = root_display_docking(ui_context.dock_tree);
         ui_context.dock_side_hit = hit;
@@ -1094,7 +1090,7 @@ void ui_context_end()
         ui_context.current_index_offset =
             ui_context.extra_index_offset + ui_context.extra_index_count;
     }
-    else
+    else if (!ui_context.any_window_hold)
     {
         b8 any_hit = false;
         UiWindow* focused_window =
@@ -1248,39 +1244,10 @@ void ui_context_end()
     }
     ui_context.current_frame_windows.size = 0;
 
-    if(any_change)
+    if (any_change)
     {
         clean_dock_tree_of_stale_windows();
     }
-
-    ui_context.window_count_last = ui_context.window_count;
-#if 0
-    // TODO: make sure all docked windows is always at the back
-    u32 first_docked_window = ui_context.last_frame_windows.size;
-    for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
-    {
-        UiWindow* window = ui_context.last_frame_windows.data[i];
-        if (window->docked)
-        {
-            if (first_docked_window == ui_context.windows.size)
-            {
-                first_docked_window = i;
-            }
-        }
-        else if (i < first_docked_window)
-        {
-            for (u32 j = first_docked_window; j < ui_context.windows.size; ++j)
-            {
-                window = ui_context.windows.data + j;
-                if (window->docked)
-                {
-                    push_window_to_front(&ui_context, j);
-                }
-            }
-            break;
-        }
-    }
-#endif
 
     rendering_properties_begin_draw(&ui_context.render, &ui_context.mvp);
     for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
@@ -1370,11 +1337,11 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
     return true;
 }
 
-internal void add_scroll_bar(UiWindow* window, AABBArray* aabbs,
-                             HoverClickedIndex hover_clicked_index)
+internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
+                                    HoverClickedIndex hover_clicked_index)
 {
     const f32 scroll_bar_width = 8.0f;
-    V2 position = v2f(window->first_item_position.x + window->size.width,
+    V2 position = v2f(window->position.x + window->size.width,
                       window->first_item_position.y);
     position.x -= scroll_bar_width;
 
@@ -1422,6 +1389,7 @@ internal void add_scroll_bar(UiWindow* window, AABBArray* aabbs,
 
         if (hover_clicked_index.pressed && collided)
         {
+            window->any_holding = true;
             window->scroll_bar.dragging = true;
             window->scroll_bar.mouse_pointer_offset =
                 scroll_bar_aabb.min.y - mouse_position.y;
@@ -1466,6 +1434,98 @@ internal void add_scroll_bar(UiWindow* window, AABBArray* aabbs,
     }
 }
 
+internal void add_scroll_bar_width(UiWindow* window, AABBArray* aabbs,
+                                   HoverClickedIndex hover_clicked_index)
+{
+    const f32 scroll_bar_height = 8.0f;
+    V2 position = v2f(window->position.x, window->position.y + window->size.y);
+    position.y -= scroll_bar_height;
+
+    const f32 area_width = window->size.width;
+    const f32 total_width = window->total_width;
+    if (area_width < total_width)
+    {
+        quad(&ui_context.render.vertices, position,
+             v2f(area_width, scroll_bar_height), high_light_color, 0.0f);
+        window->rendering_index_count += 6;
+
+        const f32 initial_x = position.x;
+        const f32 high = 0.0f;
+        const f32 low = area_width - total_width;
+        const f32 p =
+            (window->current_scroll_offset_width - low) / (high - low);
+        const V2 scroll_bar_dimensions =
+            v2f(area_width * (area_width / total_width), scroll_bar_height);
+
+        const f32 lower_end = window->position.x + window->size.width;
+        position.x =
+            lerp_f32(lower_end - scroll_bar_dimensions.width, initial_x, p);
+
+        V2 mouse_position = event_get_mouse_position();
+        b8 collided = hover_clicked_index.index == (i32)aabbs->size;
+
+        AABB scroll_bar_aabb = {
+            .min = position,
+            .size = scroll_bar_dimensions,
+        };
+        array_push(aabbs, scroll_bar_aabb);
+
+        if (collided || window->scroll_bar_width.dragging)
+        {
+            quad(&ui_context.render.vertices, position, scroll_bar_dimensions,
+                 bright_color, 0.0f);
+            window->rendering_index_count += 6;
+        }
+        else
+        {
+            quad_gradiant_t_b(&ui_context.render.vertices, position,
+                              scroll_bar_dimensions, lighter_color, v4ic(0.45f),
+                              0.0f);
+            window->rendering_index_count += 6;
+        }
+
+        if (hover_clicked_index.pressed && collided)
+        {
+            window->any_holding = true;
+            window->scroll_bar_width.dragging = true;
+            window->scroll_bar_width.mouse_pointer_offset =
+                scroll_bar_aabb.min.x - mouse_position.x;
+        }
+
+        if (window->scroll_bar_width.dragging)
+        {
+            const f32 end_position_x = lower_end - scroll_bar_dimensions.width;
+
+            f32 new_x = mouse_position.x +
+                        window->scroll_bar_width.mouse_pointer_offset;
+
+            // Clipping
+            if (new_x < initial_x)
+            {
+                window->scroll_bar_width.mouse_pointer_offset =
+                    scroll_bar_aabb.min.x - mouse_position.x;
+                new_x = initial_x;
+            }
+            if (new_x > end_position_x)
+            {
+                window->scroll_bar_width.mouse_pointer_offset =
+                    scroll_bar_aabb.min.x - mouse_position.x;
+                new_x = end_position_x;
+            }
+
+            const f32 offset_p =
+                (new_x - initial_x) / (end_position_x - initial_x);
+
+            f32 lerp = lerp_f32(high, low, offset_p);
+
+            lerp = clampf32_high(lerp, high);
+            lerp = clampf32_low(lerp, low);
+            window->current_scroll_offset_width = lerp;
+            window->end_scroll_offset_width = lerp;
+        }
+    }
+}
+
 void ui_window_end(const char* title)
 {
     const u32 window_index =
@@ -1479,6 +1539,17 @@ void ui_window_end(const char* title)
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
+    if (event_get_mouse_button_event()->action == FTIC_RELEASE)
+    {
+        window->top_bar_pressed = false;
+        window->top_bar_hold = false;
+        window->any_holding = false;
+        window->resize_dragging = false;
+        window->scroll_bar.dragging = false;
+        window->scroll_bar_width.dragging = false;
+        window->last_resize_offset = window->resize_offset;
+    }
+
     if (window->top_bar)
     {
         if (hover_clicked_index.index == (i32)aabbs->size)
@@ -1487,13 +1558,8 @@ void ui_window_end(const char* title)
             {
                 window->top_bar_offset = event_get_mouse_position();
                 window->top_bar_pressed = true;
+                window->any_holding = true;
             }
-        }
-
-        if (event_get_mouse_button_event()->action == FTIC_RELEASE)
-        {
-            window->top_bar_pressed = false;
-            window->top_bar_hold = false;
         }
 
         if (window->top_bar_hold)
@@ -1541,7 +1607,8 @@ void ui_window_end(const char* title)
         }
     }
 
-    add_scroll_bar(window, aabbs, hover_clicked_index);
+    add_scroll_bar_height(window, aabbs, hover_clicked_index);
+    add_scroll_bar_width(window, aabbs, hover_clicked_index);
 
     if (!window->scroll_bar.dragging)
     {
@@ -1565,12 +1632,6 @@ void ui_window_end(const char* title)
     quad_border(&ui_context.render.vertices, &window->rendering_index_count,
                 window->position, window->size, color, 1.0f, 0.0f);
 
-    if (event_get_mouse_button_event()->action == FTIC_RELEASE)
-    {
-        window->resize_dragging = 0;
-        window->last_resize_offset = window->resize_offset;
-    }
-
     V2 mouse_position = event_get_mouse_position();
     if (check_bit(window->resizeable, RESIZE_RIGHT))
     {
@@ -1585,6 +1646,7 @@ void ui_window_end(const char* title)
             {
                 set_bit(window->resize_dragging, RESIZE_RIGHT);
                 window->resize_pointer_offset = event_get_mouse_position();
+                window->any_holding = true;
             }
         }
         else
@@ -1610,7 +1672,6 @@ void ui_window_end(const char* title)
     // NOTE(Linus): += also works
     ui_context.current_index_offset =
         window->rendering_index_offset + window->rendering_index_count;
-    ui_context.window_count++;
 
     array_push(&ui_context.current_frame_windows, window->id);
 }
@@ -1997,6 +2058,7 @@ i32 ui_window_add_directory_item_item_list(
     v2_add_equal(&position, window->first_item_position);
 
     position.y += window->current_scroll_offset;
+    position.x += window->current_scroll_offset_width;
     i32 hit_index = -1;
     for (i32 i = 0; i < (i32)items->size; ++i)
     {
@@ -2164,6 +2226,7 @@ void ui_window_add_text(V2 position, const char* text)
     v2_add_equal(&position, window->first_item_position);
 
     position.y += window->current_scroll_offset + ui_context.font.pixel_height;
+    position.x += window->current_scroll_offset_width;
 
     u32 new_lines = 0;
     f32 x_advance = 0.0f;
