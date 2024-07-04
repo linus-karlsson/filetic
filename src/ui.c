@@ -1343,8 +1343,8 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
             window->position.y = clampf32_low(window->position.y, 0.0f);
 
             window->position.x =
-                clampf32_high(window->position.x, ui_context.dimensions.width -
-                                                      window->size.width);
+                clampf32_high(window->position.x,
+                              ui_context.dimensions.width - window->size.width);
             window->position.x = clampf32_low(window->position.x, 0.0f);
 
             window->dock_node->aabb.min = window->position;
@@ -2338,7 +2338,8 @@ void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)
         max(window->total_width, relative_position.x + image_dimensions.width);
 }
 
-b8 ui_window_add_button(V2 position, const V2 dimensions, const char* text)
+b8 ui_window_add_button(V2 position, const V2 dimensions, const V4* color,
+                        const char* text)
 {
 
     const u32 window_index =
@@ -2363,19 +2364,40 @@ b8 ui_window_add_button(V2 position, const V2 dimensions, const char* text)
     V2 end_dimensions = v2f(max(dimensions.width, x_advance),
                             max(dimensions.height, pixel_height));
 
+    if (ui_context.row)
+    {
+        position.x += ui_context.row_current;
+        ui_context.row_current += end_dimensions.width + ui_context.padding;
+    }
+
     b8 collided = hover_clicked_index.index == (i32)aabbs->size;
-    V4 button_color = v4ic(0.3f);
+    V4 button_color = color ? *color : v4ic(0.3f);
     if (collided && event_get_mouse_button_event()->action != FTIC_PRESS)
     {
-        button_color = v4ic(0.4f);
+        button_color = v4_s_multi(button_color, 1.2f);
+        button_color.a = 1.0f;
+        if (!color)
+        {
+            quad(&ui_context.render.vertices, position, end_dimensions,
+                 button_color, 0.0f);
+            window->rendering_index_count += 6;
+        }
     }
-    array_push(aabbs, quad(&ui_context.render.vertices, position,
-                           end_dimensions, button_color, 0.0f));
-    window->rendering_index_count += 6;
+    if (color)
+    {
+        quad(&ui_context.render.vertices, position, end_dimensions,
+             button_color, 0.0f);
+        window->rendering_index_count += 6;
+    }
+
+    AABB button_aabb = { .min = position, .size = end_dimensions };
+    array_push(aabbs, button_aabb);
 
     if (text)
     {
-        V2 text_position = v2f(position.x + 10.0f, position.y + pixel_height);
+        V2 text_position =
+            v2f(position.x + 10.0f,
+                position.y + ui_context.font.pixel_height + 1.0f);
         window->rendering_index_count +=
             text_generation(ui_context.font.chars, text, 1.0f, text_position,
                             1.0f, ui_context.font.line_height, NULL, NULL, NULL,
@@ -2383,5 +2405,36 @@ b8 ui_window_add_button(V2 position, const V2 dimensions, const char* text)
     }
 
     return collided && hover_clicked_index.clicked;
+}
+
+i32 ui_window_add_menu_bar(CharPtrArray* values, f32* height)
+{
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+
+    i32 index = -1;
+
+    f32 pixel_height = 10.0f + ui_context.font.pixel_height;
+    quad(&ui_context.render.vertices, window->position,
+         v2f(ui_context.dimensions.width, pixel_height), v4ic(0.1f), 0.0f);
+    window->rendering_index_count += 6;
+
+    ui_window_row_begin(0.0f);
+    for (u32 i = 0; i < values->size; i++)
+    {
+        if (ui_window_add_button(window->position, v2d(), NULL,
+                                 values->data[i]))
+        {
+            index = i;
+        }
+    }
+    ui_window_row_end();
+
+    if (height)
+    {
+        *height = pixel_height;
+    }
+    return index;
 }
 

@@ -1558,6 +1558,12 @@ int main(int argc, char** argv)
     U32Array free_window_ids = { 0 };
     array_create(&free_window_ids, 10);
 
+    char* menu_options[] = { "Menu", "Windows" };
+    CharPtrArray menu_values = { 0 };
+    array_create(&menu_values, 10);
+    array_push(&menu_values, menu_options[0]);
+    array_push(&menu_values, menu_options[1]);
+
     enable_gldebugging();
     glEnable(GL_BLEND);
     glEnable(GL_MULTISAMPLE);
@@ -1727,28 +1733,34 @@ int main(int argc, char** argv)
         look_for_dropped_files(current_directory(&tab->directory_history),
                                directory_to_drop_in);
 
-        const f32 top_bar_height = 60.0f;
+        const f32 top_bar_height = 52.0f;
+        const f32 top_bar_menu_height = 10.0f + application.font.pixel_height;
 
-        AABB dock_space = { .min = v2f(0.0f, top_bar_height) };
+        AABB dock_space = { .min = v2f(0.0f,
+                                       top_bar_height + top_bar_menu_height) };
         dock_space.size = v2_sub(application.dimensions, dock_space.min);
         ui_context_begin(application.dimensions, &dock_space,
                          application.delta_time, check_collision);
         {
-            const f32 list_item_height = application.font.pixel_height + 10.0f;
 
             UiWindow* top_bar = ui_window_get(windows.data[0]);
             top_bar->position = v2d();
-            top_bar->size = v2f(application.dimensions.width, top_bar_height);
+            top_bar->size = v2f(application.dimensions.width,
+                                top_bar_height + top_bar_menu_height);
             top_bar->top_color = v4ic(0.2f);
             top_bar->bottom_color = v4ic(0.15f);
 
-            ui_window_begin(windows.data[0], false);
+            ui_window_begin(top_bar_window, false);
             {
+                f32 height = 0.0f;
+                ui_window_add_menu_bar(&menu_values, &height);
+
                 AABB button_aabb = { 0 };
                 button_aabb.size = v2i(40.0f),
-                button_aabb.min = v2f(10.0f, middle(top_bar->size.height,
-                                                    button_aabb.size.height));
+                button_aabb.min = v2f(10.0f, top_bar_menu_height + 5.0f);
+
                 ui_window_row_begin(0.0f);
+
                 b8 disable = tab->directory_history.current_index <= 0;
                 add_move_in_history_button(&button_aabb, arrow_back_icon_co,
                                            disable, FTIC_MOUSE_BUTTON_4, -1,
@@ -1859,7 +1871,9 @@ int main(int argc, char** argv)
             }
             ui_window_end(NULL, false);
 
-            ui_window_begin(windows.data[1], true);
+            const f32 list_item_height = application.font.pixel_height + 10.0f;
+
+            ui_window_begin(quick_access_window, true);
             {
                 V2 list_position = v2i(10.0f);
                 i32 selected_item = -1;
@@ -1876,7 +1890,7 @@ int main(int argc, char** argv)
             ui_window_end(buffer, false);
             // ui_window_end("Quick access", false);
 
-            show_search_result_window(&search_page, windows.data[2],
+            show_search_result_window(&search_page, search_result_window,
                                       list_item_height,
                                       &tab->directory_history);
 
@@ -1884,7 +1898,7 @@ int main(int argc, char** argv)
             {
                 if (preview_textures.size > 0)
                 {
-                    UiWindow* preview = ui_window_get(windows.data[3]);
+                    UiWindow* preview = ui_window_get(preview_window);
 
                     V2 image_dimensions = load_and_scale_preview_image(
                         &application, &preview_image_dimensions, &current_path,
