@@ -141,6 +141,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
 void ui_window_add_text(V2 position, const char* text);
 b8 ui_window_set_overlay();
+void ui_window_add_image(V2 position, V2 image_dimensions, u32 image);
 
 
 DockNode* dock_node_create(NodeType type, SplitAxis split_axis, i32 window);

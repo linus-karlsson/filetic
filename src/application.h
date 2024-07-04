@@ -75,5 +75,5 @@ void application_uninitialize(ApplicationContext* application);
 void application_begin_frame(ApplicationContext* application);
 void application_end_frame(ApplicationContext* application);
 f64 application_get_last_mouse_move_time(const ApplicationContext* appliction);
-DirectoryTab tab_add();
+DirectoryTab tab_add(const char* dir);
 void reset_selected_items(SelectedItemValues* selected_item_values);

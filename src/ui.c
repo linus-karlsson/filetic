@@ -117,6 +117,7 @@ typedef struct UiContext
     HoverClickedIndexArray window_hover_clicked_indices;
 
     RenderingProperties render;
+    u32 default_textures_offset;
 
     u32 extra_index_offset;
     u32 extra_index_count;
@@ -911,6 +912,8 @@ void ui_context_create(FTicWindow* window)
 
     ui_context.render = rendering_properties_initialize(
         shader, textures, &vertex_buffer_layout, 100 * 4, 100 * 4);
+
+    ui_context.default_textures_offset = textures.size;
 }
 
 void ui_context_begin(const V2 dimensions, const AABB* dock_space,
@@ -922,6 +925,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
     }
     ui_context.dock_space = *dock_space;
     ui_context.dimensions = dimensions;
+    ui_context.render.textures.size = ui_context.default_textures_offset;
 
     ui_context.delta_time = delta_time;
 
@@ -1006,7 +1010,8 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
                 }
             }
 
-            for (i32 aabb_index = ((i32)aabbs->size) - 1; aabb_index >= 0; --aabb_index)
+            for (i32 aabb_index = ((i32)aabbs->size) - 1; aabb_index >= 0;
+                 --aabb_index)
             {
                 const AABB* aabb = aabbs->data + aabb_index;
                 if (collision_point_in_aabb(mouse_position, aabb))
@@ -1055,6 +1060,7 @@ internal b8 look_for_stale_windows(DockNode* root)
         if (!exist)
         {
             dock_node_remove_node(ui_context.dock_tree, root);
+            ui_window_get(root->window)->docked = false;
             return true;
         }
     }
@@ -1331,6 +1337,7 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
     window->first_item_position.y += 20.0f * top_bar;
 
     window->total_height = 0.0f;
+    window->total_width = 0.0f;
 
     v2_add_equal(&window->size, window->resize_offset);
 
@@ -2267,3 +2274,29 @@ b8 ui_window_set_overlay()
            (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) ||
             is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT));
 }
+
+void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)
+{
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+
+    V2 relative_position = position;
+    v2_add_equal(&position, window->first_item_position);
+
+    position.x += window->current_scroll_offset_width;
+    position.y += window->current_scroll_offset;
+
+    f32 texture_index = (f32)ui_context.render.textures.size;
+    array_push(&ui_context.render.textures, image);
+
+    quad(&ui_context.render.vertices, position, image_dimensions, v4i(1.0f),
+         texture_index);
+
+    window->total_height = max(window->total_height,
+                               relative_position.y + image_dimensions.height);
+
+    window->total_width =
+        max(window->total_width, relative_position.x + image_dimensions.width);
+}
+

@@ -168,123 +168,6 @@ typedef struct DropDownMenu2
                                  b8 item_clicked, V4* text_color, void* data);
 } DropDownMenu2;
 
-void set_gldebug_log_level(DebugLogLevel level);
-void opengl_log_message(GLenum source, GLenum type, GLuint id, GLenum severity,
-                        GLsizei length, const GLchar* message,
-                        const void* userParam);
-void enable_gldebugging();
-void parse_all_subdirectories(const char* start_directory, const u32 length);
-b8 string_contains(const char* string, const u32 string_length,
-                   const char* value, const u32 value_length);
-b8 string_contains_case_insensitive(const char* string, const char* value);
-void safe_add_directory_item(const DirectoryItem* item,
-                             FindingCallbackAttribute* arguments,
-                             SafeFileArray* safe_array);
-void finding_callback(void* data);
-void find_matching_string(const char* start_directory, const u32 length,
-                          const char* string_to_match,
-                          const u32 string_to_match_length);
-void clear_search_result(SafeFileArray* files);
-void search_page_clear_search_result(SearchPage* page);
-void swap_strings(char* first, char* second);
-b8 item_in_view(const f32 position_y, const f32 height,
-                const f32 window_height);
-void check_and_open_file(const b8 hit, const DirectoryItem* current_files,
-                         const i32 file_index);
-b8 go_to_directory(char* path, u32 length, DirectoryHistory* directory_history);
-void check_and_open_folder(const b8 hit, const i32 index,
-                           const DirectoryItem* current_folders,
-                           DirectoryHistory* directory_history);
-DirectoryItemListReturnValue
-item_list(const ApplicationContext* application,
-          const DirectoryItemArray* items, const f32 icon_index,
-          const V4 texture_coordinates, const b8 check_collision,
-          V2 starting_position, const f32 item_width, const f32 item_height,
-          const f32 padding, const f64 pulse_x, u32* index_count,
-          SelectedItemValues* selected_item_values,
-          RenderingProperties* render);
-DirectoryItemListReturnValue folder_item_list(
-    const ApplicationContext* application, const DirectoryItemArray* folders,
-    const b8 check_collision, V2 starting_position, const f32 item_width,
-    const f32 item_height, const f32 padding, const f64 pulse_x,
-    u32* index_count, SelectedItemValues* selected_item_values,
-    RenderingProperties* render, DirectoryHistory* directory_history);
-DirectoryItemListReturnValue
-files_item_list(const ApplicationContext* application,
-                const DirectoryItemArray* files, const b8 check_collision,
-                V2 starting_position, const f32 item_width,
-                const f32 item_height, const f32 padding, const f64 pulse_x,
-                u32* index_count, SelectedItemValues* selected_item_values,
-                RenderingProperties* render);
-DirectoryItemListReturnValue directory_item_list(
-    const ApplicationContext* application,
-    const DirectoryItemArray* sub_directories, const DirectoryItemArray* files,
-    const b8 check_collision, V2 starting_position, const f32 item_width,
-    const f32 item_height, const f32 padding, const f64 pulse_x,
-    u32* index_count, SelectedItemValues* selected_item_values,
-    RenderingProperties* render, DirectoryHistory* directory_history);
-f32 clampf32_low(f32 value, f32 low);
-f32 clampf32_high(f32 value, f32 high);
-void extract_only_aplha_channel(TextureProperties* texture_properties);
-u32 render_input(const FontTTF* font, const char* text, const u32 text_length,
-                 const f32 scale, const V2 text_position, const f32 cursor_y,
-                 const b8 active, i32 input_index, u32* index_count,
-                 const f64 delta_time, f64* time, AABBArray* aabbs,
-                 RenderingProperties* render);
-void set_scroll_offset(const u32 item_count, const f32 item_height,
-                       const f32 area_y, f32* offset);
-f32 smooth_scroll(const f64 delta_time, const f32 offset, f32 scroll_offset);
-u64 u64_hash_function(const void* data, u32 len, u64 seed);
-void reset_selected_items(SelectedItemValues* selected_item_values);
-void reload_directory(DirectoryPage* directory_page);
-b8 is_ctrl_and_key_pressed(i32 key);
-b8 is_key_clicked(i32 key);
-b8 is_key_pressed_repeat(i32 key);
-u32 load_icon_as_only_red(const char* file_path);
-u32 load_icon_as_white(const char* file_path);
-u32 load_icon(const char* file_path);
-AABB ui_add_border(RenderingProperties* render, V2 position, V2 size);
-void scroll_bar_add(ScrollBar* scroll_bar, V2 position, const f32 dimension_y,
-                    const f32 area_y, const f32 item_height, f32 total_height,
-                    f32* scroll_offset, f32* offset, u32* index_count,
-                    RenderingProperties* render);
-void paste_in_directory(DirectoryPage* current_directory);
-b8 is_mouse_button_clicked(i32 button);
-void search_page_initialize(SearchPage* search_page);
-void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
-                                           RenderingPropertiesArray* array);
-void search_page_parse_key_buffer(SearchPage* page, const f32 search_bar_width,
-                                  const FontTTF* font,
-                                  const b8 reload_search_result,
-                                  DirectoryHistory* directory_history,
-                                  ThreadTaskQueue* thread_task_queue);
-b8 erase_char(i32* cursor_index, CharArray* buffer);
-DirectoryItemListReturnValue
-search_page_update(SearchPage* page, const ApplicationContext* application,
-                   const b8 check_collision, const V2 search_bar_position,
-                   DirectoryHistory* directory_history,
-                   ThreadTaskQueue* thread_task_queue,
-                   SelectedItemValues* selected_item_values);
-b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
-                            V4* text_color, void* data);
-b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
-                      const ApplicationContext* application, void* option_data);
-void open_preview(const ApplicationContext* application, V2* image_dimensions,
-                  char** current_path, const DirectoryItemArray* files,
-                  u32* index_count, RenderingProperties* render);
-void move_in_history(const i32 index_add,
-                     SelectedItemValues* selected_item_values,
-                     DirectoryHistory* directory_history);
-b8 can_go_up_one_directory(char* parent);
-u32 get_path_length(const char* path, u32 path_length);
-void go_up_one_directory(DirectoryHistory* directory_history);
-void directory_sort_by_size(DirectoryItemArray* array);
-void directory_flip_array(DirectoryItemArray* array);
-b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
-                        V4* text_color, void* data);
-b8 load_preview_image(const char* path, V2* image_dimensions,
-                      RenderingProperties* render);
-
 void set_gldebug_log_level(DebugLogLevel level)
 {
     g_debug_log_level = level;
@@ -335,6 +218,19 @@ void enable_gldebugging()
     glDebugMessageCallback(opengl_log_message, NULL);
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+}
+
+u32 get_path_length(const char* path, u32 path_length)
+{
+    for (i32 i = path_length - 1; i >= 0; --i)
+    {
+        const char current_char = path[i];
+        if (current_char == '\\' || current_char == '/')
+        {
+            return i + 1;
+        }
+    }
+    return 0;
 }
 
 void parse_all_subdirectories(const char* start_directory, const u32 length)
@@ -461,21 +357,6 @@ void display_text_and_truncate_if_necissary(const FontTTF* font,
     }
 }
 
-void check_and_open_file(const b8 hit, const DirectoryItem* current_files,
-                         const i32 file_index)
-{
-    const MouseButtonEvent* event = event_get_mouse_button_event();
-    if (event->double_clicked && event->button == FTIC_MOUSE_BUTTON_1)
-    {
-        if (hit)
-        {
-            const char* file_path = current_files[file_index].path;
-
-            platform_open_file(file_path);
-        }
-    }
-}
-
 b8 go_to_directory(char* path, u32 length, DirectoryHistory* directory_history)
 {
     b8 result = false;
@@ -518,21 +399,6 @@ void open_folder(char* folder_path, DirectoryHistory* directory_history)
     }
     u32 length = (u32)strlen(folder_path);
     go_to_directory(folder_path, length, directory_history);
-}
-
-void check_and_open_folder(const b8 hit, const i32 index,
-                           const DirectoryItem* current_folders,
-                           DirectoryHistory* directory_history)
-{
-    const MouseButtonEvent* event = event_get_mouse_button_event();
-    if (event->double_clicked && event->button == FTIC_MOUSE_BUTTON_1)
-    {
-        if (hit)
-        {
-            char* path = current_folders[index].path;
-            open_folder(path, directory_history);
-        }
-    }
 }
 
 void display_full_path(const FontTTF* font, const V2 position, const V2 size,
@@ -630,6 +496,51 @@ void mergeSort(DirectoryItem* array, u32 left, u32 right)
 void directory_sort_by_name(DirectoryItemArray* array)
 {
     mergeSort(array->data, 0, array->size - 1);
+}
+
+void directory_flip_array(DirectoryItemArray* array)
+{
+    const i32 middle = array->size / 2;
+    for (i32 i = 0, j = array->size - 1; i < middle; ++i, --j)
+    {
+        DirectoryItem temp = array->data[i];
+        array->data[i] = array->data[j];
+        array->data[j] = temp;
+    }
+}
+
+void directory_sort_by_size(DirectoryItemArray* array)
+{
+    if (array->size <= 1) return;
+
+    DirectoryItem* output =
+        (DirectoryItem*)calloc(array->size, sizeof(DirectoryItem));
+    u32 count[256] = { 0 };
+
+    for (u32 shift = 0, s = 0; shift < 8; ++shift, s += 8)
+    {
+        memset(count, 0, sizeof(count));
+
+        for (u32 i = 0; i < array->size; ++i)
+        {
+            count[(array->data[i].size >> s) & 0xff]++;
+        }
+
+        for (u32 i = 1; i < 256; ++i)
+        {
+            count[i] += count[i - 1];
+        }
+
+        for (i32 i = array->size - 1; i >= 0; --i)
+        {
+            u32 index = (array->data[i].size >> s) & 0xff;
+            output[--count[index]] = array->data[i];
+        }
+        DirectoryItem* tmp = array->data;
+        array->data = output;
+        output = tmp;
+    }
+    free(output);
 }
 
 void sort_directory(DirectoryPage* directory_page)
@@ -790,16 +701,7 @@ void rendering_properties_array_initialize(const FontTTF* font, u8* font_bitmap,
                                                &vertex_buffer_layout, 100 * 4,
                                                100 * 6));
 
-    U32Array preview_textures = { 0 };
-    array_create(&preview_textures, 2);
-    array_push(&preview_textures, default_texture);
-    array_push(&rendering_properties,
-               rendering_properties_initialize(preview_shader, preview_textures,
-                                               &vertex_buffer_layout, 100 * 4,
-                                               100 * 6));
     *array = rendering_properties;
-
-    free(vertex_buffer_layout.items.data);
 }
 
 void search_page_search(SearchPage* page, DirectoryHistory* directory_history,
@@ -962,12 +864,37 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
     return should_close;
 }
 
+b8 load_preview_image(const char* path, V2* image_dimensions,
+                       U32Array* textures)
+{
+    b8 result = false;
+    const char* extension = file_get_extension(path, (u32)strlen(path));
+    if (extension && (!strcmp(extension, ".png") || !strcmp(extension, ".jpg")))
+    {
+        if (textures->size > 0)
+        {
+            texture_delete(textures->data[--textures->size]);
+        }
+        TextureProperties texture_properties = { 0 };
+        texture_load(path, &texture_properties);
+        *image_dimensions =
+            v2f((f32)texture_properties.width, (f32)texture_properties.height);
+
+        ftic_assert(texture_properties.bytes);
+        u32 texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+        array_push(textures, texture);
+        free(texture_properties.bytes);
+        result = true;
+    }
+    return result;
+}
+
 b8 check_and_load_image(const i32 index, V2* image_dimensions,
-                        char** current_path, const DirectoryItemArray* files,
-                        RenderingProperties* render)
+                         char** current_path, const DirectoryItemArray* files,
+                         U32Array* textures)
 {
     const char* path = files->data[index].path;
-    if (load_preview_image(path, image_dimensions, render))
+    if (load_preview_image(path, image_dimensions, textures))
     {
         free(*current_path);
         *current_path = string_copy(path, (u32)strlen(path), 0);
@@ -976,9 +903,9 @@ b8 check_and_load_image(const i32 index, V2* image_dimensions,
     return false;
 }
 
-void open_preview(const ApplicationContext* application, V2* image_dimensions,
-                  char** current_path, const DirectoryItemArray* files,
-                  u32* index_count, RenderingProperties* render)
+V2 load_and_scale_preview_image(const ApplicationContext* application, V2* image_dimensions,
+                 char** current_path, const DirectoryItemArray* files,
+                 U32Array* textures)
 {
     b8 right_key = is_key_pressed_repeat(FTIC_KEY_RIGHT);
     b8 left_key = is_key_pressed_repeat(FTIC_KEY_LEFT);
@@ -995,7 +922,8 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
                     {
                         const i32 index = (i + count) % files->size;
                         if (check_and_load_image(index, image_dimensions,
-                                                 current_path, files, render))
+                                                  current_path, files,
+                                                  textures))
                         {
                             break;
                         }
@@ -1008,7 +936,8 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
                     {
                         if (index < 0) index = files->size - 1;
                         if (check_and_load_image(index, image_dimensions,
-                                                 current_path, files, render))
+                                                  current_path, files,
+                                                  textures))
                         {
                             break;
                         }
@@ -1018,7 +947,6 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
             }
         }
     }
-
     V2 image_dimensions_internal = *image_dimensions;
 
     const V2 total_preview_dimensions =
@@ -1027,52 +955,11 @@ void open_preview(const ApplicationContext* application, V2* image_dimensions,
         v2_div(total_preview_dimensions, image_dimensions_internal);
     f32 scale_factor =
         ratios.width < ratios.height ? ratios.width : ratios.height;
-    V2 preview_dimensions = { 0 };
     if (scale_factor < 1.0f)
     {
         v2_s_multi_equal(&image_dimensions_internal, scale_factor);
     }
-    preview_dimensions = image_dimensions_internal;
-    v2_s_add_equal(&preview_dimensions, border_width * 2.0f);
-
-    V2 preview_position = v2_s_multi(application->dimensions, 0.5f);
-    v2_sub_equal(&preview_position, v2_s_multi(preview_dimensions, 0.5f));
-
-    AABB* scissor = &render->scissor;
-    scissor->min = preview_position;
-    scissor->min.y = application->dimensions.y - scissor->min.y;
-    scissor->min.y -= preview_dimensions.y;
-    scissor->size = preview_dimensions;
-    scissor->size.width += border_width;
-    scissor->size.height += border_width;
-
-    AABB preview_aabb = quad_border_gradiant(
-        &render->vertices, index_count, preview_position, preview_dimensions,
-        bright_color, lighter_color, border_width, 0.0f);
-    v2_s_add_equal(&preview_position, border_width);
-    v2_s_sub_equal(&preview_dimensions, border_width * 2.0f);
-
-    quad(&render->vertices, preview_position, preview_dimensions, clear_color,
-         0.0f);
-    *index_count += 6;
-
-    quad(&render->vertices, preview_position, preview_dimensions, v4i(1.0f),
-         1.0f);
-    *index_count += 6;
-
-    const MouseButtonEvent* event = event_get_mouse_button_event();
-    if (!collision_point_in_aabb(application->mouse_position, &preview_aabb) &&
-        event->activated && event->action == 0 &&
-        event->button == FTIC_MOUSE_BUTTON_1)
-    {
-        if (render->textures.size > 1)
-        {
-            texture_delete(render->textures.data[--render->textures.size]);
-            if (*current_path) free(*current_path);
-            *current_path = NULL;
-        }
-        rendering_properties_clear(render);
-    }
+    return image_dimensions_internal;
 }
 
 void move_in_history(const i32 index_add,
@@ -1099,18 +986,6 @@ b8 can_go_up_one_directory(char* parent)
     return false;
 }
 
-u32 get_path_length(const char* path, u32 path_length)
-{
-    for (i32 i = path_length - 1; i >= 0; --i)
-    {
-        const char current_char = path[i];
-        if (current_char == '\\' || current_char == '/')
-        {
-            return i + 1;
-        }
-    }
-    return 0;
-}
 
 void go_up_one_directory(DirectoryHistory* directory_history)
 {
@@ -1141,50 +1016,7 @@ void add_move_in_history_button(const AABB* aabb, const V4 icon_co,
     }
 }
 
-void directory_sort_by_size(DirectoryItemArray* array)
-{
-    if (array->size <= 1) return;
 
-    DirectoryItem* output =
-        (DirectoryItem*)calloc(array->size, sizeof(DirectoryItem));
-    u32 count[256] = { 0 };
-
-    for (u32 shift = 0, s = 0; shift < 8; ++shift, s += 8)
-    {
-        memset(count, 0, sizeof(count));
-
-        for (u32 i = 0; i < array->size; ++i)
-        {
-            count[(array->data[i].size >> s) & 0xff]++;
-        }
-
-        for (u32 i = 1; i < 256; ++i)
-        {
-            count[i] += count[i - 1];
-        }
-
-        for (i32 i = array->size - 1; i >= 0; --i)
-        {
-            u32 index = (array->data[i].size >> s) & 0xff;
-            output[--count[index]] = array->data[i];
-        }
-        DirectoryItem* tmp = array->data;
-        array->data = output;
-        output = tmp;
-    }
-    free(output);
-}
-
-void directory_flip_array(DirectoryItemArray* array)
-{
-    const i32 middle = array->size / 2;
-    for (i32 i = 0, j = array->size - 1; i < middle; ++i, --j)
-    {
-        DirectoryItem temp = array->data[i];
-        array->data[i] = array->data[j];
-        array->data[j] = temp;
-    }
-}
 
 b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
                         V4* text_color, void* data)
@@ -1291,31 +1123,6 @@ void drag_drop_callback(void* data)
 {
     CharPtrArray* selected_paths = (CharPtrArray*)data;
     platform_start_drag_drop(selected_paths);
-}
-
-b8 load_preview_image(const char* path, V2* image_dimensions,
-                      RenderingProperties* render)
-{
-    b8 result = false;
-    const char* extension = file_get_extension(path, (u32)strlen(path));
-    if (extension && (!strcmp(extension, ".png") || !strcmp(extension, ".jpg")))
-    {
-        if (render->textures.size > 1)
-        {
-            texture_delete(render->textures.data[--render->textures.size]);
-        }
-        TextureProperties texture_properties = { 0 };
-        texture_load(path, &texture_properties);
-        *image_dimensions =
-            v2f((f32)texture_properties.width, (f32)texture_properties.height);
-
-        ftic_assert(texture_properties.bytes);
-        u32 texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
-        array_push(&render->textures, texture);
-        free(texture_properties.bytes);
-        result = true;
-    }
-    return result;
 }
 
 void set_sorting_buttons(const ApplicationContext* application,
@@ -1664,10 +1471,9 @@ int main(int argc, char** argv)
     RenderingPropertiesArray rendering_properties = { 0 };
     rendering_properties_array_initialize(&application.font, font_bitmap,
                                           &rendering_properties);
+
     RenderingProperties* main_render = rendering_properties.data;
     u32 main_index_count = 0;
-    RenderingProperties* preview_render = rendering_properties.data + 1;
-    u32 preview_index_count = 0;
 
     U32Array windows = { 0 };
     array_create(&windows, 20);
@@ -1706,17 +1512,14 @@ int main(int argc, char** argv)
 
     V2 preview_image_dimensions = v2d();
     char* current_path = NULL;
-    i32 preview_image_index = -1;
-    FileAttrib preview_file = { 0 };
     b8 show_preview = false;
-
-    ScrollBar main_scroll_bar = { 0 };
-    b8 search_scroll_bar_dragging = false;
+    FileAttrib preview_file = { 0 };
+    U32Array preview_textures = { 0 };
+    array_create(&preview_textures, 10);
 
     DirectoryItemArray quick_access_folders = { 0 };
     array_create(&quick_access_folders, 10);
     quick_access_load(&quick_access_folders);
-    f64 quick_access_pulse_x = 0.0f;
 
     InputBuffer parent_directory_input = ui_input_buffer_create();
 
@@ -1737,18 +1540,9 @@ int main(int argc, char** argv)
     AABBArray parent_directory_aabbs = { 0 };
     array_create(&parent_directory_aabbs, 10);
 
-    V2 starting_position = v2f(150.0f, 0.0f);
     const f32 search_bar_width = 250.0f;
-    f32 open_search_result_width = search_bar_width + 10.0f;
-    f32 search_result_width = 0.0f;
-    b8 search_result_open_presist = true;
-
-    i32 side_resize = -1;
-    b8 resize_dragging = false;
-    f32 resize_offset = 0.0f;
 
     b8 activated = false;
-    b8 dragging = false;
     V2 last_mouse_position = v2d();
     f32 distance = 0.0f;
 
@@ -1763,13 +1557,12 @@ int main(int argc, char** argv)
         DirectoryTab* tab = application.tabs.data + application.tab_index;
 
         main_index_count = 0;
-        preview_index_count = 0;
 
         rendering_properties_array_clear(&rendering_properties);
 
         if (is_ctrl_and_key_pressed(FTIC_KEY_T))
         {
-            array_push(&application.tabs, tab_add());
+            array_push(&application.tabs, tab_add("C:\\*"));
             application.tab_index = application.tabs.size - 1;
         }
 
@@ -1811,7 +1604,7 @@ int main(int argc, char** argv)
                 activated = false;
             }
         }
-        b8 check_collision = preview_render->textures.size == 1;
+        b8 check_collision = true;
 
         if (check_collision &&
             (collision_point_in_aabb(application.mouse_position,
@@ -1828,24 +1621,21 @@ int main(int argc, char** argv)
             {
                 platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
-            else if (tab->selected_item_values.paths.size == 1 &&
+            else if (!show_preview &&
+                     tab->selected_item_values.paths.size == 1 &&
                      is_ctrl_and_key_pressed(FTIC_KEY_D))
             {
                 const char* path = tab->selected_item_values.paths.data[0];
 
+                show_preview = true;
                 if (load_preview_image(path, &preview_image_dimensions,
-                                       preview_render))
+                                        &preview_textures))
                 {
                     current_path = string_copy(path, (u32)strlen(path), 0);
                     reset_selected_items(&tab->selected_item_values);
                 }
                 else
                 {
-                    if (preview_file.buffer)
-                    {
-                        free(preview_file.buffer);
-                        preview_file = (FileAttrib){ 0 };
-                    }
                     preview_file = file_read(path);
                     show_preview = true;
                 }
@@ -1914,13 +1704,6 @@ int main(int argc, char** argv)
         look_for_dropped_files(current_directory(&tab->directory_history),
                                directory_to_drop_in);
 
-        if (preview_render->textures.size > 1)
-        {
-            open_preview(
-                &application, &preview_image_dimensions, &current_path,
-                &current_directory(&tab->directory_history)->directory.files,
-                &preview_index_count, preview_render);
-        }
         const f32 top_bar_height = 60.0f;
 
         AABB dock_space = { .min = v2f(0.0f, top_bar_height) };
@@ -2073,25 +1856,64 @@ int main(int argc, char** argv)
 
             if (show_preview)
             {
-                UiWindow* preview = ui_window_get(windows.data[3]);
-                preview->size =
-                    v2f(500.0f, application.dimensions.height * 0.9f);
-                preview->position = v2f(
-                    middle(application.dimensions.width, preview->size.width),
-                    middle(application.dimensions.height,
-                           preview->size.height));
-
-                ui_window_begin(windows.data[3], false);
+                if (preview_textures.size > 0)
                 {
-                    show_preview = !ui_window_set_overlay();
-                    ui_window_add_text(v2f(10.0f, 10.0f),
-                                       (char*)preview_file.buffer);
+                    UiWindow* preview = ui_window_get(windows.data[3]);
+
+                    V2 image_dimensions = load_and_scale_preview_image(
+                        &application, &preview_image_dimensions, &current_path,
+                        &current_directory(&tab->directory_history)
+                             ->directory.files,
+                        &preview_textures);
+
+                    preview->size = image_dimensions;
+                    preview->position =
+                        v2f(middle(application.dimensions.width,
+                                   preview->size.width),
+                            middle(application.dimensions.height,
+                                   preview->size.height));
+
+
+                    ui_window_begin(windows.data[3], false);
+                    {
+                        show_preview = !ui_window_set_overlay();
+                        ui_window_add_image(v2d(), image_dimensions,
+                                            preview_textures.data[0]);
+                    }
+                    ui_window_end(NULL);
                 }
-                ui_window_end(NULL);
+                else
+                {
+                    UiWindow* preview = ui_window_get(windows.data[3]);
+                    preview->size =
+                        v2f(500.0f, application.dimensions.height * 0.9f);
+                    preview->position =
+                        v2f(middle(application.dimensions.width,
+                                   preview->size.width),
+                            middle(application.dimensions.height,
+                                   preview->size.height));
+
+                    ui_window_begin(windows.data[3], false);
+                    {
+                        show_preview = !ui_window_set_overlay();
+                        ui_window_add_text(v2f(10.0f, 10.0f),
+                                           (char*)preview_file.buffer);
+                    }
+                    ui_window_end(NULL);
+                }
             }
             else
             {
-                int i = 0;
+                if (preview_textures.size > 0)
+                {
+                    texture_delete(
+                        preview_textures.data[--preview_textures.size]);
+                }
+                if (preview_file.buffer)
+                {
+                    free(preview_file.buffer);
+                    preview_file = (FileAttrib){ 0 };
+                }
             }
 
             const u32 tab_count = application.tabs.size;
@@ -2121,27 +1943,16 @@ int main(int argc, char** argv)
 
         rendering_properties_check_and_grow_buffers(main_render,
                                                     main_index_count);
-        rendering_properties_check_and_grow_buffers(preview_render,
-                                                    preview_index_count);
 
         buffer_set_sub_data(main_render->vertex_buffer_id, GL_ARRAY_BUFFER, 0,
                             sizeof(Vertex) * main_render->vertices.size,
                             main_render->vertices.data);
-
-        buffer_set_sub_data(preview_render->vertex_buffer_id, GL_ARRAY_BUFFER,
-                            0, sizeof(Vertex) * preview_render->vertices.size,
-                            preview_render->vertices.data);
 
         AABB whole_screen_scissor = { .size = application.dimensions };
 
         rendering_properties_begin_draw(main_render, &application.mvp);
         rendering_properties_draw(0, main_index_count, &whole_screen_scissor);
         rendering_properties_end_draw(main_render);
-
-        rendering_properties_begin_draw(preview_render, &application.mvp);
-        rendering_properties_draw(0, preview_index_count,
-                                  &whole_screen_scissor);
-        rendering_properties_end_draw(preview_render);
 #endif
 
         application_end_frame(&application);

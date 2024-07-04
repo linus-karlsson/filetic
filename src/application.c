@@ -1,11 +1,72 @@
 #include "application.h"
 #include "hash.h"
+#include "logging.h"
+#include <stdio.h>
 #include <string.h>
 #include <glad/glad.h>
 
 DirectoryPage* current_directory(DirectoryHistory* history)
 {
     return history->history.data + history->current_index;
+}
+
+internal void save_application_state(ApplicationContext* application)
+{
+    FILE* file = fopen("saved/application.txt", "wb");
+    if (file == NULL)
+    {
+        log_file_error("saved/application.txt");
+        return;
+    }
+
+    fwrite(&application->tabs.size, sizeof(application->tabs.size), 1, file);
+    for (u32 i = 0; i < application->tabs.size; ++i)
+    {
+        char* path =
+            current_directory(&application->tabs.data[i].directory_history)
+                ->directory.parent;
+        u32 path_length = (u32)strlen(path);
+        fwrite(&path_length, sizeof(u32), 1, file);
+        fwrite(path, sizeof(char), path_length, file);
+    }
+    fclose(file);
+}
+
+internal void load_application_state(ApplicationContext* application)
+{
+    FILE* file = fopen("saved/application.txt", "rb");
+    if (file == NULL)
+    {
+        log_file_error("saved/application.txt");
+        return;
+    }
+
+    u32 size = 0;
+    if (!fread(&size, sizeof(size), 1, file))
+    {
+        return;
+    }
+    for (u32 i = 0; i < size; ++i)
+    {
+        u32 path_length = 0;
+        fread(&path_length, sizeof(u32), 1, file);
+
+        char* path = (char*)calloc(path_length + 3, sizeof(char));
+        fread(path, sizeof(char), path_length, file);
+
+        if (platform_directory_exists(path))
+        {
+            path[path_length++] = '\\';
+            path[path_length++] = '*';
+
+            array_push(&application->tabs, tab_add(path));
+
+            path[path_length - 2] = '\0';
+            path[path_length - 1] = '\0';
+        }
+        free(path);
+    }
+    fclose(file);
 }
 
 u8* application_initialize(ApplicationContext* application)
@@ -34,8 +95,11 @@ u8* application_initialize(ApplicationContext* application)
     array_create(&application->tabs, 10);
     application->tab_index = 0;
 
-    array_push(&application->tabs, tab_add());
-
+    load_application_state(application);
+    if (application->tabs.size == 0)
+    {
+        array_push(&application->tabs, tab_add("C:\\*"));
+    }
     application->last_time = platform_get_time();
     application->delta_time = 0.0f;
     application->mvp = (MVP){ 0 };
@@ -50,6 +114,8 @@ u8* application_initialize(ApplicationContext* application)
 void application_uninitialize(ApplicationContext* application)
 {
     window_destroy(application->window);
+
+    save_application_state(application);
     for (u32 i = 0; i < application->tabs.size; ++i)
     {
         DirectoryTab* tab = application->tabs.data + i;
@@ -106,17 +172,16 @@ void application_end_frame(ApplicationContext* application)
     application->last_time = now;
 }
 
-f64 application_get_last_mouse_move_time(const ApplicationContext* appliction)
+f64 application_get_last_mouse_move_time(const ApplicationContext* application)
 {
-    return window_get_time() - appliction->last_moved_time;
+    return window_get_time() - application->last_moved_time;
 }
 
-DirectoryTab tab_add()
+DirectoryTab tab_add(const char* dir)
 {
     DirectoryHistory directory_history = { 0 };
     array_create(&directory_history.history, 10);
 
-    const char* dir = "C:\\*";
     DirectoryPage page = { 0 };
     page.directory = platform_get_directory(dir, (u32)strlen(dir));
     array_push(&directory_history.history, page);
