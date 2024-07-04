@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.16.3)
 project(FileTic)
 set(EXE ${PROJECT_NAME})
 
+set(GLFW_USE_HYBRID_HPG ON)
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY bin)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) 
 IF(WIN32)

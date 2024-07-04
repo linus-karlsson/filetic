@@ -15,13 +15,19 @@ FTicWindow* window_create(const char* title, int width, int height)
     }
 
     glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window = glfwCreateWindow(width, height, "FileTic", NULL, NULL);
 
     cursors[FTIC_HAND_CURSOR] = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
-    cursors[FTIC_RESIZE_H_CURSOR] = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
-    cursors[FTIC_RESIZE_V_CURSOR] = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
-    cursors[FTIC_RESIZE_V_CURSOR] = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+    cursors[FTIC_RESIZE_H_CURSOR] =
+        glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+    cursors[FTIC_RESIZE_V_CURSOR] =
+        glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+    cursors[FTIC_RESIZE_V_CURSOR] =
+        glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
     cursors[FTIC_MOVE_CURSOR] = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 
     if (!window)
@@ -32,7 +38,13 @@ FTicWindow* window_create(const char* title, int width, int height)
     }
     glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+    glfwSwapInterval(1);
     return (FTicWindow*)window;
+}
+
+FTicWindow* window_get_current()
+{
+    return (FTicWindow*)glfwGetCurrentContext();
 }
 
 void window_destroy(FTicWindow* window)

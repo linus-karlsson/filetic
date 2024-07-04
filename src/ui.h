@@ -3,7 +3,6 @@
 #include "rendering.h"
 #include "hash_table.h"
 #include "platform/platform.h"
-#include "ftic_window.h"
 
 typedef struct ScrollBar
 {
@@ -117,7 +116,7 @@ typedef struct DropDownMenu
 
 InputBuffer ui_input_buffer_create();
 
-void ui_context_create(FTicWindow* window);
+void ui_context_create();
 void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 delta_time, const b8 check_collisions);
 void ui_context_end();
 void ui_context_destroy();
@@ -135,6 +134,7 @@ void ui_window_row_begin(const f32 padding);
 f32 ui_window_row_end();
 
 b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index, const b8 disable);
+b8 ui_window_add_button(V2 position, const V2 dimensions, const char* text);
 void ui_window_add_directory_list(V2 position);
 b8 ui_window_add_folder_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
 b8 ui_window_add_file_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);

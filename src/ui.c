@@ -101,8 +101,6 @@ typedef struct UiContext
 {
     MVP mvp;
 
-    FTicWindow* window;
-
     u32 window_in_focus;
     u32 current_window_id;
     u32 current_index_offset;
@@ -844,10 +842,8 @@ internal DockNode* load_layout()
     return root;
 }
 
-void ui_context_create(FTicWindow* window)
+void ui_context_create()
 {
-    ui_context.window = window;
-
     array_create(&ui_context.id_to_index, 100);
     array_create(&ui_context.free_indices, 100);
 
@@ -1157,13 +1153,14 @@ void ui_context_end()
                     ui_context.dock_resize = true;
                 }
 
+                FTicWindow* ftic_window = window_get_current();
                 if (ui_context.dock_hit_node->split_axis == SPLIT_HORIZONTAL)
                 {
-                    window_set_cursor(ui_context.window, FTIC_RESIZE_V_CURSOR);
+                    window_set_cursor(ftic_window, FTIC_RESIZE_V_CURSOR);
                 }
                 else
                 {
-                    window_set_cursor(ui_context.window, FTIC_RESIZE_H_CURSOR);
+                    window_set_cursor(ftic_window, FTIC_RESIZE_H_CURSOR);
                 }
                 quad(&ui_context.render.vertices,
                      ui_context.dock_resize_aabb.min,
@@ -1173,7 +1170,7 @@ void ui_context_end()
             }
             else
             {
-                window_set_cursor(ui_context.window, FTIC_NORMAL_CURSOR);
+                window_set_cursor(window_get_current(), FTIC_NORMAL_CURSOR);
             }
         }
         else
@@ -1193,7 +1190,7 @@ void ui_context_end()
                 new_ratio = relative_mouse_position.x /
                             ui_context.dock_hit_node->aabb.size.width;
             }
-            if (closed_interval(0.2f, new_ratio, 0.8f))
+            if (closed_interval(0.1f, new_ratio, 0.9f))
             {
                 ui_context.dock_hit_node->size_ratio = new_ratio;
                 dock_node_resize_traverse(ui_context.dock_hit_node);
@@ -1339,6 +1336,17 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
         {
             window->position =
                 v2_add(event_get_mouse_position(), window->top_bar_offset);
+
+            window->position.y =
+                clampf32_high(window->position.y, ui_context.dimensions.height -
+                                                      window->size.height);
+            window->position.y = clampf32_low(window->position.y, 0.0f);
+
+            window->position.x =
+                clampf32_high(window->position.x, ui_context.dimensions.width -
+                                                      window->size.width);
+            window->position.x = clampf32_low(window->position.x, 0.0f);
+
             window->dock_node->aabb.min = window->position;
         }
         else if (window->top_bar_pressed)
@@ -1365,7 +1373,7 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
     window->total_height = 0.0f;
     window->total_width = 0.0f;
 
-    //v2_add_equal(&window->size, window->resize_offset);
+    // v2_add_equal(&window->size, window->resize_offset);
 
     return true;
 }
@@ -2328,5 +2336,52 @@ void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)
 
     window->total_width =
         max(window->total_width, relative_position.x + image_dimensions.width);
+}
+
+b8 ui_window_add_button(V2 position, const V2 dimensions, const char* text)
+{
+
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+    HoverClickedIndex hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data[window_index];
+
+    V2 relative_position = position;
+    v2_add_equal(&position, window->first_item_position);
+
+    f32 x_advance = 20.0f;
+    f32 pixel_height = 10.0f;
+    if (text)
+    {
+        x_advance += text_x_advance(ui_context.font.chars, text,
+                                    (u32)strlen(text), 1.0f);
+        pixel_height += ui_context.font.pixel_height;
+    }
+
+    V2 end_dimensions = v2f(max(dimensions.width, x_advance),
+                            max(dimensions.height, pixel_height));
+
+    b8 collided = hover_clicked_index.index == (i32)aabbs->size;
+    V4 button_color = v4ic(0.3f);
+    if (collided && event_get_mouse_button_event()->action != FTIC_PRESS)
+    {
+        button_color = v4ic(0.4f);
+    }
+    array_push(aabbs, quad(&ui_context.render.vertices, position,
+                           end_dimensions, button_color, 0.0f));
+    window->rendering_index_count += 6;
+
+    if (text)
+    {
+        V2 text_position = v2f(position.x + 10.0f, position.y + pixel_height);
+        window->rendering_index_count +=
+            text_generation(ui_context.font.chars, text, 1.0f, text_position,
+                            1.0f, ui_context.font.line_height, NULL, NULL, NULL,
+                            &ui_context.render.vertices);
+    }
+
+    return collided && hover_clicked_index.clicked;
 }
 

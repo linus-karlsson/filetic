@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <Windows.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <stb/stb_truetype.h>
@@ -1474,11 +1475,23 @@ int main(int argc, char** argv)
     U32Array windows = { 0 };
     array_create(&windows, 20);
     {
-        ui_context_create(application.window);
+        ui_context_create();
         for (u32 i = 0; i < 20; ++i)
         {
             array_push(&windows, ui_window_create());
         }
+    }
+
+    u32 current_window_index = 0;
+    u32 top_bar_window = windows.data[current_window_index++];
+    u32 quick_access_window = windows.data[current_window_index++];
+    u32 search_result_window = windows.data[current_window_index++];
+    u32 preview_window = windows.data[current_window_index++];
+
+    for (u32 i = 0; i < application.tabs.size; ++i)
+    {
+        application.tabs.data[i].window_id =
+            windows.data[current_window_index++];
     }
 
     CharPtrArray pasted_paths = { 0 };
@@ -1542,6 +1555,9 @@ int main(int argc, char** argv)
     V2 last_mouse_position = v2d();
     f32 distance = 0.0f;
 
+    U32Array free_window_ids = { 0 };
+    array_create(&free_window_ids, 10);
+
     enable_gldebugging();
     glEnable(GL_BLEND);
     glEnable(GL_MULTISAMPLE);
@@ -1560,6 +1576,17 @@ int main(int argc, char** argv)
         {
             array_push(&application.tabs, tab_add("C:\\*"));
             application.tab_index = application.tabs.size - 1;
+            u32 window_id = 0;
+            if (free_window_ids.size)
+            {
+                window_id = *array_back(&free_window_ids);
+                free_window_ids.size--;
+            }
+            else
+            {
+                window_id = windows.data[current_window_index++];
+            }
+            array_back(&application.tabs)->window_id = window_id;
         }
 
         if (is_ctrl_and_key_range_pressed(FTIC_KEY_1, FTIC_KEY_9))
@@ -1844,7 +1871,10 @@ int main(int argc, char** argv)
                                 &tab->directory_history);
                 }
             }
-            ui_window_end("Quick access", false);
+            char buffer[20] = { 0 };
+            sprintf_s(buffer, 20, "%f", application.delta_time);
+            ui_window_end(buffer, false);
+            // ui_window_end("Quick access", false);
 
             show_search_result_window(&search_page, windows.data[2],
                                       list_item_height,
@@ -1913,7 +1943,7 @@ int main(int argc, char** argv)
 
             for (u32 i = 0; i < application.tabs.size; ++i)
             {
-                const u32 window_id = windows.data[4 + i];
+                const u32 window_id = application.tabs.data[i].window_id;
                 if (ui_window_in_focus() == window_id)
                 {
                     if (i != application.tab_index)
@@ -1932,6 +1962,7 @@ int main(int argc, char** argv)
                     }
                     tab_clear(&tab_to_remove);
                     application.tabs.size--;
+                    array_push(&free_window_ids, window_id);
 
                     // NOTE: this is probably always true
                     if (i == application.tab_index)

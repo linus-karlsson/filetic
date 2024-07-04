@@ -17,6 +17,7 @@ typedef void (*OnKeyStrokeCallback)(void* window, unsigned int codepoint);
 typedef void (*OnDropCallback)(void* window, int count, const char** paths);
 
 FTicWindow* window_create(const char* title, int width, int height);
+FTicWindow* window_get_current();
 void window_destroy(FTicWindow* window);
 void window_set_on_key_event(FTicWindow* window, OnKeyCallback callback);
 void window_set_on_button_event(FTicWindow* window, OnButtonCallback callback);

@@ -152,16 +152,6 @@ void application_end_frame(ApplicationContext* application)
 
     f64 now = window_get_time();
     application->delta_time = now - application->last_time;
-    const u32 target_milliseconds = 8;
-    const u64 curr_milliseconds = (u64)(application->delta_time * 1000.0f);
-    if (target_milliseconds > curr_milliseconds)
-    {
-        const u64 milli_to_sleep =
-            (u64)(target_milliseconds - curr_milliseconds);
-        platform_sleep(milli_to_sleep);
-        now = window_get_time();
-        application->delta_time = now - application->last_time;
-    }
     application->last_time = now;
 }
 
