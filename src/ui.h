@@ -32,6 +32,7 @@ typedef struct UiWindow
     V2 position;
     V2 first_item_position;
     V2 top_bar_offset;
+
     V2 resize_offset;
     V2 last_resize_offset;
     V2 resize_pointer_offset;

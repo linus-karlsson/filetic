@@ -1331,7 +1331,33 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
                                  window->size, window->top_color,
                                  window->bottom_color, 0.0f));
     window->rendering_index_count += 6;
+
     window->top_bar = top_bar;
+    if (window->top_bar)
+    {
+        if (window->top_bar_hold)
+        {
+            window->position =
+                v2_add(event_get_mouse_position(), window->top_bar_offset);
+            window->dock_node->aabb.min = window->position;
+        }
+        else if (window->top_bar_pressed)
+        {
+            if (v2_distance(window->top_bar_offset,
+                            event_get_mouse_position()) >= 10.0f)
+            {
+                if (window->docked)
+                {
+                    window->docked = false;
+                    dock_node_remove_node(ui_context.dock_tree,
+                                          window->dock_node);
+                }
+                window->top_bar_hold = true;
+                window->top_bar_offset =
+                    v2_sub(window->position, event_get_mouse_position());
+            }
+        }
+    }
 
     window->first_item_position = window->position;
     window->first_item_position.y += 20.0f * top_bar;
@@ -1339,7 +1365,7 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
     window->total_height = 0.0f;
     window->total_width = 0.0f;
 
-    v2_add_equal(&window->size, window->resize_offset);
+    //v2_add_equal(&window->size, window->resize_offset);
 
     return true;
 }
@@ -1571,29 +1597,6 @@ b8 ui_window_end(const char* title, b8 closable)
             }
         }
 
-        if (window->top_bar_hold)
-        {
-            window->position =
-                v2_add(event_get_mouse_position(), window->top_bar_offset);
-            window->dock_node->aabb.min = window->position;
-        }
-        else if (window->top_bar_pressed)
-        {
-            if (v2_distance(window->top_bar_offset,
-                            event_get_mouse_position()) >= 10.0f)
-            {
-                if (window->docked)
-                {
-                    window->docked = false;
-                    dock_node_remove_node(ui_context.dock_tree,
-                                          window->dock_node);
-                }
-                window->top_bar_hold = true;
-                window->top_bar_offset =
-                    v2_sub(window->position, event_get_mouse_position());
-            }
-        }
-
         array_push(aabbs,
                    quad_gradiant_t_b(&ui_context.render.vertices,
                                      window->position, top_bar_dimensions,
@@ -1625,7 +1628,8 @@ b8 ui_window_end(const char* title, b8 closable)
             collided = hover_clicked_index.index == (i32)aabbs->size;
 
             V4 button_color = v4ic(0.3f);
-            if (collided && event_get_mouse_button_event()->action != FTIC_PRESS)
+            if (collided &&
+                event_get_mouse_button_event()->action != FTIC_PRESS)
             {
                 button_color = v4ic(0.4f);
             }
