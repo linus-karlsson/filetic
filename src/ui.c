@@ -750,7 +750,7 @@ InputBuffer ui_input_buffer_create()
     return input;
 }
 
-internal void insert_window(DockNode* node, const u32 id)
+internal void insert_window(DockNode* node, const u32 id, const b8 docked)
 {
     UiWindow window = {
         .position = v2f(200.0f, 200.0f),
@@ -759,6 +759,7 @@ internal void insert_window(DockNode* node, const u32 id)
         .top_color = clear_color,
         .bottom_color = clear_color,
         .dock_node = node,
+        .docked = docked,
     };
     array_push(&ui_context.windows, window);
     node->window = id;
@@ -820,8 +821,7 @@ DockNode* read_node(FILE* file)
 
     if (node->window != -1)
     {
-        insert_window(node, node->window);
-        ui_window_get(node->window)->docked = true;
+        insert_window(node, node->window, true);
     }
 
     node->children[0] = read_node(file);
@@ -1213,6 +1213,7 @@ void ui_context_end()
                         sizeof(Vertex) * ui_context.render.vertices.size,
                         ui_context.render.vertices.data);
 
+    b8 any_change = false;
     // TODO: can be very expensive. Consider a more efficient way.
     for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
     {
@@ -1235,6 +1236,7 @@ void ui_context_end()
             push_window_to_back(&ui_context, &ui_context.last_frame_windows,
                                 i--);
             ui_context.last_frame_windows.size--;
+            any_change = true;
         }
     }
 
@@ -1242,10 +1244,14 @@ void ui_context_end()
     {
         array_push(&ui_context.last_frame_windows,
                    ui_context.current_frame_windows.data[i]);
+        any_change = true;
     }
     ui_context.current_frame_windows.size = 0;
 
-    clean_dock_tree_of_stale_windows();
+    if(any_change)
+    {
+        clean_dock_tree_of_stale_windows();
+    }
 
     ui_context.window_count_last = ui_context.window_count;
 #if 0
@@ -1320,7 +1326,7 @@ u32 ui_window_create()
             return id;
         }
     }
-    insert_window(dock_node_create(NODE_LEAF, SPLIT_NONE, -1), id);
+    insert_window(dock_node_create(NODE_LEAF, SPLIT_NONE, -1), id, false);
     return id;
 }
 
