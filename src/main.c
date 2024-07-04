@@ -865,7 +865,7 @@ b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
 }
 
 b8 load_preview_image(const char* path, V2* image_dimensions,
-                       U32Array* textures)
+                      U32Array* textures)
 {
     b8 result = false;
     const char* extension = file_get_extension(path, (u32)strlen(path));
@@ -890,8 +890,8 @@ b8 load_preview_image(const char* path, V2* image_dimensions,
 }
 
 b8 check_and_load_image(const i32 index, V2* image_dimensions,
-                         char** current_path, const DirectoryItemArray* files,
-                         U32Array* textures)
+                        char** current_path, const DirectoryItemArray* files,
+                        U32Array* textures)
 {
     const char* path = files->data[index].path;
     if (load_preview_image(path, image_dimensions, textures))
@@ -903,9 +903,10 @@ b8 check_and_load_image(const i32 index, V2* image_dimensions,
     return false;
 }
 
-V2 load_and_scale_preview_image(const ApplicationContext* application, V2* image_dimensions,
-                 char** current_path, const DirectoryItemArray* files,
-                 U32Array* textures)
+V2 load_and_scale_preview_image(const ApplicationContext* application,
+                                V2* image_dimensions, char** current_path,
+                                const DirectoryItemArray* files,
+                                U32Array* textures)
 {
     b8 right_key = is_key_pressed_repeat(FTIC_KEY_RIGHT);
     b8 left_key = is_key_pressed_repeat(FTIC_KEY_LEFT);
@@ -922,8 +923,7 @@ V2 load_and_scale_preview_image(const ApplicationContext* application, V2* image
                     {
                         const i32 index = (i + count) % files->size;
                         if (check_and_load_image(index, image_dimensions,
-                                                  current_path, files,
-                                                  textures))
+                                                 current_path, files, textures))
                         {
                             break;
                         }
@@ -936,8 +936,7 @@ V2 load_and_scale_preview_image(const ApplicationContext* application, V2* image
                     {
                         if (index < 0) index = files->size - 1;
                         if (check_and_load_image(index, image_dimensions,
-                                                  current_path, files,
-                                                  textures))
+                                                 current_path, files, textures))
                         {
                             break;
                         }
@@ -986,7 +985,6 @@ b8 can_go_up_one_directory(char* parent)
     return false;
 }
 
-
 void go_up_one_directory(DirectoryHistory* directory_history)
 {
     DirectoryPage* current = current_directory(directory_history);
@@ -1015,8 +1013,6 @@ void add_move_in_history_button(const AABB* aabb, const V4 icon_co,
         move_in_history(history_add, selected_item_values, directory_history);
     }
 }
-
-
 
 b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
                         V4* text_color, void* data)
@@ -1198,7 +1194,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
         platform_mutex_unlock(&page->search_result_file_array.mutex);
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
     }
-    ui_window_end("Search result");
+    ui_window_end("Search result", false);
 }
 
 char* get_parent_directory_name(DirectoryPage* current)
@@ -1208,8 +1204,8 @@ char* get_parent_directory_name(DirectoryPage* current)
                            (u32)strlen(current->directory.parent));
 }
 
-void show_directory_window(const u32 window, const f32 list_item_height,
-                           DirectoryTab* tab)
+b8 show_directory_window(const u32 window, const f32 list_item_height,
+                         DirectoryTab* tab)
 {
     DirectoryPage* current = current_directory(&tab->directory_history);
     ui_window_begin(window, true);
@@ -1235,7 +1231,7 @@ void show_directory_window(const u32 window, const f32 list_item_height,
                 current->directory.files.data[selected_item].path);
         }
     }
-    ui_window_end(get_parent_directory_name(current));
+    return ui_window_end(get_parent_directory_name(current), true);
 }
 
 #if 0
@@ -1629,7 +1625,7 @@ int main(int argc, char** argv)
 
                 show_preview = true;
                 if (load_preview_image(path, &preview_image_dimensions,
-                                        &preview_textures))
+                                       &preview_textures))
                 {
                     current_path = string_copy(path, (u32)strlen(path), 0);
                     reset_selected_items(&tab->selected_item_values);
@@ -1834,7 +1830,7 @@ int main(int argc, char** argv)
                                        &thread_queue.task_queue);
                 }
             }
-            ui_window_end(NULL);
+            ui_window_end(NULL, false);
 
             ui_window_begin(windows.data[1], true);
             {
@@ -1848,7 +1844,7 @@ int main(int argc, char** argv)
                                 &tab->directory_history);
                 }
             }
-            ui_window_end("Quick access");
+            ui_window_end("Quick access", false);
 
             show_search_result_window(&search_page, windows.data[2],
                                       list_item_height,
@@ -1873,14 +1869,13 @@ int main(int argc, char** argv)
                             middle(application.dimensions.height,
                                    preview->size.height));
 
-
                     ui_window_begin(windows.data[3], false);
                     {
                         show_preview = !ui_window_set_overlay();
                         ui_window_add_image(v2d(), image_dimensions,
                                             preview_textures.data[0]);
                     }
-                    ui_window_end(NULL);
+                    ui_window_end(NULL, false);
                 }
                 else
                 {
@@ -1899,7 +1894,7 @@ int main(int argc, char** argv)
                         ui_window_add_text(v2f(10.0f, 10.0f),
                                            (char*)preview_file.buffer);
                     }
-                    ui_window_end(NULL);
+                    ui_window_end(NULL, false);
                 }
             }
             else
@@ -1916,8 +1911,7 @@ int main(int argc, char** argv)
                 }
             }
 
-            const u32 tab_count = application.tabs.size;
-            for (u32 i = 0; i < tab_count; ++i)
+            for (u32 i = 0; i < application.tabs.size; ++i)
             {
                 const u32 window_id = windows.data[4 + i];
                 if (ui_window_in_focus() == window_id)
@@ -1928,8 +1922,25 @@ int main(int argc, char** argv)
                     }
                     application.tab_index = i;
                 }
-                show_directory_window(window_id, list_item_height,
-                                      application.tabs.data + i);
+                if (show_directory_window(window_id, list_item_height,
+                                          application.tabs.data + i))
+                {
+                    DirectoryTab tab_to_remove = application.tabs.data[i];
+                    for (u32 j = i; j < application.tabs.size - 1; ++j)
+                    {
+                        application.tabs.data[j] = application.tabs.data[j + 1];
+                    }
+                    tab_clear(&tab_to_remove);
+                    application.tabs.size--;
+
+                    // NOTE: this is probably always true
+                    if (i == application.tab_index)
+                    {
+                        application.tab_index =
+                            (application.tab_index + 1) % application.tabs.size;
+                    }
+                    --i;
+                }
             }
 
             b8 search_result_open = search_page_has_result(&search_page) &&

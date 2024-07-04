@@ -1533,14 +1533,14 @@ internal void add_scroll_bar_width(UiWindow* window, AABBArray* aabbs,
     }
 }
 
-void ui_window_end(const char* title)
+b8 ui_window_end(const char* title, b8 closable)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
     AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
 
-    if (window->hide) return;
+    if (window->hide) return false;
 
     const V2 top_bar_dimensions = v2f(window->size.width, 20.0f);
     HoverClickedIndex hover_clicked_index =
@@ -1556,6 +1556,8 @@ void ui_window_end(const char* title)
         window->scroll_bar_width.dragging = false;
         window->last_resize_offset = window->resize_offset;
     }
+
+    b8 collided = false;
 
     if (window->top_bar)
     {
@@ -1602,6 +1604,8 @@ void ui_window_end(const char* title)
                     window->position, top_bar_dimensions, border_color, 1.0f,
                     0.0f);
 
+        f32 x_advance = 0.0f;
+
         if (title)
         {
             const V2 text_position =
@@ -1609,8 +1613,28 @@ void ui_window_end(const char* title)
                     window->position.y + ui_context.font.pixel_height);
             window->rendering_index_count += text_generation(
                 ui_context.font.chars, title, 1.0f, text_position, 1.0f,
-                ui_context.font.line_height, NULL, NULL, NULL,
+                ui_context.font.line_height, NULL, &x_advance, NULL,
                 &ui_context.render.vertices);
+            x_advance += text_position.x - window->position.x;
+        }
+
+        if (closable)
+        {
+            x_advance += 10.0f;
+
+            collided = hover_clicked_index.index == (i32)aabbs->size;
+
+            V4 button_color = v4ic(0.3f);
+            if (collided && event_get_mouse_button_event()->action != FTIC_PRESS)
+            {
+                button_color = v4ic(0.4f);
+            }
+            array_push(aabbs, quad(&ui_context.render.vertices,
+                                   v2f(window->position.x + x_advance,
+                                       window->position.y + 2.0f),
+                                   v2i(top_bar_dimensions.height - 4.0f),
+                                   button_color, 0.0f));
+            window->rendering_index_count += 6;
         }
     }
 
@@ -1684,6 +1708,8 @@ void ui_window_end(const char* title)
         window->rendering_index_offset + window->rendering_index_count;
 
     array_push(&ui_context.current_frame_windows, window->id);
+
+    return collided && hover_clicked_index.clicked;
 }
 
 void ui_window_row_begin(const f32 padding)

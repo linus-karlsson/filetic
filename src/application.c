@@ -118,14 +118,7 @@ void application_uninitialize(ApplicationContext* application)
     save_application_state(application);
     for (u32 i = 0; i < application->tabs.size; ++i)
     {
-        DirectoryTab* tab = application->tabs.data + i;
-        for (u32 j = 0; j < tab->directory_history.history.size; j++)
-        {
-            platform_reset_directory(
-                &tab->directory_history.history.data[j].directory);
-        }
-        free(tab->directory_history.history.data);
-        reset_selected_items(&tab->selected_item_values);
+        tab_clear(application->tabs.data + i);
     }
     event_uninitialize();
 }
@@ -196,6 +189,17 @@ DirectoryTab tab_add(const char* dir)
         .directory_history = directory_history,
         .selected_item_values = selected_item_values,
     };
+}
+
+void tab_clear(DirectoryTab* tab)
+{
+    for (u32 j = 0; j < tab->directory_history.history.size; j++)
+    {
+        platform_reset_directory(
+            &tab->directory_history.history.data[j].directory);
+    }
+    free(tab->directory_history.history.data);
+    reset_selected_items(&tab->selected_item_values);
 }
 
 void reset_selected_items(SelectedItemValues* selected_item_values)
