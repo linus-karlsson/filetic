@@ -299,8 +299,7 @@ internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
     return result;
 }
 
-DockNode* dock_node_create(NodeType type, SplitAxis split_axis,
-                           UiWindow* window)
+DockNode* dock_node_create(NodeType type, SplitAxis split_axis, i32 window)
 {
     DockNode* node = (DockNode*)calloc(1, sizeof(DockNode));
     node->type = type;
@@ -342,16 +341,16 @@ internal void dock_node_set_split(DockNode* split_node, DockNode* parent,
         split_node->children[1]->aabb.min.y = parent->aabb.min.y;
     }
     DockNode* left = split_node->children[0];
-    UiWindow* left_window = left->window;
-    if (left_window != NULL)
+    if (left->window != -1)
     {
+        UiWindow* left_window = ui_window_get(left->window);
         left_window->position = left->aabb.min;
         left_window->size = left->aabb.size;
     }
     DockNode* right = split_node->children[1];
-    UiWindow* right_window = right->window;
-    if (right_window != NULL)
+    if (right->window != -1)
     {
+        UiWindow* right_window = ui_window_get(right->window);
         right_window->position = right->aabb.min;
         right_window->size = right->aabb.size;
     }
@@ -379,12 +378,12 @@ void dock_node_dock_window(DockNode* root, DockNode* window,
     DockNode* split_node = root;
     if (root->type == NODE_ROOT)
     {
-        split_node = dock_node_create(NODE_PARENT, split_axis, NULL);
+        split_node = dock_node_create(NODE_PARENT, split_axis, -1);
     }
     else if (root->type == NODE_LEAF)
     {
         copy_node = dock_node_create(NODE_LEAF, SPLIT_NONE, root->window);
-        root->window->dock_node = copy_node;
+        ui_window_get(root->window)->dock_node = copy_node;
     }
     else
     {
@@ -393,8 +392,9 @@ void dock_node_dock_window(DockNode* root, DockNode* window,
 
     if (copy_node == NULL)
     {
-        window->window->position = root->aabb.min;
-        window->window->size = root->aabb.size;
+        UiWindow* ui_window = ui_window_get(window->window);
+        ui_window->position = root->aabb.min;
+        ui_window->size = root->aabb.size;
         root->children[0] = window;
         return;
     }
@@ -424,7 +424,7 @@ void dock_node_dock_window(DockNode* root, DockNode* window,
         root->type = NODE_PARENT;
     }
     root->split_axis = split_axis;
-    root->window = NULL;
+    root->window = -1;
 }
 
 void dock_node_resize_from_root(DockNode* root, const AABB* aabb)
@@ -434,9 +434,9 @@ void dock_node_resize_from_root(DockNode* root, const AABB* aabb)
     if (left != NULL)
     {
         left->aabb = root->aabb;
-        UiWindow* left_window = left->window;
-        if (left_window != NULL)
+        if (left->window != -1)
         {
+            UiWindow* left_window = ui_window_get(left->window);
             left_window->position = left->aabb.min;
             left_window->size = left->aabb.size;
         }
@@ -449,7 +449,7 @@ void dock_node_resize_from_root(DockNode* root, const AABB* aabb)
 
 DockNode* find_node(DockNode* root, DockNode* node_before, DockNode* node)
 {
-    if (root->type == NODE_LEAF && root->window->id == node->window->id)
+    if (root->type == NODE_LEAF && root->window == node->window)
     {
         return node_before;
     }
@@ -473,7 +473,7 @@ DockNode* find_node(DockNode* root, DockNode* node_before, DockNode* node)
 void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
 {
     if (root->children[0]->type == NODE_LEAF &&
-        root->children[0]->window->id == node_to_remove->window->id)
+        root->children[0]->window == node_to_remove->window)
     {
         root->children[0] = NULL;
         return;
@@ -481,9 +481,10 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
     DockNode* node_before = find_node(root->children[0], root, node_to_remove);
     DockNode* left = node_before->children[0];
     DockNode* right = node_before->children[1];
-    if (left->type == NODE_LEAF &&
-        left->window->id == node_to_remove->window->id)
+    if (left->type == NODE_LEAF && left->window == node_to_remove->window)
     {
+        node_to_remove->aabb.size =
+            ui_window_get(node_to_remove->window)->size = v2i(200.0f);
         node_before->type = right->type;
         node_before->split_axis = right->split_axis;
         node_before->window = right->window;
@@ -492,13 +493,15 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
         node_before->size_ratio = right->size_ratio;
         if (right->type == NODE_LEAF)
         {
-            node_before->window->dock_node = node_before;
+            ui_window_get(node_before->window)->dock_node = node_before;
         }
         free(right);
     }
     else if (right->type == NODE_LEAF &&
-             right->window->id == node_to_remove->window->id)
+             right->window == node_to_remove->window)
     {
+        node_to_remove->aabb.size =
+            ui_window_get(node_to_remove->window)->size = v2i(200.0f);
         node_before->type = left->type;
         node_before->split_axis = left->split_axis;
         node_before->window = left->window;
@@ -507,7 +510,7 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
         node_before->size_ratio = left->size_ratio;
         if (left->type == NODE_LEAF)
         {
-            node_before->window->dock_node = node_before;
+            ui_window_get(node_before->window)->dock_node = node_before;
         }
         free(left);
     }
@@ -755,21 +758,10 @@ internal void insert_window(DockNode* node, const u32 id)
         .size = v2f(200.0f, 200.0f),
         .top_color = clear_color,
         .bottom_color = clear_color,
+        .dock_node = node,
     };
-    b8 update_window_pointers =
-        ui_context.windows.size >= ui_context.windows.capacity;
     array_push(&ui_context.windows, window);
-    UiWindow* added_window = array_back(&ui_context.windows);
-    added_window->dock_node = node;
-    node->window = added_window;
-    if (update_window_pointers)
-    {
-        for (u32 i = 0; i < ui_context.windows.size; ++i)
-        {
-            UiWindow* win = ui_context.windows.data + i;
-            win->dock_node->window = win;
-        }
-    }
+    node->window = id;
 
     AABBArray aabbs = { 0 };
     array_create(&aabbs, 10);
@@ -792,12 +784,7 @@ internal void write_node(FILE* file, DockNode* node)
     fwrite(&is_null, sizeof(is_null), 1, file);
     fwrite(&node->type, sizeof(node->type), 1, file);
     fwrite(&node->split_axis, sizeof(node->split_axis), 1, file);
-
-    b8 is_window_null = (node->window == NULL);
-    u32 window_id = is_window_null ? 0 : node->window->id;
-    fwrite(&is_window_null, sizeof(is_window_null), 1, file);
-    fwrite(&window_id, sizeof(window_id), 1, file);
-
+    fwrite(&node->window, sizeof(node->window), 1, file);
     fwrite(&node->size_ratio, sizeof(node->size_ratio), 1, file);
 
     write_node(file, node->children[0]);
@@ -828,19 +815,14 @@ DockNode* read_node(FILE* file)
     DockNode* node = (DockNode*)calloc(1, sizeof(DockNode));
     ftic_assert(fread(&node->type, sizeof(node->type), 1, file));
     ftic_assert(fread(&node->split_axis, sizeof(node->split_axis), 1, file));
-
-    b8 is_window_null;
-    u32 window_id;
-    ftic_assert(fread(&is_window_null, sizeof(is_window_null), 1, file));
-    ftic_assert(fread(&window_id, sizeof(window_id), 1, file));
-
-    if (!is_window_null)
-    {
-        insert_window(node, window_id);
-        node->window->docked = true;
-    }
-
+    ftic_assert(fread(&node->window, sizeof(node->window), 1, file));
     ftic_assert(fread(&node->size_ratio, sizeof(node->size_ratio), 1, file));
+
+    if (node->window != -1)
+    {
+        insert_window(node, node->window);
+        ui_window_get(node->window)->docked = true;
+    }
 
     node->children[0] = read_node(file);
     node->children[1] = read_node(file);
@@ -883,7 +865,7 @@ void ui_context_create(FTicWindow* window)
     }
     else
     {
-        ui_context.dock_tree = dock_node_create(NODE_ROOT, SPLIT_NONE, NULL);
+        ui_context.dock_tree = dock_node_create(NODE_ROOT, SPLIT_NONE, -1);
     }
     ui_context.dock_side_hit = -1;
 
@@ -1059,6 +1041,43 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
 collision_check_done:;
 }
 
+internal b8 look_for_stale_windows(DockNode* root)
+{
+    if (root == NULL) return false;
+
+    if (root->type == NODE_LEAF)
+    {
+        b8 exist = false;
+        for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
+        {
+            if (root->window == (i32)ui_context.last_frame_windows.data[i])
+            {
+                exist = true;
+                break;
+            }
+        }
+        if (!exist)
+        {
+            dock_node_remove_node(ui_context.dock_tree, root);
+            return true;
+        }
+    }
+    else
+    {
+        b8 removed = look_for_stale_windows(root->children[0]);
+        if (removed) return removed;
+        removed = look_for_stale_windows(root->children[1]);
+        if (removed) return removed;
+    }
+    return false;
+}
+
+internal void clean_dock_tree_of_stale_windows()
+{
+    while (look_for_stale_windows(ui_context.dock_tree))
+        ;
+}
+
 void ui_context_end()
 {
     ui_context.extra_index_offset = ui_context.current_index_offset;
@@ -1226,6 +1245,8 @@ void ui_context_end()
     }
     ui_context.current_frame_windows.size = 0;
 
+    clean_dock_tree_of_stale_windows();
+
     ui_context.window_count_last = ui_context.window_count;
 #if 0
     // TODO: make sure all docked windows is always at the back
@@ -1262,11 +1283,14 @@ void ui_context_end()
         UiWindow* window = ui_context.windows.data + window_index;
 
         AABB scissor = { 0 };
-        scissor.min.x = window->position.x;
-        scissor.min.y = ui_context.dimensions.y -
-                        (window->position.y + window->size.height);
-        scissor.size = window->size;
-        scissor.size.width += 1.0f;
+        if (ui_context.dimensions.y)
+        {
+            scissor.min.x = window->position.x;
+            scissor.min.y = ui_context.dimensions.y -
+                            (window->position.y + window->size.height);
+            scissor.size = window->size;
+            scissor.size.width += 1.0f;
+        }
         rendering_properties_draw(window->rendering_index_offset,
                                   window->rendering_index_count, &scissor);
     }
@@ -1296,7 +1320,7 @@ u32 ui_window_create()
             return id;
         }
     }
-    insert_window(dock_node_create(NODE_LEAF, SPLIT_NONE, NULL), id);
+    insert_window(dock_node_create(NODE_LEAF, SPLIT_NONE, -1), id);
     return id;
 }
 
@@ -1482,9 +1506,6 @@ void ui_window_end(const char* title)
                     window->docked = false;
                     dock_node_remove_node(ui_context.dock_tree,
                                           window->dock_node);
-
-                    window->size = v2f(200.0f, 200.0f);
-                    window->dock_node->aabb.size = window->size;
                 }
                 window->top_bar_hold = true;
                 window->top_bar_offset =

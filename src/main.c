@@ -1431,6 +1431,7 @@ void show_directory_window(const u32 window, const f32 list_item_height,
     ui_window_end(get_parent_directory_name(current));
 }
 
+#if 0
 void render_node(DockNode* node, int depth)
 {
     if (!node) return;
@@ -1456,6 +1457,7 @@ void render_node(DockNode* node, int depth)
         }
     }
 }
+#endif
 
 b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
                       const ApplicationContext* application, void* option_data)

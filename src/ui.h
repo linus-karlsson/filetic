@@ -89,7 +89,7 @@ struct DockNode
 {
     NodeType type;
     SplitAxis split_axis;
-    UiWindow* window;
+    i32 window;
     DockNode* children[2];
     AABB aabb;
     f32 size_ratio;
@@ -141,7 +141,7 @@ void ui_window_add_text(V2 position, const char* text);
 b8 ui_window_set_overlay();
 
 
-DockNode* dock_node_create(NodeType type, SplitAxis split_axis, UiWindow* window);
+DockNode* dock_node_create(NodeType type, SplitAxis split_axis, i32 window);
 void dock_node_dock_window(DockNode* root, DockNode* window, SplitAxis split_axis, u8 where);
 void dock_node_resize_from_root(DockNode* root, const AABB* aabb);
 void dock_node_remove_node(DockNode* root, DockNode* node_to_remove);
