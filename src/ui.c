@@ -948,7 +948,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
         hover_clicked_index->double_clicked = false;
     }
     ui_context.any_window_top_bar_hold = false;
-    ui_context.any_window_hold= false;
+    ui_context.any_window_hold = false;
     i32 index_window_dragging = -1;
     for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
     {
@@ -1006,7 +1006,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
                 }
             }
 
-            for (i32 aabb_index = aabbs->size; aabb_index >= 0; --aabb_index)
+            for (i32 aabb_index = ((i32)aabbs->size) - 1; aabb_index >= 0; --aabb_index)
             {
                 const AABB* aabb = aabbs->data + aabb_index;
                 if (collision_point_in_aabb(mouse_position, aabb))
@@ -1618,9 +1618,12 @@ void ui_window_end(const char* title)
                 set_scroll_offset(window->total_height, window->size.y,
                                   window->end_scroll_offset);
         }
-        window->current_scroll_offset =
-            smooth_scroll(ui_context.delta_time, window->end_scroll_offset,
-                          window->current_scroll_offset);
+        if (ui_context.delta_time < 0.5f)
+        {
+            window->current_scroll_offset =
+                smooth_scroll(ui_context.delta_time, window->end_scroll_offset,
+                              window->current_scroll_offset);
+        }
     }
 
     const b8 in_focus = window_index == ui_context.window_in_focus;
@@ -2240,7 +2243,7 @@ void ui_window_add_text(V2 position, const char* text)
             relative_position.y + (++new_lines * ui_context.font.line_height));
 
     window->total_width =
-        max(window->total_width, relative_position.x + x_advance);
+        max(window->total_width, relative_position.x + x_advance + 20.0f);
 }
 
 b8 ui_window_set_overlay()
