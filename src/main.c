@@ -1705,6 +1705,8 @@ int main(int argc, char** argv)
     V2 preview_image_dimensions = v2d();
     char* current_path = NULL;
     i32 preview_image_index = -1;
+    FileAttrib preview_file = { 0 };
+    b8 show_preview = false;
 
     ScrollBar main_scroll_bar = { 0 };
     b8 search_scroll_bar_dragging = false;
@@ -1834,6 +1836,16 @@ int main(int argc, char** argv)
                 {
                     current_path = string_copy(path, (u32)strlen(path), 0);
                     reset_selected_items(&tab->selected_item_values);
+                }
+                else
+                {
+                    if (preview_file.buffer)
+                    {
+                        free(preview_file.buffer);
+                        preview_file = (FileAttrib){ 0 };
+                    }
+                    preview_file = file_read(path);
+                    show_preview = true;
                 }
             }
             else if (key_event->activated && key_event->action == 1 &&
@@ -2057,10 +2069,33 @@ int main(int argc, char** argv)
                                       list_item_height,
                                       &tab->directory_history);
 
+            if (show_preview)
+            {
+                UiWindow* preview = ui_window_get(windows.data[3]);
+                preview->size =
+                    v2f(500.0f, application.dimensions.height * 0.9f);
+                preview->position = v2f(
+                    middle(application.dimensions.width, preview->size.width),
+                    middle(application.dimensions.height,
+                           preview->size.height));
+
+                ui_window_begin(windows.data[3], false);
+                {
+                    show_preview = !ui_window_set_overlay();
+                    ui_window_add_text(v2f(10.0f, 10.0f),
+                                       (char*)preview_file.buffer);
+                }
+                ui_window_end(NULL);
+            }
+            else
+            {
+                int i = 0;
+            }
+
             const u32 tab_count = application.tabs.size;
             for (u32 i = 0; i < tab_count; ++i)
             {
-                const u32 window_id = windows.data[3 + i];
+                const u32 window_id = windows.data[4 + i];
                 if (ui_window_in_focus() == window_id)
                 {
                     if (i != application.tab_index)
@@ -2100,9 +2135,10 @@ int main(int argc, char** argv)
         rendering_properties_begin_draw(main_render, &application.mvp);
         rendering_properties_draw(0, main_index_count, &whole_screen_scissor);
         rendering_properties_end_draw(main_render);
-        
+
         rendering_properties_begin_draw(preview_render, &application.mvp);
-        rendering_properties_draw(0, preview_index_count, &whole_screen_scissor);
+        rendering_properties_draw(0, preview_index_count,
+                                  &whole_screen_scissor);
         rendering_properties_end_draw(preview_render);
 #endif
 

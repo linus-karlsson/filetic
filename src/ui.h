@@ -46,6 +46,11 @@ typedef struct UiWindow
     f32 current_scroll_offset;
     ScrollBar scroll_bar;
 
+    f32 total_width;
+    f32 end_scroll_offset_width;
+    f32 current_scroll_offset_width;
+    ScrollBar scroll_bar_width;
+
     DockNode* dock_node;
 
     b8 docked;
@@ -132,6 +137,9 @@ b8 ui_window_add_folder_list(V2 position, const f32 item_height, const Directory
 b8 ui_window_add_file_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
+void ui_window_add_text(V2 position, const char* text);
+b8 ui_window_set_overlay();
+
 
 DockNode* dock_node_create(NodeType type, SplitAxis split_axis, UiWindow* window);
 void dock_node_dock_window(DockNode* root, DockNode* window, SplitAxis split_axis, u8 where);

@@ -41,6 +41,7 @@ u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
     u32 count = 0;
     f32 start_x = pos.x;
     u32 new_lines = 0;
+    f32 x_max_advance = 0.0f;
     for (; *text; text++)
     {
         char current_char = *text;
@@ -67,6 +68,7 @@ u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
                 array_push(aabbs, aabb);
             }
             pos.x += c->x_advance * scale;
+            x_max_advance = max(x_max_advance, pos.x);
             count++;
         }
     }
@@ -76,7 +78,7 @@ u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
     }
     if (x_advance)
     {
-        *x_advance = pos.x - start_x;
+        *x_advance = x_max_advance - start_x;
     }
     return count * 6;
 }
