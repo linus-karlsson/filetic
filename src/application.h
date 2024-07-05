@@ -131,6 +131,9 @@ typedef struct ApplicationContext
     DropDownMenu2 suggestions;
     SuggestionSelectionData suggestion_data;
 
+    DropDownMenu2 top_bar_menu;
+    b8 top_bar_menu_open;
+
 } ApplicationContext;
 
 u8* application_initialize(ApplicationContext* application);

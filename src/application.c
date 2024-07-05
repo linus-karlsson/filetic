@@ -158,6 +158,29 @@ internal b8 suggestion_selection(u32 index, b8 hit, b8 should_close,
     return should_close;
 }
 
+internal b8 top_bar_menu_selection(u32 index, b8 hit, b8 should_close,
+                                   b8 item_clicked, V4* text_color, void* data)
+{
+    ApplicationContext* app = (ApplicationContext*)data;
+    if (item_clicked)
+    {
+        switch (index)
+        {
+            case 0:
+            {
+                app->show_quick_access = true;
+                break;
+            }
+            case 1:
+            {
+                app->show_search_page = true;
+                break;
+            }
+        }
+    }
+    return should_close;
+}
+
 internal void save_application_state(ApplicationContext* app)
 {
     FILE* file = fopen("saved/application.txt", "wb");
@@ -170,9 +193,8 @@ internal void save_application_state(ApplicationContext* app)
     fwrite(&app->tabs.size, sizeof(app->tabs.size), 1, file);
     for (u32 i = 0; i < app->tabs.size; ++i)
     {
-        char* path =
-            directory_current(&app->tabs.data[i].directory_history)
-                ->directory.parent;
+        char* path = directory_current(&app->tabs.data[i].directory_history)
+                         ->directory.parent;
         u32 path_length = (u32)strlen(path);
         fwrite(&path_length, sizeof(u32), 1, file);
         fwrite(path, sizeof(char), path_length, file);
@@ -383,14 +405,10 @@ u8* application_initialize(ApplicationContext* app)
     }
 
     app->current_window_index = 0;
-    app->top_bar_window =
-        app->windows.data[app->current_window_index++];
-    app->quick_access_window =
-        app->windows.data[app->current_window_index++];
-    app->search_result_window =
-        app->windows.data[app->current_window_index++];
-    app->preview_window =
-        app->windows.data[app->current_window_index++];
+    app->top_bar_window = app->windows.data[app->current_window_index++];
+    app->quick_access_window = app->windows.data[app->current_window_index++];
+    app->search_result_window = app->windows.data[app->current_window_index++];
+    app->preview_window = app->windows.data[app->current_window_index++];
 
     for (u32 i = 0; i < app->tabs.size; ++i)
     {
@@ -414,8 +432,7 @@ u8* application_initialize(ApplicationContext* app)
         [ADD_TO_QUICK_OPTION_INDEX] = "Add to quick",
         [PROPERTIES_OPTION_INDEX] = "Properties",
     };
-    array_create(&app->context_menu.options,
-                 static_array_size(options));
+    array_create(&app->context_menu.options, static_array_size(options));
     array_push(&app->context_menu.options,
                string_copy_d(options[COPY_OPTION_INDEX]));
     array_push(&app->context_menu.options,
@@ -448,6 +465,20 @@ u8* application_initialize(ApplicationContext* app)
     };
     array_create(&app->suggestion_data.items, 6);
 
+    app->top_bar_menu = (DropDownMenu2){
+        .index_count = &app->main_index_count,
+        .tab_index = -1,
+        .menu_options_selection = top_bar_menu_selection,
+        .render = &app->main_render,
+    };
+    array_create(&app->top_bar_menu.options, static_array_size(options));
+    char* top_bar_menu_options[] = {
+        "Quick access",
+        "Search result",
+    };
+    array_push(&app->top_bar_menu.options, string_copy_d(top_bar_menu_options[0]));
+    array_push(&app->top_bar_menu.options, string_copy_d(top_bar_menu_options[1]));
+
     return font_bitmap;
 }
 
@@ -466,6 +497,10 @@ void application_uninitialize(ApplicationContext* app)
     for (u32 i = 0; i < app->context_menu.options.size; ++i)
     {
         free(app->context_menu.options.data[i]);
+    }
+    for (u32 i = 0; i < app->top_bar_menu.options.size; ++i)
+    {
+        free(app->top_bar_menu.options.data[i]);
     }
 
     ui_context_destroy();
@@ -502,9 +537,8 @@ void application_begin_frame(ApplicationContext* app)
     glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    app->mvp.projection =
-        ortho(0.0f, app->dimensions.width,
-              app->dimensions.height, 0.0f, -1.0f, 1.0f);
+    app->mvp.projection = ortho(0.0f, app->dimensions.width,
+                                app->dimensions.height, 0.0f, -1.0f, 1.0f);
 
     app->main_index_count = 0;
     rendering_properties_clear(&app->main_render);
@@ -525,8 +559,7 @@ void application_begin_frame(ApplicationContext* app)
             {
                 array_push(&app->windows, ui_window_create());
             }
-            window_id =
-                app->windows.data[app->current_window_index++];
+            window_id = app->windows.data[app->current_window_index++];
         }
         array_back(&app->tabs)->window_id = window_id;
     }

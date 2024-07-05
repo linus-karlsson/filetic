@@ -1901,7 +1901,7 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
             input->time = 0.4f;
         }
         ui_input_buffer_clear_selection(input);
-        if (input->chars.size)
+        if (input->active && input->chars.size)
         {
             for (u32 i = 0; i < input->chars.size; ++i)
             {
@@ -1943,6 +1943,7 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
         quad(&ui_context.render.vertices, v2f(position_x, text_position.y),
              v2f(size_width, ui_context.font.pixel_height + 5.0f),
              ui_context.docking_color, 0.0f);
+        index_count += 6;
     }
     return index_count;
 }
@@ -2028,8 +2029,8 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
         ui_context.row_current += size.width + ui_context.padding;
     }
 
-    if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) ||
-        is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT))
+    if (is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT) ||
+        is_mouse_button_pressed(FTIC_MOUSE_BUTTON_RIGHT))
     {
         input->active = hover_clicked_index.index == (i32)aabbs->size;
     }
@@ -2066,7 +2067,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
         }
         else if (is_ctrl_and_key_pressed(FTIC_KEY_X))
         {
-            if(input->chars_selected.size)
+            if (input->chars_selected.size)
             {
                 ui_input_buffer_copy_selection_to_clipboard(input);
                 ui_input_buffer_erase_from_selection(input);
@@ -2467,7 +2468,7 @@ void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)
         max(window->total_width, relative_position.x + image_dimensions.width);
 }
 
-b8 ui_window_add_button(V2 position, const V2 dimensions, const V4* color,
+b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color,
                         const char* text)
 {
 
@@ -2490,9 +2491,10 @@ b8 ui_window_add_button(V2 position, const V2 dimensions, const V4* color,
         pixel_height += ui_context.font.pixel_height;
     }
 
-    V2 end_dimensions = v2f(max(dimensions.width, x_advance),
-                            max(dimensions.height, pixel_height));
+    V2 end_dimensions = v2f(max(dimensions->width, x_advance),
+                            max(dimensions->height, pixel_height));
 
+    *dimensions = end_dimensions;
     if (ui_context.row)
     {
         position.x += ui_context.row_current;
@@ -2536,7 +2538,7 @@ b8 ui_window_add_button(V2 position, const V2 dimensions, const V4* color,
     return collided && hover_clicked_index.clicked;
 }
 
-i32 ui_window_add_menu_bar(CharPtrArray* values, f32* height)
+i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
@@ -2552,18 +2554,22 @@ i32 ui_window_add_menu_bar(CharPtrArray* values, f32* height)
     ui_window_row_begin(0.0f);
     for (u32 i = 0; i < values->size; i++)
     {
-        if (ui_window_add_button(window->position, v2d(), NULL,
+        V2 current_dimensions = v2d();
+        const f32 current_x_position = ui_context.row_current;
+        if (ui_window_add_button(window->position, &current_dimensions, NULL,
                                  values->data[i]))
         {
+            if (position_of_clicked_item)
+            {
+                *position_of_clicked_item =
+                    v2f(current_x_position,
+                        window->position.y + current_dimensions.height);
+            }
             index = i;
         }
     }
     ui_window_row_end();
 
-    if (height)
-    {
-        *height = pixel_height;
-    }
     return index;
 }
 

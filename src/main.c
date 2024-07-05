@@ -736,7 +736,9 @@ int main(int argc, char** argv)
             (collision_point_in_aabb(app.mouse_position,
                                      &app.context_menu.aabb) ||
              collision_point_in_aabb(app.mouse_position,
-                                     &app.suggestions.aabb)))
+                                     &app.suggestions.aabb) ||
+             collision_point_in_aabb(app.mouse_position,
+                                     &app.top_bar_menu.aabb)))
         {
             check_collision = false;
         }
@@ -746,7 +748,7 @@ int main(int argc, char** argv)
             if (is_ctrl_and_key_pressed(FTIC_KEY_C))
             {
                 // TODO: this is used in input fields
-                //platform_copy_to_clipboard(&tab->selected_item_values.paths);
+                // platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
             else if (!show_preview &&
                      tab->selected_item_values.paths.size == 1 &&
@@ -787,8 +789,8 @@ int main(int argc, char** argv)
         if (is_ctrl_and_key_pressed(FTIC_KEY_V))
         {
             // TODO: this is used in input fields
-            //directory_paste_in_directory(
-             //   directory_current(&tab->directory_history));
+            // directory_paste_in_directory(
+            //   directory_current(&tab->directory_history));
         }
         if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
         {
@@ -811,6 +813,18 @@ int main(int argc, char** argv)
         {
             app.context_menu.aabb = (AABB){ 0 };
         }
+
+        b8 top_bar_open = app.top_bar_menu_open;
+        if (app.top_bar_menu_open)
+        {
+            app.top_bar_menu_open =
+                !drop_down_menu_add(&app.top_bar_menu, &app, &app);
+        }
+        else
+        {
+            app.top_bar_menu.aabb = (AABB){ 0 };
+        }
+
         const char* directory_to_drop_in = NULL;
 #if 0
         if (main_list_return_value.hit_index >= 0 &&
@@ -852,8 +866,15 @@ int main(int argc, char** argv)
 
             ui_window_begin(app.top_bar_window, false);
             {
-                f32 height = 0.0f;
-                ui_window_add_menu_bar(&menu_values, &height);
+                V2 drop_down_position = v2d();
+                i32 index_clicked =
+                    ui_window_add_menu_bar(&menu_values, &drop_down_position);
+                if (index_clicked != -1)
+                {
+                    app.top_bar_menu_open = top_bar_open ^ true;
+                    app.top_bar_menu.position = drop_down_position;
+                    app.top_bar_menu.x = 0.0f;
+                }
 
                 AABB button_aabb = { 0 };
                 button_aabb.size = v2i(40.0f),
@@ -910,7 +931,8 @@ int main(int argc, char** argv)
                             path, &app.parent_directory_input);
                     }
                     app.suggestion_data.change_directory = false;
-                    drop_down_menu_add(&app.suggestions, &app, &app.suggestion_data);
+                    drop_down_menu_add(&app.suggestions, &app,
+                                       &app.suggestion_data);
 
                     if (app.suggestion_data.change_directory ||
                         is_key_clicked(FTIC_KEY_ENTER))
@@ -925,9 +947,10 @@ int main(int argc, char** argv)
                             *last_char = '\0';
                             app.parent_directory_input.buffer.size--;
                         }
-                        if (!directory_go_to(app.parent_directory_input.buffer.data,
-                                             app.parent_directory_input.buffer.size,
-                                             &tab->directory_history))
+                        if (!directory_go_to(
+                                app.parent_directory_input.buffer.data,
+                                app.parent_directory_input.buffer.size,
+                                &tab->directory_history))
                         {
                         }
                         if (should_restore)
@@ -964,7 +987,8 @@ int main(int argc, char** argv)
                 if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
                                               &app.search_page.input))
                 {
-                    search_page_search(&app.search_page, &tab->directory_history,
+                    search_page_search(&app.search_page,
+                                       &tab->directory_history,
                                        &app.thread_queue.task_queue);
                 }
             }
@@ -972,24 +996,27 @@ int main(int argc, char** argv)
 
             const f32 list_item_height = app.font.pixel_height + 10.0f;
 
-            ui_window_begin(app.quick_access_window, true);
+            if (app.show_quick_access)
             {
-                V2 list_position = v2i(10.0f);
-                i32 selected_item = -1;
-                if (ui_window_add_folder_list(list_position, list_item_height,
-                                              &app.quick_access_folders, NULL,
-                                              &selected_item))
+                ui_window_begin(app.quick_access_window, true);
                 {
-                    directory_open_folder(
-                        app.quick_access_folders.data[selected_item].path,
-                        &tab->directory_history);
+                    V2 list_position = v2i(10.0f);
+                    i32 selected_item = -1;
+                    if (ui_window_add_folder_list(
+                            list_position, list_item_height,
+                            &app.quick_access_folders, NULL, &selected_item))
+                    {
+                        directory_open_folder(
+                            app.quick_access_folders.data[selected_item].path,
+                            &tab->directory_history);
+                    }
                 }
+                app.show_quick_access = !ui_window_end("Quick access", true);
             }
-            ui_window_end("Quick access", false);
 
-            show_search_result_window(&app.search_page, app.search_result_window,
-                                      list_item_height,
-                                      &tab->directory_history);
+            show_search_result_window(
+                &app.search_page, app.search_result_window, list_item_height,
+                &tab->directory_history);
 
             if (show_preview)
             {
@@ -1054,7 +1081,8 @@ int main(int argc, char** argv)
                 {
                     if (i != app.tab_index)
                     {
-                        directory_reset_selected_items(&tab->selected_item_values);
+                        directory_reset_selected_items(
+                            &tab->selected_item_values);
                     }
                     app.tab_index = i;
                 }
@@ -1091,14 +1119,15 @@ int main(int argc, char** argv)
         rendering_properties_check_and_grow_buffers(&app.main_render,
                                                     app.main_index_count);
 
-        buffer_set_sub_data(app.main_render.vertex_buffer_id, GL_ARRAY_BUFFER, 0,
-                            sizeof(Vertex) * app.main_render.vertices.size,
+        buffer_set_sub_data(app.main_render.vertex_buffer_id, GL_ARRAY_BUFFER,
+                            0, sizeof(Vertex) * app.main_render.vertices.size,
                             app.main_render.vertices.data);
 
         AABB whole_screen_scissor = { .size = app.dimensions };
 
         rendering_properties_begin_draw(&app.main_render, &app.mvp);
-        rendering_properties_draw(0, app.main_index_count, &whole_screen_scissor);
+        rendering_properties_draw(0, app.main_index_count,
+                                  &whole_screen_scissor);
         rendering_properties_end_draw(&app.main_render);
 #endif
 
