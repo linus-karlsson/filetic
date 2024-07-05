@@ -1357,6 +1357,7 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
                                  window->bottom_color, 0.0f));
     window->rendering_index_count += 6;
 
+    const f32 top_bar_height = 20.0f;
     window->top_bar = top_bar;
     if (window->top_bar)
     {
@@ -1382,21 +1383,27 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
             if (v2_distance(window->top_bar_offset,
                             event_get_mouse_position()) >= 10.0f)
             {
+                const V2 mouse_position = event_get_mouse_position();
                 if (window->docked)
                 {
                     window->docked = false;
                     dock_node_remove_node(ui_context.dock_tree,
                                           window->dock_node);
+
+                    window->position.x =
+                        mouse_position.x - (window->size.width * 0.5f);
+                    window->position.y =
+                        mouse_position.y - (top_bar_height * 0.5f);
                 }
                 window->top_bar_hold = true;
                 window->top_bar_offset =
-                    v2_sub(window->position, event_get_mouse_position());
+                    v2_sub(window->position, mouse_position);
             }
         }
     }
 
     window->first_item_position = window->position;
-    window->first_item_position.y += 20.0f * top_bar;
+    window->first_item_position.y += top_bar_height * top_bar;
 
     window->total_height = 0.0f;
     window->total_width = 0.0f;
