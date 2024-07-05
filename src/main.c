@@ -1084,7 +1084,8 @@ int main(int argc, char** argv)
                 else
                 {
                     UiWindow* preview = ui_window_get(app.preview_window);
-                    preview->size = v2f(500.0f, app.dimensions.height * 0.9f);
+                    preview->size = v2f(app.dimensions.width * 0.9f,
+                                        app.dimensions.height * 0.9f);
                     preview->position = v2f(
                         middle(app.dimensions.width, preview->size.width),
                         middle(app.dimensions.height, preview->size.height));
