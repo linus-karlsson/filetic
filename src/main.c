@@ -202,13 +202,6 @@ u32 load_icon_as_only_red(const char* file_path)
     return icon_texture;
 }
 
-b8 is_mouse_button_clicked(i32 button)
-{
-    const MouseButtonEvent* event = event_get_mouse_button_event();
-    return event->activated && event->action == FTIC_RELEASE &&
-           event->button == button;
-}
-
 b8 load_preview_image(const char* path, V2* image_dimensions,
                       U32Array* textures)
 {
@@ -752,7 +745,8 @@ int main(int argc, char** argv)
         {
             if (is_ctrl_and_key_pressed(FTIC_KEY_C))
             {
-                platform_copy_to_clipboard(&tab->selected_item_values.paths);
+                // TODO: this is used in input fields
+                //platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
             else if (!show_preview &&
                      tab->selected_item_values.paths.size == 1 &&
@@ -792,8 +786,9 @@ int main(int argc, char** argv)
         }
         if (is_ctrl_and_key_pressed(FTIC_KEY_V))
         {
-            directory_paste_in_directory(
-                directory_current(&tab->directory_history));
+            // TODO: this is used in input fields
+            //directory_paste_in_directory(
+             //   directory_current(&tab->directory_history));
         }
         if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
         {

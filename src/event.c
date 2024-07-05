@@ -197,6 +197,26 @@ const CharPtrArray* event_get_drop_buffer()
     return &event_context.drop_paths;
 }
 
+b8 is_mouse_button_clicked(i32 button)
+{
+    const MouseButtonEvent* event = event_get_mouse_button_event();
+    return event->activated && event->action == FTIC_RELEASE &&
+           event->button == button;
+}
+
+b8 is_mouse_button_pressed_once(i32 button)
+{
+    const MouseButtonEvent* event = event_get_mouse_button_event();
+    return event->activated && event->action == FTIC_PRESS &&
+           event->button == button;
+}
+
+b8 is_mouse_button_pressed(i32 button)
+{
+    const MouseButtonEvent* event = event_get_mouse_button_event();
+    return event->action == FTIC_PRESS && event->button == button;
+}
+
 b8 is_ctrl_and_key_pressed(i32 key)
 {
     const KeyEvent* event = event_get_key_event();

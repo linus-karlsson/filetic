@@ -36,7 +36,8 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
 u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
                           float texture_index, V2 pos, f32 scale,
                           f32 line_height, V4 color, u32* new_lines_count,
-                          f32* x_advance, AABBArray* aabbs, VertexArray* array)
+                          f32* x_advance, SelectionCharacterArray* selection_chars,
+                          VertexArray* array)
 {
     u32 count = 0;
     f32 start_x = pos.x;
@@ -61,11 +62,14 @@ u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
             AABB aabb = quad_co(array, curr_pos, size, color, c->text_coords,
                                 texture_index);
 
-            // TODO: do a check for every character is slow. make a seperate
-            // function for the aabbs
-            if (aabbs)
+            // TODO: do a check for every character is slow.
+            if (selection_chars)
             {
-                array_push(aabbs, aabb);
+                SelectionCharacter selection_char = {
+                    .character = current_char,
+                    .aabb = aabb,
+                };
+                array_push(selection_chars, selection_char);
             }
             pos.x += c->x_advance * scale;
             x_max_advance = max(x_max_advance, pos.x);

@@ -124,3 +124,13 @@ f64 window_get_time()
 {
     return glfwGetTime();
 }
+
+void window_set_clipboard(const char* text)
+{
+    glfwSetClipboardString(NULL, text);
+}
+
+const char* window_get_clipboard()
+{
+    return glfwGetClipboardString(NULL);
+}

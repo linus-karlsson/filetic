@@ -19,3 +19,5 @@ b8 aabb_equal(const AABB* first, const AABB* second);
 
 b8 collision_point_in_point(V2 point_pos, V2 target, V2 target_size);
 b8 collision_point_in_aabb(V2 point_pos, const AABB* target);
+
+u32 collision_point_in_aabb_what_side(V2 point_pos, const AABB* target);

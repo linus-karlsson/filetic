@@ -36,3 +36,6 @@ void window_poll_event();
 void window_swap(FTicWindow* window);
 void window_get_size(FTicWindow* window, int* width, int* height);
 double window_get_time();
+
+void window_set_clipboard(const char* text);
+const char* window_get_clipboard();

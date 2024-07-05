@@ -5,12 +5,11 @@
 
 #define PI 3.141592653589f
 
-
 #define array_create(array, array_capacity)                                    \
     do                                                                         \
     {                                                                          \
         (array)->size = 0;                                                     \
-        (array)->capacity = ((array_capacity) == 1 ? 2 : (array_capacity));        \
+        (array)->capacity = ((array_capacity) == 1 ? 2 : (array_capacity));    \
         (array)->data = calloc(array_capacity, sizeof((*(array)->data)));      \
     } while (0)
 
@@ -41,6 +40,17 @@
     {                                                                          \
         array_create(&(arr)->array, array_capacity);                           \
         (arr)->mutex = platform_mutex_create();                                \
+    } while (0)
+
+#define move_to_front(type, array, index)                                      \
+    do                                                                         \
+    {                                                                          \
+        type temp = (array)->data[(index)];                                    \
+        for (i32 i34251 = (index); i34251 >= 1; --i34251)                      \
+        {                                                                      \
+            (array)->data[i34251] = (array)->data[i34251 - 1];                 \
+        }                                                                      \
+        (array)->data[0] = temp;                                               \
     } while (0)
 
 #define static_array_size(array) (sizeof(array) / sizeof(array[0]))

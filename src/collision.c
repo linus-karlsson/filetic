@@ -22,3 +22,14 @@ b8 collision_point_in_aabb(V2 point_pos, const AABB* target)
              point_pos.y < target->min.y + target->size.y;
     return res;
 }
+
+u32 collision_point_in_aabb_what_side(V2 point_pos, const AABB* target)
+{
+    u32 side = 0;
+    if(collision_point_in_aabb(point_pos, target))
+    {
+        const f32 middle_point = target->min.x + target->size.width * 0.5f;
+        side = point_pos.x < middle_point ? 1 : 2;
+    }
+    return side;
+}

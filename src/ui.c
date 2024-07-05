@@ -129,6 +129,8 @@ typedef struct UiContext
 
     FontTTF font;
 
+    V4 docking_color;
+
     V2 dimensions;
     f64 delta_time;
 
@@ -168,24 +170,6 @@ internal f32 smooth_scroll(const f64 delta_time, const f32 offset,
     scroll_offset += (f32)((offset - scroll_offset) * (delta_time * 15.0f));
     return scroll_offset;
 }
-
-internal b8 is_mouse_button_clicked(i32 button)
-{
-    const MouseButtonEvent* event = event_get_mouse_button_event();
-    return event->activated && event->action == FTIC_RELEASE &&
-           event->button == button;
-}
-
-#define move_to_front(type, array, index)                                      \
-    do                                                                         \
-    {                                                                          \
-        type temp = (array)->data[(index)];                                    \
-        for (u32 i = (index); i >= 1; --i)                                     \
-        {                                                                      \
-            (array)->data[i] = (array)->data[i - 1];                           \
-        }                                                                      \
-        (array)->data[0] = temp;                                               \
-    } while (0)
 
 internal void push_window_to_front(UiContext* context, U32Array* window_array,
                                    const u32 index)
@@ -287,8 +271,7 @@ internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
     if (collision_point_in_aabb(event_get_mouse_position(), &aabb))
     {
         quad(&ui_context.render.vertices, expanded_position, expanded_size,
-             v4f(secondary_color.r, secondary_color.g, secondary_color.b, 0.4f),
-             0.0f);
+             ui_context.docking_color, 0.0f);
         *index_count += 6;
         result = true;
     }
@@ -745,7 +728,48 @@ InputBuffer ui_input_buffer_create()
         .time = 0.4f,
     };
     array_create(&input.buffer, 20);
+    array_create(&input.chars, 20);
+    array_create(&input.chars_selected, 20);
     return input;
+}
+
+void ui_input_buffer_clear_selection(InputBuffer* input)
+{
+    input->chars_selected.size = 0;
+    input->start_selection_index = -1;
+    input->end_selection_index = -1;
+}
+
+char* ui_input_buffer_get_selection_as_string(InputBuffer* input)
+{
+    char* text = (char*)calloc(input->chars_selected.size + 1, sizeof(char));
+    for (u32 i = 0; i < input->chars_selected.size; ++i)
+    {
+        text[i] = input->chars_selected.data[i].character;
+    }
+    return text;
+}
+
+void ui_input_buffer_copy_selection_to_clipboard(InputBuffer* input)
+{
+    char* text = ui_input_buffer_get_selection_as_string(input);
+    window_set_clipboard(text);
+    free(text);
+}
+
+void ui_input_buffer_erase_from_selection(InputBuffer* input)
+{
+    for (u32 i = input->start_selection_index, j = input->end_selection_index;
+         j < input->buffer.size; ++i, ++j)
+    {
+        input->buffer.data[i] = input->buffer.data[j];
+    }
+    input->input_index = input->start_selection_index;
+    input->buffer.size -=
+        input->end_selection_index - input->start_selection_index;
+
+    ui_input_buffer_clear_selection(input);
+    input->buffer.data[input->buffer.size] = '\0';
 }
 
 internal void insert_window(DockNode* node, const u32 id, const b8 docked)
@@ -910,6 +934,9 @@ void ui_context_create()
         shader, textures, &vertex_buffer_layout, 100 * 4, 100 * 4);
 
     ui_context.default_textures_offset = textures.size;
+
+    ui_context.docking_color =
+        v4f(secondary_color.r, secondary_color.g, secondary_color.b, 0.4f);
 }
 
 void ui_context_begin(const V2 dimensions, const AABB* dock_space,
@@ -1800,12 +1827,22 @@ b8 ui_window_add_icon_button(V2 position, const V2 size,
     return clicked;
 }
 
+internal void input_buffer_select_char(InputBuffer* input, u32 index)
+{
+    if (input->start_selection_index == -1)
+    {
+        input->start_selection_index = index;
+    }
+    input->end_selection_index = index + 1;
+    array_push(&input->chars_selected, input->chars.data[index]);
+}
+
 internal u32 render_input(const f64 delta_time, const V2 text_position,
                           InputBuffer* input)
 {
     u32 index_count = 0;
     // Blinking cursor
-    if (input->active)
+    if (input->active && input->chars_selected.size == 0)
     {
         if (input->input_index < 0)
         {
@@ -1837,20 +1874,75 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
             quad(
                 &ui_context.render.vertices,
                 v2f(text_position.x + x_advance + 1.0f, text_position.y + 2.0f),
-                v2f(2.0f, 16.0f), v4i(1.0f), 0.0f);
+                v2f(1.0f, 16.0f), v4i(1.0f), 0.0f);
             index_count += 6;
 
             input->time = input->time >= 0.8f ? 0 : input->time;
         }
     }
+    input->chars.size = 0;
     if (input->buffer.size)
     {
         index_count +=
             text_generation(ui_context.font.chars, input->buffer.data, 1.0f,
                             v2f(text_position.x,
                                 text_position.y + ui_context.font.pixel_height),
-                            1.0f, ui_context.font.line_height, NULL, NULL, NULL,
-                            &ui_context.render.vertices);
+                            1.0f, ui_context.font.line_height, NULL, NULL,
+                            &input->chars, &ui_context.render.vertices);
+    }
+    if (is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT))
+    {
+        const V2 mouse_position = event_get_mouse_position();
+        if (event_get_mouse_button_event()->activated)
+        {
+            // This happens only once when the button is pressed.
+            input->selected_pivot_point = mouse_position.x;
+            input->selected = true;
+            input->time = 0.4f;
+        }
+        ui_input_buffer_clear_selection(input);
+        if (input->chars.size)
+        {
+            for (u32 i = 0; i < input->chars.size; ++i)
+            {
+                const AABB* current_aabb = &input->chars.data[i].aabb;
+                const f32 middle_point =
+                    current_aabb->min.x + (current_aabb->size.width * 0.5f);
+
+                if (mouse_position.x > middle_point)
+                {
+                    input->input_index = i + 1;
+                    if (mouse_position.x > input->selected_pivot_point &&
+                        middle_point > input->selected_pivot_point)
+                    {
+                        input_buffer_select_char(input, i);
+                    }
+                }
+                else if (mouse_position.x < input->selected_pivot_point &&
+                         middle_point < input->selected_pivot_point)
+                {
+                    input_buffer_select_char(input, i);
+                }
+            }
+        }
+    }
+    else
+    {
+        input->selected = false;
+    }
+    if (input->chars_selected.size)
+    {
+        if (is_ctrl_and_key_pressed(FTIC_KEY_C))
+        {
+            ui_input_buffer_copy_selection_to_clipboard(input);
+        }
+        const f32 position_x = input->chars_selected.data[0].aabb.min.x;
+        const AABB* last_char = &array_back(&input->chars_selected)->aabb;
+        const f32 size_width =
+            (last_char->min.x + last_char->size.width) - position_x;
+        quad(&ui_context.render.vertices, v2f(position_x, text_position.y),
+             v2f(size_width, ui_context.font.pixel_height + 5.0f),
+             ui_context.docking_color, 0.0f);
     }
     return index_count;
 }
@@ -1900,13 +1992,19 @@ internal b8 erase_char(InputBuffer* input)
     {
         if (input->input_index > 0)
         {
-            input->input_index--;
-            for (u32 i = input->input_index; i < input->buffer.size; ++i)
+            if (input->chars_selected.size)
             {
-                input->buffer.data[i] = input->buffer.data[i + 1];
+                ui_input_buffer_erase_from_selection(input);
             }
-            *array_back(&input->buffer) = '\0';
-            input->buffer.size--;
+            else
+            {
+                input->input_index--;
+                for (u32 i = input->input_index; i < input->buffer.size; ++i)
+                {
+                    input->buffer.data[i] = input->buffer.data[i + 1];
+                }
+                input->buffer.data[--input->buffer.size] = '\0';
+            }
             return true;
         }
     }
@@ -1944,6 +2042,33 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
     {
         typed = erase_char(input);
         typed |= add_from_key_buffer(size.width - 10.0f, input);
+
+        if (is_ctrl_and_key_pressed(FTIC_KEY_V))
+        {
+            const char* clip_board = window_get_clipboard();
+            if (clip_board)
+            {
+                typed = true;
+                const u32 clip_board_length = (u32)strlen(clip_board);
+                for (u32 i = 0; i < clip_board_length; ++i)
+                {
+                    array_push(&input->buffer, clip_board[i]);
+                    for (i32 j = ((i32)input->buffer.size) - 1;
+                         j > input->input_index; --j)
+                    {
+                        input->buffer.data[j] = input->buffer.data[j - 1];
+                    }
+                    input->buffer.data[input->input_index++] = clip_board[i];
+                }
+                array_push(&input->buffer, '\0');
+                input->buffer.size--;
+            }
+        }
+        else if (is_ctrl_and_key_pressed(FTIC_KEY_X))
+        {
+            ui_input_buffer_copy_selection_to_clipboard(input);
+            ui_input_buffer_erase_from_selection(input);
+        }
     }
     V2 text_position =
         v2f(position.x + 5.0f,

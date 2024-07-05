@@ -202,14 +202,14 @@ void threads_uninitialize(ThreadQueue* queue)
     {
         // TODO: This might not be a good idea. Should only be called on program
         // close
-        platform_thread_terminate(queue->pool[i]);
+        //platform_thread_terminate(queue->pool[i]);
         platform_thread_join(queue->pool[i]);
-        // platform_thread_close(queue->pool[i]);
+        platform_thread_close(queue->pool[i]);
     }
     free(queue->pool);
     free(queue->attribs);
     free(queue->task_queue.tasks);
     free(queue->task_queue.id_to_count.cells);
-    platform_semaphore_destroy(queue->task_queue.start_semaphore);
-    platform_semaphore_destroy(queue->task_queue.mutex);
+    platform_semaphore_destroy(&queue->task_queue.start_semaphore);
+    platform_semaphore_destroy(&queue->task_queue.mutex);
 }
