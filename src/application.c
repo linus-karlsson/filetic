@@ -394,26 +394,31 @@ u8* application_initialize(ApplicationContext* app)
 
     search_page_initialize(&app->search_page);
 
-    array_create(&app->free_window_ids, 10);
+    ui_context_create();
+
     array_create(&app->windows, 20);
+    for (u32 i = 0; i < 20; ++i)
     {
-        ui_context_create();
-        for (u32 i = 0; i < 20; ++i)
-        {
-            array_push(&app->windows, ui_window_create());
-        }
+        array_push(&app->windows, ui_window_create());
+    }
+    app->top_bar_window = app->windows.data[0];
+    app->bottom_bar_window = app->windows.data[1];
+    app->quick_access_window = app->windows.data[2];
+    app->search_result_window = app->windows.data[3];
+    app->preview_window = app->windows.data[4];
+
+    array_create(&app->free_window_ids, 10);
+    array_create(&app->tab_windows, 20);
+    for(u32 i = 0; i < 20; ++i)
+    {
+        array_push(&app->tab_windows, ui_window_create());
     }
 
-    app->current_window_index = 0;
-    app->top_bar_window = app->windows.data[app->current_window_index++];
-    app->quick_access_window = app->windows.data[app->current_window_index++];
-    app->search_result_window = app->windows.data[app->current_window_index++];
-    app->preview_window = app->windows.data[app->current_window_index++];
-
+    app->current_tab_window_index = 0;
     for (u32 i = 0; i < app->tabs.size; ++i)
     {
         app->tabs.data[i].window_id =
-            app->windows.data[app->current_window_index++];
+            app->tab_windows.data[app->current_tab_window_index++];
     }
 
     array_create(&app->pasted_paths, 10);
@@ -476,8 +481,10 @@ u8* application_initialize(ApplicationContext* app)
         "Quick access",
         "Search result",
     };
-    array_push(&app->top_bar_menu.options, string_copy_d(top_bar_menu_options[0]));
-    array_push(&app->top_bar_menu.options, string_copy_d(top_bar_menu_options[1]));
+    array_push(&app->top_bar_menu.options,
+               string_copy_d(top_bar_menu_options[0]));
+    array_push(&app->top_bar_menu.options,
+               string_copy_d(top_bar_menu_options[1]));
 
     return font_bitmap;
 }
@@ -502,6 +509,9 @@ void application_uninitialize(ApplicationContext* app)
     {
         free(app->top_bar_menu.options.data[i]);
     }
+    free(app->windows.data);
+    free(app->tab_windows.data);
+    free(app->free_window_ids.data);
 
     ui_context_destroy();
 
@@ -555,11 +565,11 @@ void application_begin_frame(ApplicationContext* app)
         }
         else
         {
-            if (app->windows.size <= app->current_window_index)
+            if (app->tab_windows.size <= app->current_tab_window_index)
             {
-                array_push(&app->windows, ui_window_create());
+                ftic_assert(false);
             }
-            window_id = app->windows.data[app->current_window_index++];
+            window_id = app->tab_windows.data[app->current_tab_window_index++];
         }
         array_back(&app->tabs)->window_id = window_id;
     }

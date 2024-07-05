@@ -20,7 +20,29 @@ typedef struct HoverClickedIndex
     b8 double_clicked;
 } HoverClickedIndex;
 
-typedef struct DockNode DockNode;
+typedef enum NodeType
+{
+    NODE_ROOT,
+    NODE_PARENT,
+    NODE_LEAF
+} NodeType;
+
+typedef enum SplitAxis
+{
+    SPLIT_NONE,
+    SPLIT_HORIZONTAL,
+    SPLIT_VERTICAL
+} SplitAxis;
+
+typedef struct DockNode
+{
+    NodeType type;
+    SplitAxis split_axis;
+    i32 window;
+    struct DockNode* children[2];
+    AABB aabb;
+    f32 size_ratio;
+}DockNode;
 
 #define RESIZE_NONE 0
 #define RESIZE_RIGHT BIT_1
@@ -74,29 +96,6 @@ typedef struct UiWindow
 #define DOCK_SIDE_BOTTOM 0
 #define DOCK_SIDE_TOP 1
 
-typedef enum
-{
-    NODE_ROOT,
-    NODE_PARENT,
-    NODE_LEAF
-} NodeType;
-
-typedef enum
-{
-    SPLIT_NONE,
-    SPLIT_HORIZONTAL,
-    SPLIT_VERTICAL
-} SplitAxis;
-
-struct DockNode
-{
-    NodeType type;
-    SplitAxis split_axis;
-    i32 window;
-    DockNode* children[2];
-    AABB aabb;
-    f32 size_ratio;
-};
 
 typedef struct InputBuffer
 {
@@ -153,10 +152,11 @@ b8 ui_window_add_folder_list(V2 position, const f32 item_height, const Directory
 b8 ui_window_add_file_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
-void ui_window_add_text(V2 position, const char* text);
+void ui_window_add_text(V2 position, const char* text, b8 scrolling);
 b8 ui_window_set_overlay();
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image);
 i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item);
+void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index);
 
 DockNode* dock_node_create(NodeType type, SplitAxis split_axis, i32 window);
 void dock_node_dock_window(DockNode* root, DockNode* window,

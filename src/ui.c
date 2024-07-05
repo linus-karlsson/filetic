@@ -571,8 +571,9 @@ i32 root_display_docking(DockNode* dock_node)
                                   middle_left_right.y);
 
     const V2 bottom_position =
-        v2f(middle_top_bottom.x, dock_node->aabb.size.height -
-                                     (docking_size_top_bottom.height + 10.0f));
+        v2f(middle_top_bottom.x,
+            (dock_node->aabb.min.y + dock_node->aabb.size.height) -
+                (docking_size_top_bottom.height + 10.0f));
 
     const V2 left_position =
         v2f(dock_node->aabb.min.x + 10.0f, middle_left_right.y);
@@ -1819,6 +1820,7 @@ b8 ui_window_add_icon_button(V2 position, const V2 size,
     V2 icon_position =
         v2_add(position, v2f(middle(size.width, icon_size.width),
                              middle(size.height, icon_size.height)));
+    v2_add_equal(&position, window->first_item_position);
 
     quad_co(&ui_context.render.vertices, icon_position, icon_size, button_color,
             texture_coordinates, texture_index);
@@ -2394,7 +2396,7 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
            is_key_clicked(FTIC_KEY_ESCAPE);
 }
 
-void ui_window_add_text(V2 position, const char* text)
+void ui_window_add_text(V2 position, const char* text, b8 scrolling)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
@@ -2402,6 +2404,11 @@ void ui_window_add_text(V2 position, const char* text)
 
     V2 relative_position = position;
     v2_add_equal(&position, window->first_item_position);
+
+    if (ui_context.row)
+    {
+        position.x += ui_context.row_current;
+    }
 
     position.y += window->current_scroll_offset + ui_context.font.pixel_height;
     position.x += window->current_scroll_offset_width;
@@ -2413,12 +2420,20 @@ void ui_window_add_text(V2 position, const char* text)
                         ui_context.font.line_height, &new_lines, &x_advance,
                         NULL, &ui_context.render.vertices);
 
-    window->total_height =
-        max(window->total_height,
+    if (ui_context.row)
+    {
+        ui_context.row_current += x_advance + ui_context.padding;
+    }
+
+    if (scrolling)
+    {
+        window->total_height = max(
+            window->total_height,
             relative_position.y + (++new_lines * ui_context.font.line_height));
 
-    window->total_width =
-        max(window->total_width, relative_position.x + x_advance + 20.0f);
+        window->total_width =
+            max(window->total_width, relative_position.x + x_advance + 20.0f);
+    }
 }
 
 b8 ui_window_set_overlay()
@@ -2573,3 +2588,21 @@ i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item)
     return index;
 }
 
+void ui_window_add_icon(V2 position, const V2 size,
+                        const V4 texture_coordinates, const f32 texture_index)
+{
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+
+    v2_add_equal(&position, window->first_item_position);
+
+    if (ui_context.row)
+    {
+        position.x += ui_context.row_current;
+        ui_context.row_current += size.width + ui_context.padding;
+    }
+    quad_co(&ui_context.render.vertices, position, size, v4ic(1.0f),
+            texture_coordinates, texture_index);
+    window->rendering_index_count += 6;
+}

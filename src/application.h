@@ -115,8 +115,11 @@ typedef struct ApplicationContext
 
     U32Array free_window_ids;
     U32Array windows;
-    u32 current_window_index;
+    U32Array tab_windows;
+    u32 current_tab_window_index;
+
     u32 top_bar_window;
+    u32 bottom_bar_window;
     u32 quick_access_window;
     u32 search_result_window;
     u32 preview_window;

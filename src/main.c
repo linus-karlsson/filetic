@@ -508,13 +508,19 @@ b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
         drop_down_menu->position.x -= diff;
     }
 
-    drop_down_menu->aabb = quad_border_gradiant(
-        &drop_down_menu->render->vertices, drop_down_menu->index_count,
+    drop_down_menu->aabb = quad_gradiant_t_b(
+        &drop_down_menu->render->vertices,
         v2f(drop_down_menu->position.x - drop_down_border_width,
             drop_down_menu->position.y - drop_down_border_width),
         v2f(drop_down_width + border_extra_padding,
             current_y + border_extra_padding),
-        lighter_color, lighter_color, drop_down_border_width, 0.0f);
+        v4ic(0.15f), clear_color, 0.0f);
+    *drop_down_menu->index_count += 6;
+
+    quad_border_gradiant(&drop_down_menu->render->vertices,
+                         drop_down_menu->index_count, drop_down_menu->aabb.min,
+                         drop_down_menu->aabb.size, lighter_color,
+                         lighter_color, drop_down_border_width, 0.0f);
 
     b8 item_clicked = false;
 
@@ -564,12 +570,12 @@ b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
             }
         }
 
-        const V4 drop_down_color =
-            drop_down_item_hit ? border_color : high_light_color;
-
-        quad(&drop_down_menu->render->vertices, promt_item_position,
-             drop_down_item_aabb.size, drop_down_color, 0.0f);
-        *drop_down_menu->index_count += 6;
+        if (drop_down_item_hit)
+        {
+            quad(&drop_down_menu->render->vertices, promt_item_position,
+                 drop_down_item_aabb.size, border_color, 0.0f);
+            *drop_down_menu->index_count += 6;
+        }
 
         V2 promt_item_text_position = promt_item_position;
         promt_item_text_position.y +=
@@ -849,10 +855,12 @@ int main(int argc, char** argv)
 
         const f32 top_bar_height = 52.0f;
         const f32 top_bar_menu_height = 10.0f + app.font.pixel_height;
+        const f32 bottom_bar_heighth = 25.0f;
 
         AABB dock_space = { .min = v2f(0.0f,
                                        top_bar_height + top_bar_menu_height) };
         dock_space.size = v2_sub(app.dimensions, dock_space.min);
+        dock_space.size.height -= bottom_bar_heighth;
         ui_context_begin(app.dimensions, &dock_space, app.delta_time,
                          check_collision);
         {
@@ -994,6 +1002,36 @@ int main(int argc, char** argv)
             }
             ui_window_end(NULL, false);
 
+            UiWindow* bottom_bar = ui_window_get(app.bottom_bar_window);
+            bottom_bar->position =
+                v2f(0.0f, app.dimensions.height - bottom_bar_heighth);
+            bottom_bar->size = v2f(app.dimensions.width, bottom_bar_heighth);
+            bottom_bar->top_color = v4ic(0.2f);
+            bottom_bar->bottom_color = v4ic(0.15f);
+            ui_window_begin(app.bottom_bar_window, false);
+            {
+                Directory current =
+                    directory_current(&tab->directory_history)->directory;
+                char buffer[10] = { 0 };
+                sprintf_s(buffer, sizeof(buffer), "%u",
+                          current.sub_directories.size);
+
+                V2 position = v2f(10.0f, 2.0f);
+                ui_window_row_begin(10.0f);
+
+                ui_window_add_icon(position, v2i(20.0f), folder_icon_co, 2.0f);
+                ui_window_add_text(position, buffer, false);
+
+                memset(buffer, 0, sizeof(buffer));
+                sprintf_s(buffer, sizeof(buffer), "%u",
+                          current.sub_directories.size);
+                ui_window_add_icon(position, v2i(20.0f), file_icon_co, 2.0f);
+
+                position.x += ui_window_row_end() - 4.0f;
+                ui_window_add_text(position, buffer, false);
+            }
+            ui_window_end(NULL, false);
+
             const f32 list_item_height = app.font.pixel_height + 10.0f;
 
             if (app.show_quick_access)
@@ -1055,7 +1093,7 @@ int main(int argc, char** argv)
                     {
                         show_preview = !ui_window_set_overlay();
                         ui_window_add_text(v2f(10.0f, 10.0f),
-                                           (char*)preview_file.buffer);
+                                           (char*)preview_file.buffer, true);
                     }
                     ui_window_end(NULL, false);
                 }
