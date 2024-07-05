@@ -153,7 +153,7 @@ internal u64 hash_function_u64(const void* key, u32 len, u64 seed)
     return *((u64*)key);
 }
 
-void thread_init(u32 capacity, u32 thread_count, ThreadQueue* queue)
+void thread_initialize(u32 capacity, u32 thread_count, ThreadQueue* queue)
 {
     ftic_assert(!queue->pool);
     if (thread_count > 8)
@@ -187,7 +187,7 @@ void thread_init(u32 capacity, u32 thread_count, ThreadQueue* queue)
     }
 }
 
-void threads_destroy(ThreadQueue* queue)
+void threads_uninitialize(ThreadQueue* queue)
 {
     const u32 thread_count = queue->pool_size;
     for (u32 i = 0; i < thread_count; i++)
@@ -200,7 +200,16 @@ void threads_destroy(ThreadQueue* queue)
     }
     for (u32 i = 0; i < thread_count; i++)
     {
+        // TODO: This might not be a good idea. Should only be called on program
+        // close
+        platform_thread_terminate(queue->pool[i]);
         platform_thread_join(queue->pool[i]);
-        platform_thread_close(queue->pool[i]);
+        // platform_thread_close(queue->pool[i]);
     }
+    free(queue->pool);
+    free(queue->attribs);
+    free(queue->task_queue.tasks);
+    free(queue->task_queue.id_to_count.cells);
+    platform_semaphore_destroy(queue->task_queue.start_semaphore);
+    platform_semaphore_destroy(queue->task_queue.mutex);
 }

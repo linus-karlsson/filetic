@@ -57,6 +57,7 @@ void file_format_size(u64 size_in_bytes, char* output, size_t output_size);
 
 f32 lerp_f32(const f32 a, const f32 b, const f32 t);
 V4 v4_lerp(V4 v1, V4 v2, f32 t);
+#define string_copy_d(string) string_copy(string, (u32)strlen(string), 0)
 char* string_copy(const char* string, const u32 string_length, const u32 extra_length);
 i32 string_compare_case_insensitive(const char* first, const char* second);
 u32 string_span_case_insensitive(const char* first, const char* second);
@@ -72,3 +73,5 @@ void log_f32(const char* message, const f32 value);
 void log_u64(const char* message, const u64 value);
 
 f32 ease_out_elastic(const f32 x);
+
+u32 get_path_length(const char* path, u32 path_length);

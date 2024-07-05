@@ -56,7 +56,7 @@ void semaphore_counter_wait(SemaphoreCounter* semaphore_counter);
 void semaphore_counter_wait_and_free(SemaphoreCounter* semaphore_counter);
 void thread_tasks_push(ThreadTaskQueue* task_queue, ThreadTask* tasks, u32 task_count, SemaphoreCounter* semaphore_counter);
 u64 thread_get_task_count(ThreadTaskQueue* task_queue, u64 id);
-void thread_init(u32 capacity, u32 thread_count, ThreadQueue* queue);
-void threads_destroy(ThreadQueue* queue);
+void thread_initialize(u32 capacity, u32 thread_count, ThreadQueue* queue);
+void threads_uninitialize(ThreadQueue* queue);
 
 extern u32 global_thread_count;

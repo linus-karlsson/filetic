@@ -265,3 +265,16 @@ f32 ease_out_elastic(const f32 x)
 
     return powf(2.0f, -10.0f * x) * sinf((x * 10.0f - 0.75f) * c4) + 1.0f;
 }
+
+u32 get_path_length(const char* path, u32 path_length)
+{
+    for (i32 i = path_length - 1; i >= 0; --i)
+    {
+        const char current_char = path[i];
+        if (current_char == '\\' || current_char == '/')
+        {
+            return i + 1;
+        }
+    }
+    return 0;
+}
