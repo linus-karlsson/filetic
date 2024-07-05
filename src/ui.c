@@ -2048,7 +2048,6 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
             const char* clip_board = window_get_clipboard();
             if (clip_board)
             {
-                typed = true;
                 const u32 clip_board_length = (u32)strlen(clip_board);
                 for (u32 i = 0; i < clip_board_length; ++i)
                 {
@@ -2062,12 +2061,17 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
                 }
                 array_push(&input->buffer, '\0');
                 input->buffer.size--;
+                typed = true;
             }
         }
         else if (is_ctrl_and_key_pressed(FTIC_KEY_X))
         {
-            ui_input_buffer_copy_selection_to_clipboard(input);
-            ui_input_buffer_erase_from_selection(input);
+            if(input->chars_selected.size)
+            {
+                ui_input_buffer_copy_selection_to_clipboard(input);
+                ui_input_buffer_erase_from_selection(input);
+                typed = true;
+            }
         }
     }
     V2 text_position =
