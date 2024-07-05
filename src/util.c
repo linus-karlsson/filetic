@@ -106,7 +106,6 @@ const char* file_get_extension(const char* path, const u32 path_length)
     return NULL;
 }
 
-
 void file_format_size(u64 size_in_bytes, char* output, size_t output_size)
 {
     const u64 KB = 1024;
@@ -139,6 +138,10 @@ f32 lerp_f32(const f32 a, const f32 b, const f32 t)
 V4 v4_lerp(V4 v1, V4 v2, f32 t)
 {
     return v4_add(v1, v4_s_multi(v4_sub(v2, v1), t));
+}
+V2 v2_lerp(V2 v1, V2 v2, f32 t)
+{
+    return v2_add(v1, v2_s_multi(v2_sub(v2, v1), t));
 }
 
 char* string_copy(const char* string, const u32 string_length,
@@ -264,6 +267,16 @@ f32 ease_out_elastic(const f32 x)
     const f32 c4 = (2.0f * PI) / 3.0f;
 
     return powf(2.0f, -10.0f * x) * sinf((x * 10.0f - 0.75f) * c4) + 1.0f;
+}
+
+f32 ease_out_sine(const f32 x)
+{
+    return sinf((x * PI) / 2);
+}
+
+f32 ease_out_cubic(const f32 x)
+{
+    return 1 - powf(1 - x, 3);
 }
 
 u32 get_path_length(const char* path, u32 path_length)

@@ -197,6 +197,28 @@ internal void push_window_to_front(UiContext* context, U32Array* window_array,
                   */
 }
 
+internal void push_window_to_first_docked(UiContext* context,
+                                          U32Array* window_array,
+                                          const u32 index)
+{
+    if ((!window_array->size) || (index == 0))
+    {
+        return;
+    }
+    u32 index_to_insert = 0;
+    u32 temp = window_array->data[(index)];
+    for (u32 i = (index); i >= 1; --i)
+    {
+        if (ui_window_get(window_array->data[i - 1])->docked)
+        {
+            index_to_insert = i;
+            break;
+        }
+        window_array->data[i] = window_array->data[i - 1];
+    }
+    window_array->data[index_to_insert] = temp;
+}
+
 #define move_to_back(type, array, index)                                       \
     do                                                                         \
     {                                                                          \
@@ -256,6 +278,25 @@ internal u32 get_window_index(const u32 id_index)
 {
     return ui_context.id_to_index
         .data[ui_context.last_frame_windows.data[id_index]];
+}
+
+internal void window_start_size_animation(UiWindow* window, V2 start_size,
+                                          V2 end_size)
+{
+    window->size_animation_precent = 0.0f;
+    window->size_before_animation = start_size;
+    window->size_after_animation = end_size;
+    window->size_animation_on = true;
+}
+
+internal void window_start_position_animation(UiWindow* window,
+                                              V2 start_position,
+                                              V2 end_position)
+{
+    window->position_animation_precent = 0.0f;
+    window->position_before_animation = start_position;
+    window->position_after_animation = end_position;
+    window->position_animation_on = true;
 }
 
 internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
@@ -326,14 +367,35 @@ internal void dock_node_set_split(DockNode* split_node, DockNode* parent,
     {
         UiWindow* left_window = ui_window_get(left->window);
         left_window->position = left->aabb.min;
-        left_window->size = left->aabb.size;
+        if (ui_context.dock_resize)
+        {
+            left_window->position = left->aabb.min;
+            left_window->size = left->aabb.size;
+        }
+        else
+        {
+            window_start_position_animation(left_window, left_window->position,
+                                            left->aabb.min);
+            window_start_size_animation(left_window, left_window->size,
+                                        left->aabb.size);
+        }
     }
     DockNode* right = split_node->children[1];
     if (right->window != -1)
     {
         UiWindow* right_window = ui_window_get(right->window);
-        right_window->position = right->aabb.min;
-        right_window->size = right->aabb.size;
+        if (ui_context.dock_resize)
+        {
+            right_window->position = right->aabb.min;
+            right_window->size = right->aabb.size;
+        }
+        else
+        {
+            window_start_position_animation(
+                right_window, right_window->position, right->aabb.min);
+            window_start_size_animation(right_window, right_window->size,
+                                        right->aabb.size);
+        }
     }
 }
 
@@ -464,8 +526,6 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
     DockNode* right = node_before->children[1];
     if (left->type == NODE_LEAF && left->window == node_to_remove->window)
     {
-        node_to_remove->aabb.size =
-            ui_window_get(node_to_remove->window)->size = v2i(200.0f);
         node_before->type = right->type;
         node_before->split_axis = right->split_axis;
         node_before->window = right->window;
@@ -481,8 +541,6 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
     else if (right->type == NODE_LEAF &&
              right->window == node_to_remove->window)
     {
-        node_to_remove->aabb.size =
-            ui_window_get(node_to_remove->window)->size = v2i(200.0f);
         node_before->type = left->type;
         node_before->split_axis = left->split_axis;
         node_before->window = left->window;
@@ -1156,8 +1214,9 @@ void ui_context_end()
         if (any_hit)
         {
             focused_window->docked = true;
-            push_window_to_front(&ui_context, &ui_context.last_frame_windows,
-                                 ui_context.last_frame_windows.size - 1);
+            push_window_to_first_docked(&ui_context,
+                                        &ui_context.last_frame_windows,
+                                        ui_context.last_frame_windows.size - 1);
         }
         ui_context.dock_side_hit = -1;
         // ui_context.dock_hit_node = NULL;
@@ -1293,7 +1352,6 @@ void ui_context_end()
             scissor.min.y = ui_context.dimensions.y -
                             (window->position.y + window->size.height);
             scissor.size = window->size;
-            scissor.size.width += 1.0f;
         }
         rendering_properties_draw(window->rendering_index_offset,
                                   window->rendering_index_count, &scissor);
@@ -1377,6 +1435,7 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
             window->position.x = clampf32_low(window->position.x, 0.0f);
 
             window->dock_node->aabb.min = window->position;
+            window->dock_node->aabb.size = window->size;
         }
         else if (window->top_bar_pressed)
         {
@@ -1390,16 +1449,59 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
                     dock_node_remove_node(ui_context.dock_tree,
                                           window->dock_node);
 
-                    window->position.x =
-                        mouse_position.x - (window->size.width * 0.5f);
                     window->position.y =
                         mouse_position.y - (top_bar_height * 0.5f);
+
+                    window_start_size_animation(window, window->size,
+                                                v2i(200.0f));
                 }
                 window->top_bar_hold = true;
                 window->top_bar_offset =
                     v2_sub(window->position, mouse_position);
             }
         }
+    }
+
+    const f32 animation_speed = 4.0f;
+    if (window->size_animation_on)
+    {
+        if (window->size_animation_precent >= 1.0f)
+        {
+            window->size = window->size_after_animation;
+            window->size_animation_on = false;
+        }
+        else
+        {
+            window->size = v2_lerp(
+                window->size_before_animation, window->size_after_animation,
+                ease_out_cubic(window->size_animation_precent));
+        }
+        window->size_animation_precent +=
+            clampf32_low((f32)ui_context.delta_time, 0.0f) * animation_speed;
+
+        if (window->top_bar_hold)
+        {
+            const V2 mouse_position = event_get_mouse_position();
+            window->position.x = mouse_position.x - (window->size.width * 0.5f);
+            window->top_bar_offset = v2_sub(window->position, mouse_position);
+        }
+    }
+    if (window->position_animation_on)
+    {
+        if (window->position_animation_precent >= 1.0f)
+        {
+            window->position = window->position_after_animation;
+            window->position_animation_on = false;
+        }
+        else
+        {
+            window->position =
+                v2_lerp(window->position_before_animation,
+                        window->position_after_animation,
+                        ease_out_cubic(window->position_animation_precent));
+        }
+        window->position_animation_precent +=
+            clampf32_low((f32)ui_context.delta_time, 0.0f) * animation_speed;
     }
 
     window->first_item_position = window->position;

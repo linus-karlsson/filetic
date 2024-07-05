@@ -64,6 +64,14 @@ typedef struct UiWindow
     u32 rendering_index_offset;
     u32 rendering_index_count;
 
+    V2 position_before_animation;
+    V2 position_after_animation;
+    f32 position_animation_precent; 
+
+    V2 size_before_animation;
+    V2 size_after_animation;
+    f32 size_animation_precent; 
+
     f32 total_height;
     f32 end_scroll_offset;
     f32 current_scroll_offset;
@@ -87,6 +95,8 @@ typedef struct UiWindow
     u8 resizeable;
 
     b8 any_holding;
+    b8 size_animation_on;
+    b8 position_animation_on;
 
 } UiWindow;
 
