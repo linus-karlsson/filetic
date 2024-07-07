@@ -285,7 +285,7 @@ internal u32 get_window_index(const u32 id_index)
         .data[ui_context.last_frame_windows.data[id_index]];
 }
 
-internal void window_start_size_animation(UiWindow* window, V2 start_size,
+void ui_window_start_size_animation(UiWindow* window, V2 start_size,
                                           V2 end_size)
 {
     window->size_animation_precent = 0.0f;
@@ -294,7 +294,7 @@ internal void window_start_size_animation(UiWindow* window, V2 start_size,
     window->size_animation_on = true;
 }
 
-internal void window_start_position_animation(UiWindow* window,
+void ui_window_start_position_animation(UiWindow* window,
                                               V2 start_position,
                                               V2 end_position)
 {
@@ -379,9 +379,9 @@ internal void dock_node_set_split(DockNode* split_node, DockNode* parent,
         }
         else
         {
-            window_start_position_animation(left_window, left_window->position,
+            ui_window_start_position_animation(left_window, left_window->position,
                                             left->aabb.min);
-            window_start_size_animation(left_window, left_window->size,
+            ui_window_start_size_animation(left_window, left_window->size,
                                         left->aabb.size);
         }
     }
@@ -396,9 +396,9 @@ internal void dock_node_set_split(DockNode* split_node, DockNode* parent,
         }
         else
         {
-            window_start_position_animation(
+            ui_window_start_position_animation(
                 right_window, right_window->position, right->aabb.min);
-            window_start_size_animation(right_window, right_window->size,
+            ui_window_start_size_animation(right_window, right_window->size,
                                         right->aabb.size);
         }
     }
@@ -1570,7 +1570,7 @@ b8 ui_window_begin(u32 window_id, b8 top_bar)
                     window->position.y =
                         mouse_position.y - (top_bar_height * 0.5f);
 
-                    window_start_size_animation(window, window->size,
+                    ui_window_start_size_animation(window, window->size,
                                                 v2i(200.0f));
                 }
                 window->top_bar_hold = true;

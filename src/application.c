@@ -573,12 +573,19 @@ void application_begin_frame(ApplicationContext* app)
         }
         array_back(&app->tabs)->window_id = window_id;
         UiWindow* window = ui_window_get(window_id);
-        window->position_animation_on = false;
-        window->size_animation_on = false;
-        window->size = v2i(200.0f);
+        V2 end_size = v2i(200.0f);
+        V2 end_position =
+            v2f(middle(app->dimensions.width, end_size.width),
+                middle(app->dimensions.height, end_size.height));
+
+        window->size = v2i(0.0f);
         window->position =
             v2f(middle(app->dimensions.width, window->size.width),
                 middle(app->dimensions.height, window->size.height));
+
+
+        ui_window_start_position_animation(window, window->position, end_position);
+        ui_window_start_size_animation(window, window->size, end_size);
     }
 
     if (is_ctrl_and_key_range_pressed(FTIC_KEY_1, FTIC_KEY_9))

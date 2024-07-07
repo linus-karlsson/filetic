@@ -157,6 +157,9 @@ b8 ui_window_end(const char* title, b8 closable);
 void ui_window_row_begin(const f32 padding);
 f32 ui_window_row_end();
 
+void ui_window_start_size_animation(UiWindow* window, V2 start_size, V2 end_size);
+void ui_window_start_position_animation(UiWindow* window, V2 start_position, V2 end_position);
+
 b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index, const b8 disable);
 b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text);
 void ui_window_add_directory_list(V2 position);
@@ -169,6 +172,7 @@ b8 ui_window_set_overlay();
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image);
 i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item);
 void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index);
+
 
 DockNode* dock_node_create(NodeType type, SplitAxis split_axis, i32 window);
 void dock_node_dock_window(DockNode* root, DockNode* window,
