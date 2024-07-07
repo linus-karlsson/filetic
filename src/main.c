@@ -1135,13 +1135,6 @@ int main(int argc, char** argv)
                 const u32 window_id = app.tabs.data[i].window_id;
                 if (ui_window_in_focus() == window_id)
                 {
-                    /*
-                    if (i != app.tab_index)
-                    {
-                        directory_reset_selected_items(
-                            &tab->selected_item_values);
-                    }
-                    */
                     app.tab_index = i;
                 }
                 if (show_directory_window(window_id, list_item_height,

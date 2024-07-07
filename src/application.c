@@ -409,7 +409,7 @@ u8* application_initialize(ApplicationContext* app)
 
     array_create(&app->free_window_ids, 10);
     array_create(&app->tab_windows, 20);
-    for(u32 i = 0; i < 20; ++i)
+    for (u32 i = 0; i < 20; ++i)
     {
         array_push(&app->tab_windows, ui_window_create());
     }
@@ -572,6 +572,13 @@ void application_begin_frame(ApplicationContext* app)
             window_id = app->tab_windows.data[app->current_tab_window_index++];
         }
         array_back(&app->tabs)->window_id = window_id;
+        UiWindow* window = ui_window_get(window_id);
+        window->position_animation_on = false;
+        window->size_animation_on = false;
+        window->size = v2i(200.0f);
+        window->position =
+            v2f(middle(app->dimensions.width, window->size.width),
+                middle(app->dimensions.height, window->size.height));
     }
 
     if (is_ctrl_and_key_range_pressed(FTIC_KEY_1, FTIC_KEY_9))
