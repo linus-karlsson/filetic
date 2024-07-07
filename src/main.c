@@ -1012,6 +1012,7 @@ int main(int argc, char** argv)
             {
                 Directory current =
                     directory_current(&tab->directory_history)->directory;
+#if 0
                 char buffer[10] = { 0 };
                 sprintf_s(buffer, sizeof(buffer), "%u",
                           current.sub_directories.size);
@@ -1029,6 +1030,12 @@ int main(int argc, char** argv)
 
                 position.x += ui_window_row_end() - 4.0f;
                 ui_window_add_text(position, buffer, false);
+#else
+                char buffer[64] = { 0 };
+                sprintf_s(buffer, sizeof(buffer), "Folders: %u  |  Files: %u",
+                          current.sub_directories.size, current.files.size);
+                ui_window_add_text(v2f(10.0f, 0.0f), buffer, false);
+#endif
             }
             ui_window_end(NULL, false);
 
