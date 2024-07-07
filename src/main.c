@@ -767,7 +767,7 @@ int main(int argc, char** argv)
                                        &preview_textures))
                 {
                     current_path = string_copy(path, (u32)strlen(path), 0);
-                    directory_reset_selected_items(&tab->selected_item_values);
+                    directory_clear_selected_items(&tab->selected_item_values);
                 }
                 else
                 {
@@ -784,14 +784,24 @@ int main(int argc, char** argv)
                 // directory_reload(
                 //   directory_current(&application.directory_history));
             }
-            else if (check_collision && !key_event->ctrl_pressed &&
-                     mouse_button_event->activated &&
-                     mouse_button_event->action == 0 &&
-                     mouse_button_event->button == FTIC_MOUSE_BUTTON_1)
+        }
+
+        for (u32 i = 0; i < app.tabs.size; ++i)
+        {
+            DirectoryTab* current = app.tabs.data + i;
+            if (current->selected_item_values.paths.size)
             {
-                directory_reset_selected_items(&tab->selected_item_values);
+                if (check_collision && !key_event->ctrl_pressed &&
+                    mouse_button_event->activated &&
+                    mouse_button_event->action == 0 &&
+                    mouse_button_event->button == FTIC_MOUSE_BUTTON_1)
+                {
+                    directory_clear_selected_items(
+                        &app.tabs.data[i].selected_item_values);
+                }
             }
         }
+
         if (is_ctrl_and_key_pressed(FTIC_KEY_V))
         {
             // TODO: this is used in input fields
@@ -1125,11 +1135,13 @@ int main(int argc, char** argv)
                 const u32 window_id = app.tabs.data[i].window_id;
                 if (ui_window_in_focus() == window_id)
                 {
+                    /*
                     if (i != app.tab_index)
                     {
                         directory_reset_selected_items(
                             &tab->selected_item_values);
                     }
+                    */
                     app.tab_index = i;
                 }
                 if (show_directory_window(window_id, list_item_height,

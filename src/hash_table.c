@@ -76,7 +76,7 @@ void hash_table_insert_uu64(HashTableUU64* table, u64 key, u64 value)
         if (value_cmp(cell->key, key) != 0)
         {
             cell = table->cells + (++hashed_index & capacity_mask);
-            for (u32 i = 0; i < table->size && cell->active; i++)
+            for (u32 i = 1; i < table->size && cell->active; ++i)
             {
                 if (value_cmp(cell->key, key) == 0)
                 {
@@ -128,7 +128,7 @@ void hash_table_insert_char_u32(HashTableCharU32* table, char* key, u32 value)
         if (strcmp(cell->key, key) != 0)
         {
             cell = table->cells + (++hashed_index & capacity_mask);
-            for (u32 i = 0; i < table->size && cell->active; i++)
+            for (u32 i = 1; i < table->size && cell->active; ++i)
             {
                 if (strcmp(cell->key, key) == 0)
                 {
@@ -176,17 +176,20 @@ u64* hash_table_get_uu64(HashTableUU64* table, const u64 key)
         table->hash_function(&key, (u32)sizeof(key), HASH_SEED) & capacity_mask;
 
     CellUU64* cell = table->cells + hashed_index;
-    if (cell->active)
+    if (cell->active || cell->deleted)
     {
         if (value_cmp(cell->key, key) != 0)
         {
             cell = table->cells + (++hashed_index & capacity_mask);
-            for (u32 i = 0; i < table->size && (cell->active || cell->deleted);
-                 i++)
+            for (u32 i = 0;
+                 i < table->capacity && (cell->active || cell->deleted); ++i)
             {
-                if (value_cmp(cell->key, key) == 0)
+                if (cell->active)
                 {
-                    return &cell->value;
+                    if (value_cmp(cell->key, key) == 0)
+                    {
+                        return &cell->value;
+                    }
                 }
                 cell = table->cells + (++hashed_index & capacity_mask);
             }
@@ -206,17 +209,20 @@ u32* hash_table_get_char_u32(HashTableCharU32* table, const char* key)
         table->hash_function(&key, (u32)strlen(key), HASH_SEED) & capacity_mask;
 
     CellCharU32* cell = table->cells + hashed_index;
-    if (cell->active)
+    if (cell->active || cell->deleted)
     {
         if (strcmp(cell->key, key) != 0)
         {
             cell = table->cells + (++hashed_index & capacity_mask);
-            for (u32 i = 0; i < table->size && (cell->active || cell->deleted);
-                 i++)
+            for (u32 i = 0;
+                 i < table->capacity && (cell->active || cell->deleted); ++i)
             {
-                if (strcmp(cell->key, key) == 0)
+                if (cell->active)
                 {
-                    return &cell->value;
+                    if (strcmp(cell->key, key) == 0)
+                    {
+                        return &cell->value;
+                    }
                 }
                 cell = table->cells + (++hashed_index & capacity_mask);
             }
@@ -236,20 +242,23 @@ CellUU64* hash_table_remove_uu64(HashTableUU64* table, const u64 key)
         table->hash_function(&key, (u32)sizeof(key), HASH_SEED) & capacity_mask;
 
     CellUU64* cell = table->cells + hashed_index;
-    if (cell->active)
+    if (cell->active || cell->deleted)
     {
         if (value_cmp(cell->key, key) != 0)
         {
             cell = table->cells + (++hashed_index & capacity_mask);
-            for (u32 i = 0; i < table->size && (cell->active || cell->deleted);
-                 i++)
+            for (u32 i = 0;
+                 i < table->capacity && (cell->active || cell->deleted); ++i)
             {
-                if (value_cmp(cell->key, key) == 0)
+                if (cell->active)
                 {
-                    cell->active = false;
-                    cell->deleted = true;
-                    table->size--;
-                    return cell;
+                    if (value_cmp(cell->key, key) == 0)
+                    {
+                        cell->active = false;
+                        cell->deleted = true;
+                        table->size--;
+                        return cell;
+                    }
                 }
                 cell = table->cells + (++hashed_index & capacity_mask);
             }
@@ -273,20 +282,23 @@ CellCharU32* hash_table_remove_char_u32(HashTableCharU32* table,
         table->hash_function(&key, (u32)strlen(key), HASH_SEED) & capacity_mask;
 
     CellCharU32* cell = table->cells + hashed_index;
-    if (cell->active)
+    if (cell->active || cell->deleted)
     {
         if (strcmp(cell->key, key) != 0)
         {
             cell = table->cells + (++hashed_index & capacity_mask);
-            for (u32 i = 0; i < table->size && (cell->active || cell->deleted);
-                 i++)
+            for (u32 i = 0;
+                 i < table->capacity && (cell->active || cell->deleted); ++i)
             {
-                if (strcmp(cell->key, key) == 0)
+                if (cell->active)
                 {
-                    cell->active = false;
-                    cell->deleted = true;
-                    table->size--;
-                    return cell;
+                    if (strcmp(cell->key, key) == 0)
+                    {
+                        cell->active = false;
+                        cell->deleted = true;
+                        table->size--;
+                        return cell;
+                    }
                 }
                 cell = table->cells + (++hashed_index & capacity_mask);
             }

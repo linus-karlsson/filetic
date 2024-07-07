@@ -25,8 +25,7 @@ HashTable<Key, Value> hash_table_create(u32 capacity, u64 (*hash_function)(const
 {
     capacity = max(round_up_power_of_two(capacity), 32);
     HashTable<Key, Value> out = {
-        .cells =
-            (Cell<Key, Value>*)calloc(capacity, sizeof(Cell<Key, Value>)),
+        .cells = (Cell<Key, Value>*)calloc(capacity, sizeof(Cell<Key, Value>)),
         .capacity = capacity,
         .hash_function = hash_function,
     };
@@ -46,7 +45,7 @@ void hash_table_insert(HashTable<Key, Value>* table, Key key, Value value)
         if (Cmp(cell->key, key) != 0)
         {
             cell = table->cells + (++hashed_index & capacity_mask);
-            for (u32 i = 0; i < table->size && cell->active; i++)
+            for (u32 i = 1; i < table->size && cell->active; ++i)
             {
                 if (Cmp(cell->key, key) == 0)
                 {
@@ -72,8 +71,8 @@ add_node:
 
         table->size = 0;
         table->capacity *= 2;
-        table->cells = 
-            (Cell<Key, Value>*)calloc(table->capacity, sizeof(Cell<Key, Value>));
+        table->cells = (Cell<Key, Value>*)calloc(table->capacity,
+                                                 sizeof(Cell<Key, Value>));
 
         for (u32 i = 0; i < old_capacity; i++)
         {
@@ -95,17 +94,20 @@ Value* hash_table_get(HashTable<Key, Value>* table, const Key key)
         table->hash_function(&key, (u32)Len(key), HASH_SEED) & capacity_mask;
 
     Cell<Key, Value>* cell = table->cells + hashed_index;
-    if (cell->active)
+    if (cell->active || cell->deleted)
     {
         if (Cmp(cell->key, key) != 0)
         {
             cell = table->cells + (++hashed_index & capacity_mask);
-            for (u32 i = 0; i < table->size && (cell->active || cell->deleted);
-                 i++)
+            for (u32 i = 0;
+                 i < table->capacity && (cell->active || cell->deleted); ++i)
             {
-                if (Cmp(cell->key, key) == 0)
+                if (cell->active)
                 {
-                    return &cell->value;
+                    if (Cmp(cell->key, key) == 0)
+                    {
+                        return &cell->value;
+                    }
                 }
                 cell = table->cells + (++hashed_index & capacity_mask);
             }
@@ -126,20 +128,23 @@ Cell<Key, Value>* hash_table_remove(HashTable<Key, Value>* table, const Key key)
         table->hash_function(&key, (u32)Len(key), HASH_SEED) & capacity_mask;
 
     Cell<Key, Value>* cell = table->cells + hashed_index;
-    if (cell->active)
+    if (cell->active || cell->deleted)
     {
         if (Cmp(cell->key, key) != 0)
         {
             cell = table->cells + (++hashed_index & capacity_mask);
-            for (u32 i = 0; i < table->size && (cell->active || cell->deleted);
-                 i++)
+            for (u32 i = 0;
+                 i < table->capacity && (cell->active || cell->deleted); ++i)
             {
-                if (Cmp(cell->key, key) == 0)
+                if (cell->active)
                 {
-                    cell->active = false;
-                    cell->deleted = true;
-                    table->size--;
-                    return cell;
+                    if (Cmp(cell->key, key) == 0)
+                    {
+                        cell->active = false;
+                        cell->deleted = true;
+                        table->size--;
+                        return cell;
+                    }
                 }
                 cell = table->cells + (++hashed_index & capacity_mask);
             }
@@ -158,5 +163,6 @@ Cell<Key, Value>* hash_table_remove(HashTable<Key, Value>* table, const Key key)
 template <Key, Value>
 void hash_table_clear(HashTable<Key, Value>* hash_table)
 {
-    memset(hash_table->cells, 0, hash_table->capacity * sizeof(hash_table->cells[0]));
+    memset(hash_table->cells, 0,
+           hash_table->capacity * sizeof(hash_table->cells[0]));
 }

@@ -231,7 +231,7 @@ void directory_move_in_history(const i32 index_add,
     directory_history->current_index += index_add;
     DirectoryPage* current = directory_current(directory_history);
     current->scroll_offset = 0.0f;
-    directory_reset_selected_items(selected_item_values);
+    directory_clear_selected_items(selected_item_values);
     directory_reload(current);
 }
 
@@ -289,10 +289,10 @@ void directory_tab_clear(DirectoryTab* tab)
             &tab->directory_history.history.data[j].directory);
     }
     free(tab->directory_history.history.data);
-    directory_reset_selected_items(&tab->selected_item_values);
+    directory_clear_selected_items(&tab->selected_item_values);
 }
 
-void directory_reset_selected_items(SelectedItemValues* selected_item_values)
+void directory_clear_selected_items(SelectedItemValues* selected_item_values)
 {
     for (u32 i = 0; i < selected_item_values->paths.size; ++i)
     {
@@ -300,4 +300,25 @@ void directory_reset_selected_items(SelectedItemValues* selected_item_values)
     }
     hash_table_clear_char_u32(&selected_item_values->selected_items);
     selected_item_values->paths.size = 0;
+}
+
+void directory_remove_selected_item(SelectedItemValues* selected_item_values,
+                                    const char* path)
+{
+    hash_table_remove_char_u32(&selected_item_values->selected_items, path);
+    CharPtrArray* paths = &selected_item_values->paths;
+    for (u32 i = 0; i < paths->size; ++i)
+    {
+        if (strcmp(paths->data[i], path) == 0)
+        {
+            char* temp = paths->data[i];
+            for (u32 j = i; j < paths->size - 1; ++j)
+            {
+                paths->data[j] = paths->data[j + 1];
+            }
+            paths->size--;
+            free(temp);
+            break;
+        }
+    }
 }

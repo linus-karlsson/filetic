@@ -42,7 +42,7 @@
         (arr)->mutex = platform_mutex_create();                                \
     } while (0)
 
-#define move_to_front(type, array, index)                                      \
+#define array_move_to_front(type, array, index)                                      \
     do                                                                         \
     {                                                                          \
         type temp = (array)->data[(index)];                                    \

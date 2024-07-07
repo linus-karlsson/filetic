@@ -127,7 +127,8 @@ typedef struct UiContext
     AABB dock_resize_aabb;
     AABB dock_space;
 
-    AABB mouse_box_drag;
+    V2 mouse_drag_box_point;
+    AABB mouse_drag_box;
     b8 mouse_box_is_dragging;
 
     FontTTF font;
@@ -562,7 +563,8 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
 
 internal i32 display_docking(const AABB* dock_aabb, const V2 top_position,
                              const V2 right_position, const V2 bottom_position,
-                             const V2 left_position)
+                             const V2 left_position,
+                             const b8 should_have_middle)
 {
     const V2 docking_size_top_bottom = v2f(50.0f, 30.0f);
     const V2 docking_size_left_right = v2f(30.0f, 50.0f);
@@ -605,6 +607,26 @@ internal i32 display_docking(const AABB* dock_aabb, const V2 top_position,
     {
         index = 3;
     }
+
+    if (should_have_middle)
+    {
+        const V2 docking_size_middle = v2i(50.0f);
+        const f32 x =
+            middle((right_position.x + docking_size_left_right.width) -
+                       left_position.x,
+                   docking_size_middle.width);
+        const f32 y =
+            middle((bottom_position.y + docking_size_top_bottom.height) -
+                       top_position.y,
+                   docking_size_middle.height);
+
+        const V2 middle_position = v2f(left_position.x + x, top_position.y + y);
+        if (set_docking(middle_position, docking_size_middle, dock_aabb->min,
+                        dock_aabb->size, &ui_context.extra_index_count))
+        {
+            index = 4;
+        }
+    }
     return index;
 }
 
@@ -641,7 +663,7 @@ i32 root_display_docking(DockNode* dock_node)
         v2f(dock_node->aabb.min.x + 10.0f, middle_left_right.y);
 
     i32 index = display_docking(&dock_node->aabb, top_position, right_position,
-                                bottom_position, left_position);
+                                bottom_position, left_position, false);
     if (index != -1) ui_context.dock_hit_node = dock_node;
     return index;
 }
@@ -680,7 +702,7 @@ i32 leaf_display_docking(DockNode* dock_node)
             middle_left_right.y);
 
     i32 index = display_docking(&dock_node->aabb, top_position, right_position,
-                                bottom_position, left_position);
+                                bottom_position, left_position, true);
     if (index != -1) ui_context.dock_hit_node = dock_node;
     return index;
 }
@@ -1302,7 +1324,7 @@ void ui_context_end()
 
     if (is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
     {
-        ui_context.mouse_box_drag.min = event_get_mouse_position();
+        ui_context.mouse_drag_box_point = event_get_mouse_position();
     }
 
     if (is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT) &&
@@ -1310,11 +1332,11 @@ void ui_context_end()
     {
         const V2 mouse_position = event_get_mouse_position();
         const V2 min_point =
-            v2f(min(ui_context.mouse_box_drag.min.x, mouse_position.x),
-                min(ui_context.mouse_box_drag.min.y, mouse_position.y));
+            v2f(min(ui_context.mouse_drag_box_point.x, mouse_position.x),
+                min(ui_context.mouse_drag_box_point.y, mouse_position.y));
         const V2 max_point =
-            v2f(max(ui_context.mouse_box_drag.min.x, mouse_position.x),
-                max(ui_context.mouse_box_drag.min.y, mouse_position.y));
+            v2f(max(ui_context.mouse_drag_box_point.x, mouse_position.x),
+                max(ui_context.mouse_drag_box_point.y, mouse_position.y));
 
         AABB mouse_drag_box = {
             .min = min_point,
@@ -1331,12 +1353,12 @@ void ui_context_end()
                     mouse_drag_box.min, mouse_drag_box.size, drag_border_color,
                     1.0f, 0.0f);
 
-        ui_context.mouse_box_drag = mouse_drag_box;
+        ui_context.mouse_drag_box = mouse_drag_box;
         ui_context.mouse_box_is_dragging = true;
     }
     else
     {
-        ui_context.mouse_box_drag = (AABB){ 0 };
+        ui_context.mouse_drag_box = (AABB){ 0 };
         ui_context.mouse_box_is_dragging = false;
     }
 
@@ -2310,19 +2332,26 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
 
     AABB aabb = { .min = starting_position, .size = item_dimensions };
     b8 hit = hover_clicked_index.index == (i32)aabbs->size ||
-             (collision_aabb_in_aabb(&ui_context.mouse_box_drag, &aabb) &&
+             (collision_aabb_in_aabb(&ui_context.mouse_drag_box, &aabb) &&
               event_get_key_event()->alt_pressed);
 
-    if (hit && selected_item_values && !check_if_selected &&
-        hover_clicked_index.clicked)
+    if (hit && selected_item_values &&
+        is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
     {
-        const u32 path_length = (u32)strlen(item->path);
-        char* path = (char*)calloc(path_length + 3, sizeof(char));
-        memcpy(path, item->path, path_length);
-        hash_table_insert_char_u32(&selected_item_values->selected_items, path,
-                                   1);
-        array_push(&selected_item_values->paths, path);
-        selected = true;
+        if (!check_if_selected)
+        {
+            const u32 path_length = (u32)strlen(item->path);
+            char* path = (char*)calloc(path_length + 3, sizeof(char));
+            memcpy(path, item->path, path_length);
+            hash_table_insert_char_u32(&selected_item_values->selected_items,
+                                       path, 1);
+            array_push(&selected_item_values->paths, path);
+            selected = true;
+        }
+        else
+        {
+            directory_remove_selected_item(selected_item_values, item->path);
+        }
     }
 
     V4 color = clear_color;
