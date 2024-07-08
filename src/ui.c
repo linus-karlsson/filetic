@@ -1339,8 +1339,7 @@ void ui_context_end()
             for (u32 i = 0; i < dock_node->windows.size; ++i)
             {
                 u32 window_id = dock_node->windows.data[i];
-                array_push(&ui_context.dock_hit_node->windows,
-                           window_id);
+                array_push(&ui_context.dock_hit_node->windows, window_id);
 
                 UiWindow* window = ui_window_get(window_id);
                 window->dock_node = ui_context.dock_hit_node;
@@ -1357,6 +1356,8 @@ void ui_context_end()
                 {
                     window->hide = false;
                     node->window_in_focus = i;
+                    ui_context.window_in_focus =
+                        ui_context.id_to_index.data[window->id];
                 }
                 else
                 {
@@ -1601,8 +1602,9 @@ void ui_context_end()
                                          (u32)strlen(tab_window->title), 1.0f)
                         : 0.0f;
 
+                const f32 tab_padding = 30.0f;
                 V2 tab_dimensions =
-                    v2f(x_advance + 10.0f, top_bar_dimensions.y);
+                    v2f(x_advance + tab_padding, top_bar_dimensions.y);
                 AABB tab_aabb = {
                     .min = tab_position,
                     .size = tab_dimensions,
@@ -1635,7 +1637,7 @@ void ui_context_end()
                 index_offset_and_count.second += 6;
 
                 V2 text_position =
-                    v2f(tab_position.x + 5.0f,
+                    v2f(tab_position.x + (tab_padding * 0.5f),
                         tab_position.y + ui_context.font.pixel_height);
                 f32 title_advance = 0.0f;
                 if (tab_window->title)
@@ -1650,7 +1652,7 @@ void ui_context_end()
                     v2f(text_position.x + x_advance, tab_position.y + 2.0f);
                 V2 button_size = v2i(top_bar_dimensions.height - 4.0f);
 
-                tab_position.x += x_advance + 10.0f;
+                tab_position.x += x_advance + tab_padding;
             }
 
             quad_border(&ui_context.render.vertices,
@@ -1722,7 +1724,8 @@ void ui_context_end()
         window_to_show->position = window_to_hide->position;
         window_to_show->size = window_to_hide->size;
         window_to_show->hide = false;
-        ui_context.window_in_focus = window_to_show->id;
+        ui_context.window_in_focus =
+            ui_context.id_to_index.data[window_to_show->id];
     }
 
     // set_clear_u64(&dock_cache);
