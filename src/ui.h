@@ -38,17 +38,19 @@ typedef struct DockNode
 {
     NodeType type;
     SplitAxis split_axis;
+    u32 window_in_focus;
     U32Array windows;
     struct DockNode* children[2];
     AABB aabb;
     f32 size_ratio;
-}DockNode;
+} DockNode;
 
 #define RESIZE_NONE 0
 #define RESIZE_RIGHT BIT_1
 
 typedef struct UiWindow
 {
+    const char* title;
     u32 id;
     V2 size;
     V2 position;
@@ -149,8 +151,8 @@ void ui_dock_space_end();
 u32 ui_window_create();
 UiWindow* ui_window_get(u32 window_id);
 u32 ui_window_in_focus();
-b8 ui_window_begin(u32 window_id, b8 top_bar);
-b8 ui_window_end(const char* title, b8 closable);
+b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar);
+b8 ui_window_end();
 
 void ui_window_row_begin(const f32 padding);
 f32 ui_window_row_end();

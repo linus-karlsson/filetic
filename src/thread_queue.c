@@ -1,5 +1,6 @@
 #include "thread_queue.h"
 #include "platform/platform.h"
+#include "hash.h"
 #include <stdlib.h>
 
 u32 global_thread_count = 0;
@@ -148,11 +149,6 @@ u64 thread_get_task_count(ThreadTaskQueue* task_queue, u64 id)
     return count ? *count : 0;
 }
 
-internal u64 hash_function_u64(const void* key, u32 len, u64 seed)
-{
-    return *((u64*)key);
-}
-
 void thread_initialize(u32 capacity, u32 thread_count, ThreadQueue* queue)
 {
     ftic_assert(!queue->pool);
@@ -174,7 +170,7 @@ void thread_initialize(u32 capacity, u32 thread_count, ThreadQueue* queue)
     queue->task_queue.tasks = (ThreadTaskInternal*)calloc(
         queue->task_queue.capacity, sizeof(ThreadTaskInternal));
     queue->task_queue.id_to_count =
-        hash_table_create_uu64(100, hash_function_u64);
+        hash_table_create_uu64(100, hash_u64);
 
     for (u32 i = 0; i < thread_count; i++)
     {

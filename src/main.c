@@ -381,7 +381,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
                                const f32 list_item_height,
                                DirectoryHistory* directory_history)
 {
-    ui_window_begin(window, true);
+    if (ui_window_begin(window, "Search result", true))
     {
         platform_mutex_lock(&page->search_result_file_array.mutex);
         platform_mutex_lock(&page->search_result_folder_array.mutex);
@@ -408,8 +408,9 @@ void show_search_result_window(SearchPage* page, const u32 window,
 
         platform_mutex_unlock(&page->search_result_file_array.mutex);
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
+
+        ui_window_end();
     }
-    ui_window_end("Search result", false);
 }
 
 char* get_parent_directory_name(DirectoryPage* current)
@@ -423,7 +424,7 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
                          DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
-    ui_window_begin(window, true);
+    if (ui_window_begin(window, get_parent_directory_name(current), true))
     {
         V2 list_position = v2f(10.0f, 10.0f);
         i32 selected_item = -1;
@@ -445,8 +446,9 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
             platform_open_file(
                 current->directory.files.data[selected_item].path);
         }
+        return ui_window_end();
     }
-    return ui_window_end(get_parent_directory_name(current), true);
+    return false;
 }
 
 #if 0
@@ -973,7 +975,7 @@ int main(int argc, char** argv)
             top_bar->top_color = v4ic(0.2f);
             top_bar->bottom_color = v4ic(0.15f);
 
-            ui_window_begin(app.top_bar_window, false);
+            if (ui_window_begin(app.top_bar_window, NULL, false))
             {
                 V2 drop_down_position = v2d();
                 i32 index_clicked =
@@ -1100,8 +1102,9 @@ int main(int argc, char** argv)
                                        &tab->directory_history,
                                        &app.thread_queue.task_queue);
                 }
+
+                ui_window_end();
             }
-            ui_window_end(NULL, false);
 
             UiWindow* bottom_bar = ui_window_get(app.bottom_bar_window);
             bottom_bar->position =
@@ -1109,7 +1112,7 @@ int main(int argc, char** argv)
             bottom_bar->size = v2f(app.dimensions.width, bottom_bar_heighth);
             bottom_bar->top_color = v4ic(0.2f);
             bottom_bar->bottom_color = v4ic(0.15f);
-            ui_window_begin(app.bottom_bar_window, false);
+            if (ui_window_begin(app.bottom_bar_window, NULL, false))
             {
                 Directory current =
                     directory_current(&tab->directory_history)->directory;
@@ -1137,14 +1140,15 @@ int main(int argc, char** argv)
                           current.sub_directories.size, current.files.size);
                 ui_window_add_text(v2f(10.0f, 0.0f), buffer, false);
 #endif
+                ui_window_end();
             }
-            ui_window_end(NULL, false);
 
             const f32 list_item_height = app.font.pixel_height + 10.0f;
 
             if (app.show_quick_access)
             {
-                ui_window_begin(app.quick_access_window, true);
+                if (ui_window_begin(app.quick_access_window, "Quick access",
+                                    true))
                 {
                     V2 list_position = v2i(10.0f);
                     i32 selected_item = -1;
@@ -1156,8 +1160,8 @@ int main(int argc, char** argv)
                             app.quick_access_folders.data[selected_item].path,
                             &tab->directory_history);
                     }
+                    app.show_quick_access = !ui_window_end();
                 }
-                app.show_quick_access = !ui_window_end("Quick access", true);
             }
 
             show_search_result_window(
@@ -1181,13 +1185,14 @@ int main(int argc, char** argv)
                         middle(app.dimensions.width, preview->size.width),
                         middle(app.dimensions.height, preview->size.height));
 
-                    ui_window_begin(app.preview_window, false);
+                    if (ui_window_begin(app.preview_window, NULL, false))
                     {
                         show_preview = !ui_window_set_overlay();
                         ui_window_add_image(v2d(), image_dimensions,
                                             preview_textures.data[0]);
+
+                        ui_window_end();
                     }
-                    ui_window_end(NULL, false);
                 }
                 else
                 {
@@ -1198,7 +1203,7 @@ int main(int argc, char** argv)
                         middle(app.dimensions.width, preview->size.width),
                         middle(app.dimensions.height, preview->size.height));
 
-                    ui_window_begin(app.preview_window, false);
+                    if (ui_window_begin(app.preview_window,NULL, false))
                     {
                         show_preview = !ui_window_set_overlay();
                         ui_window_add_text_colored(v2f(10.0f, 10.0f),
@@ -1206,8 +1211,8 @@ int main(int argc, char** argv)
                         // ui_window_add_text(v2f(10.0f, 10.0f),
                         //                   (char*)preview_file.buffer,
                         //                   true);
+                        ui_window_end();
                     }
-                    ui_window_end(NULL, false);
                 }
             }
             else
