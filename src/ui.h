@@ -38,7 +38,7 @@ typedef struct DockNode
 {
     NodeType type;
     SplitAxis split_axis;
-    i32 window;
+    U32Array windows;
     struct DockNode* children[2];
     AABB aabb;
     f32 size_ratio;
@@ -64,8 +64,6 @@ typedef struct UiWindow
     u32 rendering_index_offset;
     u32 rendering_index_count;
 
-    u32 related_window;
-
     V2 position_before_animation;
     V2 position_after_animation;
     f32 position_animation_precent; 
@@ -87,19 +85,19 @@ typedef struct UiWindow
     DockNode* dock_node;
 
     b8 docked;
+    b8 hide;
 
     b8 area_hit;
     b8 top_bar;
     b8 top_bar_pressed;
     b8 top_bar_hold;
-    b8 hide;
     u8 resize_dragging;
     u8 resizeable;
 
     b8 any_holding;
     b8 size_animation_on;
     b8 position_animation_on;
-
+    b8 closing;
 } UiWindow;
 
 #define DOCK_SIDE_RIGHT 0
@@ -168,6 +166,7 @@ b8 ui_window_add_file_list(V2 position, const f32 item_height, const DirectoryIt
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
 void ui_window_add_text(V2 position, const char* text, b8 scrolling);
+void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text, b8 scrolling);
 b8 ui_window_set_overlay();
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image);
 i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item);

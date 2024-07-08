@@ -33,10 +33,55 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
     free(file.buffer);
 }
 
+internal void render_character(const char character, const CharacterTTF* c_ttf,
+                               const float texture_index, const f32 scale,
+                               const f32 line_height, const f32 start_x,
+                               const V4 color, u32* new_lines,
+                               f32* x_max_advance, u32* count, V2* pos,
+                               SelectionCharacterArray* selection_chars,
+                               VertexArray* array)
+{
+    if (character == '\n')
+    {
+        pos->y += line_height * scale;
+        pos->x = start_x;
+        *new_lines += 1;
+        return;
+    }
+    else if (character == '\t')
+    {
+        const CharacterTTF* c = c_ttf + (' ' - 32);
+        pos->x += c->x_advance * scale * 4;
+    }
+    if (closed_interval(0, (character - 32), 96))
+    {
+        const CharacterTTF* c = c_ttf + (character - 32);
+
+        V2 size = v2_s_multi(c->dimensions, scale);
+        V2 curr_pos = v2_add(*pos, v2_s_multi(c->offset, scale));
+        AABB aabb = quad_co(array, curr_pos, size, color, c->text_coords,
+                            texture_index);
+
+        // TODO: do a check for every character is slow.
+        if (selection_chars)
+        {
+            SelectionCharacter selection_char = {
+                .character = character,
+                .aabb = aabb,
+            };
+            array_push(selection_chars, selection_char);
+        }
+        pos->x += c->x_advance * scale;
+        *x_max_advance = max(*x_max_advance, pos->x);
+        *count += 1;
+    }
+}
+
 u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
                           float texture_index, V2 pos, f32 scale,
                           f32 line_height, V4 color, u32* new_lines_count,
-                          f32* x_advance, SelectionCharacterArray* selection_chars,
+                          f32* x_advance,
+                          SelectionCharacterArray* selection_chars,
                           VertexArray* array)
 {
     u32 count = 0;
@@ -46,35 +91,39 @@ u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
     for (; *text; text++)
     {
         char current_char = *text;
-        if (current_char == '\n')
-        {
-            pos.y += line_height * scale;
-            pos.x = start_x;
-            new_lines++;
-            continue;
-        }
-        if (closed_interval(0, (current_char - 32), 96))
-        {
-            const CharacterTTF* c = c_ttf + (current_char - 32);
+        render_character(current_char, c_ttf, texture_index, scale, line_height,
+                         start_x, color, &new_lines, &x_max_advance, &count,
+                         &pos, selection_chars, array);
+    }
+    if (new_lines_count)
+    {
+        *new_lines_count = new_lines;
+    }
+    if (x_advance)
+    {
+        *x_advance = x_max_advance - start_x;
+    }
+    return count * 6;
+}
 
-            V2 size = v2_s_multi(c->dimensions, scale);
-            V2 curr_pos = v2_add(pos, v2_s_multi(c->offset, scale));
-            AABB aabb = quad_co(array, curr_pos, size, color, c->text_coords,
-                                texture_index);
-
-            // TODO: do a check for every character is slow.
-            if (selection_chars)
-            {
-                SelectionCharacter selection_char = {
-                    .character = current_char,
-                    .aabb = aabb,
-                };
-                array_push(selection_chars, selection_char);
-            }
-            pos.x += c->x_advance * scale;
-            x_max_advance = max(x_max_advance, pos.x);
-            count++;
-        }
+u32 text_generation_colored_char(const CharacterTTF* c_ttf,
+                                 const ColoredCharacterArray* text,
+                                 float texture_index, V2 pos, f32 scale,
+                                 f32 line_height, u32* new_lines_count,
+                                 f32* x_advance,
+                                 SelectionCharacterArray* selection_chars,
+                                 VertexArray* array)
+{
+    u32 count = 0;
+    f32 start_x = pos.x;
+    u32 new_lines = 0;
+    f32 x_max_advance = 0.0f;
+    for (u32 i = 0; i < text->size; ++i)
+    {
+        ColoredCharacter* current = text->data + i;
+        render_character(current->character, c_ttf, texture_index, scale,
+                         line_height, start_x, current->color, &new_lines,
+                         &x_max_advance, &count, &pos, selection_chars, array);
     }
     if (new_lines_count)
     {

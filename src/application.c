@@ -158,6 +158,21 @@ internal b8 suggestion_selection(u32 index, b8 hit, b8 should_close,
     return should_close;
 }
 
+internal void open_window(ApplicationContext* app, u32 window_id)
+{
+    UiWindow* window = ui_window_get(window_id);
+    V2 end_size = v2i(200.0f);
+    V2 end_position = v2f(middle(app->dimensions.width, end_size.width),
+                          middle(app->dimensions.height, end_size.height));
+
+    window->size = v2i(0.0f);
+    window->position = v2f(middle(app->dimensions.width, window->size.width),
+                           middle(app->dimensions.height, window->size.height));
+
+    ui_window_start_position_animation(window, window->position, end_position);
+    ui_window_start_size_animation(window, window->size, end_size);
+}
+
 internal b8 top_bar_menu_selection(u32 index, b8 hit, b8 should_close,
                                    b8 item_clicked, V4* text_color, void* data)
 {
@@ -168,13 +183,21 @@ internal b8 top_bar_menu_selection(u32 index, b8 hit, b8 should_close,
         {
             case 0:
             {
-                app->show_quick_access = true;
-                break;
+                if (!app->show_quick_access)
+                {
+                    app->show_quick_access = true;
+                    open_window(app, app->quick_access_window);
+                }
+                return true;
             }
             case 1:
             {
-                app->show_search_page = true;
-                break;
+                if (!app->show_search_page)
+                {
+                    app->show_search_page = true;
+                    open_window(app, app->quick_access_window);
+                }
+                return true;
             }
         }
     }
@@ -572,20 +595,7 @@ void application_begin_frame(ApplicationContext* app)
             window_id = app->tab_windows.data[app->current_tab_window_index++];
         }
         array_back(&app->tabs)->window_id = window_id;
-        UiWindow* window = ui_window_get(window_id);
-        V2 end_size = v2i(200.0f);
-        V2 end_position =
-            v2f(middle(app->dimensions.width, end_size.width),
-                middle(app->dimensions.height, end_size.height));
-
-        window->size = v2i(0.0f);
-        window->position =
-            v2f(middle(app->dimensions.width, window->size.width),
-                middle(app->dimensions.height, window->size.height));
-
-
-        ui_window_start_position_animation(window, window->position, end_position);
-        ui_window_start_size_animation(window, window->size, end_size);
+        open_window(app, window_id);
     }
 
     if (is_ctrl_and_key_range_pressed(FTIC_KEY_1, FTIC_KEY_9))

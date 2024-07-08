@@ -9,7 +9,7 @@
     do                                                                         \
     {                                                                          \
         (array)->size = 0;                                                     \
-        (array)->capacity = ((array_capacity) == 1 ? 2 : (array_capacity));    \
+        (array)->capacity = max((array_capacity), 2);    \
         (array)->data = calloc(array_capacity, sizeof((*(array)->data)));      \
     } while (0)
 

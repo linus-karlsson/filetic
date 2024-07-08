@@ -555,6 +555,8 @@ b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
             .size = v2f(drop_down_width, drop_down_item_height * precent),
         };
 
+        item_clicked = false;
+
         b8 drop_down_item_hit = drop_down_menu->tab_index == (i32)i;
         if (drop_down_item_hit) item_clicked = enter_clicked;
         if (collision_point_in_aabb(application->mouse_position,
@@ -672,6 +674,92 @@ void set_input_buffer_to_current_directory(const char* path, InputBuffer* input)
     input->input_index = input->buffer.size;
 }
 
+internal b8 get_word(const FileAttrib* file, u32* index, CharArray* buffer,
+                     ColoredCharacterArray* array)
+{
+    while (file->buffer[*index] == ' ' || file->buffer[*index] == '\t')
+    {
+        ColoredCharacter value = {
+            .color = v4ic(1.0f),
+            .character = file->buffer[*index],
+        };
+        array_push(array, value);
+        if (++(*index) >= file->size) return false;
+    }
+    while (file->buffer[*index] != ' ' && file->buffer[*index] != '=' &&
+           file->buffer[*index] != '\n' && file->buffer[*index] != '\r')
+    {
+        array_push(buffer, file->buffer[*index]);
+        if (++(*index) >= file->size) break;
+    }
+    array_push(buffer, '\0');
+    buffer->size--;
+    return true;
+}
+
+const char* primitive_key_words[] = {
+    "const", "void", "for", "if", "else", "case", "switch", "while",
+};
+
+const char* user_key_words[] = {
+    "int", "u64", "u32", "u16", "u8", "b8", "i32", "f32", "f64", "V2",
+};
+
+internal void word_to_color(const CharArray* word, ColoredCharacterArray* array)
+{
+    V4 color = v4ic(1.0f);
+    b8 found = false;
+    for (u32 i = 0; i < static_array_size(primitive_key_words); ++i)
+    {
+        if (strcmp(word->data, primitive_key_words[i]) == 0)
+        {
+            color = v4f(1.0f, 0.34117f, 0.2f, 1.0f);
+            found = true;
+        }
+    }
+    if (!found)
+    {
+        for (u32 i = 0; i < static_array_size(user_key_words); ++i)
+        {
+            if (strcmp(word->data, user_key_words[i]) == 0)
+            {
+                color = v4f(1.0f, 0.5f, 0.2f, 1.0f);
+            }
+        }
+    }
+    for (u32 i = 0; i < word->size; ++i)
+    {
+        ColoredCharacter value = {
+            .color = color,
+            .character = word->data[i],
+        };
+        array_push(array, value);
+    }
+}
+
+void parse_file(FileAttrib* file, ColoredCharacterArray* array)
+{
+    CharArray word = { 0 };
+    array_create(&word, 64);
+    for (u32 i = 0; i < file->size; ++i)
+    {
+        word.size = 0;
+        if (get_word(file, &i, &word, array))
+        {
+            word_to_color(&word, array);
+            if (i < file->size)
+            {
+                ColoredCharacter value = {
+                    .color = v4ic(1.0f),
+                    .character = file->buffer[i],
+                };
+                array_push(array, value);
+            }
+        }
+    }
+    free(word.data);
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext app = { 0 };
@@ -681,6 +769,8 @@ int main(int argc, char** argv)
     char* current_path = NULL;
     b8 show_preview = false;
     FileAttrib preview_file = { 0 };
+    ColoredCharacterArray preview_file_colored = { 0 };
+    array_create(&preview_file_colored, 1000);
     U32Array preview_textures = { 0 };
     array_create(&preview_textures, 10);
 
@@ -772,14 +862,15 @@ int main(int argc, char** argv)
                 else
                 {
                     preview_file = file_read(path);
+                    parse_file(&preview_file, &preview_file_colored);
                     show_preview = true;
                 }
             }
             else if (key_event->activated && key_event->action == 1 &&
                      key_event->key == FTIC_KEY_ESCAPE)
             {
-                // TODO: Not get called when you press escape in a drop down for
-                // example
+                // TODO: Not get called when you press escape in a drop
+                // down for example
                 // platform_delete_files(&tab->selected_item_values.paths);
                 // directory_reload(
                 //   directory_current(&application.directory_history));
@@ -1110,8 +1201,11 @@ int main(int argc, char** argv)
                     ui_window_begin(app.preview_window, false);
                     {
                         show_preview = !ui_window_set_overlay();
-                        ui_window_add_text(v2f(10.0f, 10.0f),
-                                           (char*)preview_file.buffer, true);
+                        ui_window_add_text_colored(v2f(10.0f, 10.0f),
+                                                   &preview_file_colored, true);
+                        // ui_window_add_text(v2f(10.0f, 10.0f),
+                        //                   (char*)preview_file.buffer,
+                        //                   true);
                     }
                     ui_window_end(NULL, false);
                 }
