@@ -368,9 +368,9 @@ DockNode* dock_node_create_(NodeType type, SplitAxis split_axis)
 DockNode* dock_node_create(NodeType type, SplitAxis split_axis, i32 window)
 {
     DockNode* node = dock_node_create_(type, split_axis);
-    array_create(&node->windows, 2);
     if (window != -1)
     {
+        array_create(&node->windows, 2);
         array_push(&node->windows, window);
     }
     return node;
@@ -485,12 +485,14 @@ void dock_node_dock_window(DockNode* root, DockNode* window,
             root->children[0] = window;
             return;
         }
+        // TODO: might be a memory leak
         split_node = dock_node_create(NODE_PARENT, split_axis, -1);
     }
     else if (root->type == NODE_LEAF)
     {
         copy_node = dock_node_create_multiple_windows(NODE_LEAF, SPLIT_NONE,
                                                       root->windows);
+        copy_node->window_in_focus = root->window_in_focus;
         update_window_dock_nodes(copy_node);
     }
     else
@@ -524,6 +526,7 @@ void dock_node_dock_window(DockNode* root, DockNode* window,
     }
     root->split_axis = split_axis;
     root->windows.size = 0;
+    root->windows.data = NULL;
 }
 
 void dock_node_resize_from_root(DockNode* root, const AABB* aabb)
@@ -587,6 +590,7 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
         node_before->type = right->type;
         node_before->split_axis = right->split_axis;
         node_before->windows = right->windows;
+        node_before->window_in_focus = right->window_in_focus;
         node_before->children[0] = right->children[0];
         node_before->children[1] = right->children[1];
         node_before->size_ratio = right->size_ratio;
@@ -602,6 +606,7 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
         node_before->type = left->type;
         node_before->split_axis = left->split_axis;
         node_before->windows = left->windows;
+        node_before->window_in_focus = left->window_in_focus;
         node_before->children[0] = left->children[0];
         node_before->children[1] = left->children[1];
         node_before->size_ratio = left->size_ratio;
@@ -988,7 +993,7 @@ DockNode* read_node(FILE* file)
     if (node->windows.size)
     {
         u32 size = node->windows.size;
-        array_create(&node->windows, node->windows.size);
+        array_create(&node->windows, size);
         node->windows.size = size;
         for (u32 i = 0; i < node->windows.size; ++i)
         {
@@ -1000,6 +1005,11 @@ DockNode* read_node(FILE* file)
                 array_back(&ui_context.windows)->hide = true;
             }
         }
+    }
+    else
+    {
+        node->windows.capacity = 0;
+        node->windows.data = NULL;
     }
 
     ftic_assert(fread(&node->size_ratio, sizeof(node->size_ratio), 1, file));
@@ -1036,7 +1046,7 @@ void ui_context_create()
     array_create(&ui_context.window_aabbs, 10);
     array_create(&ui_context.window_hover_clicked_indices, 10);
 
-    DockNode* saved_tree = NULL;//load_layout();
+    DockNode* saved_tree = load_layout();
     if (saved_tree)
     {
         ui_context.dock_tree = saved_tree;
@@ -1740,9 +1750,8 @@ u32 ui_window_create()
             return id;
         }
     }
-    DockNode* node = dock_node_create(NODE_LEAF, SPLIT_NONE, -1);
+    DockNode* node = dock_node_create(NODE_LEAF, SPLIT_NONE, id);
     insert_window(node, id, false);
-    array_push(&node->windows, id);
     return id;
 }
 
