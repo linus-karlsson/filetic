@@ -106,6 +106,37 @@ const char* file_get_extension(const char* path, const u32 path_length)
     return NULL;
 }
 
+Token file_read_token(CharArray* buffer, const char* delims, u32 delims_len)
+{
+    Token result = { 0 };
+    if (buffer->size == 0)
+    {
+        return result;
+    }
+    for (u32 i = 0; i < buffer->size; i++)
+    {
+        if (buffer->data[i] == '\0')
+        {
+            break;
+        }
+        for (u32 j = 0; j < delims_len; j++)
+        {
+            if (buffer->data[i] == delims[j])
+            {
+                buffer->data[i] = '\0';
+
+                result.start = buffer->data;
+                // TODO:
+                result.buffer_len = buffer->size;
+                result.delim_position = i;
+                result.delim_used = delims[j];
+                return result;
+            }
+        }
+    }
+    return result;
+}
+
 void file_format_size(u64 size_in_bytes, char* output, size_t output_size)
 {
     const u64 KB = 1024;

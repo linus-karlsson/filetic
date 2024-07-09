@@ -33,6 +33,14 @@ typedef struct FileAttrib
     u64 current_pos;
 } FileAttrib;
 
+typedef struct Token
+{
+    char* start;
+    u32 buffer_len;
+    u32 delim_position;
+    char delim_used;
+} Token;
+
 typedef struct CharArray
 {
     u32 size;
@@ -52,6 +60,8 @@ b8 file_end_of_file(const FileAttrib* file);
 void file_buffer_read(FileAttrib* file, char* delims, u32 delim_len, b8 remove_character, CharArray* buffer);
 void file_line_read(FileAttrib* file, b8 remove_newline, CharArray* line);
 const char* file_get_extension(const char* path, const u32 path_length);
+
+Token file_read_token(CharArray* line, const char* delims, u32 delims_len);
 
 void file_format_size(u64 size_in_bytes, char* output, size_t output_size);
 

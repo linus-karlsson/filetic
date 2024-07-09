@@ -1,9 +1,34 @@
 #pragma once
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "math/ftic_math.h"
 
 #define PI 3.141592653589f
+#define KILOBYTE(n) ((n) * 1024ULL)
+#define MEGABYTE(n) (KILOBYTE((n)) * 1024ULL)
+#define GIGABYTE(n) (MEGABYTE((n)) * 1024ULL)
+
+#define MILLISECONDS(milli) ((milli) * 0.001);
+#define MICROSECONDS(micro) ((micro) * 0.000001);
+#define NANOSECONDS(nano) ((nano) * 0.000000001);
+
+#define sysprintf(...) sprintf_s(__VA_ARGS__)
+#define syscanf(...) sscanf_s(__VA_ARGS__)
+#define sy_gcvt(...) _gcvt_s(__VA_ARGS__);
+
+#define value_to_string(buffer, ...) sysprintf(buffer, sizeof((buffer)), __VA_ARGS__)
+
+#define value_to_string_offset(buffer, offset, ...)                                 \
+    sysprintf((buffer) + (offset), sizeof((buffer)) - (offset), __VA_ARGS__)
+
+#define string_to_value(buffer, ...) syscanf((buffer), __VA_ARGS__)
+
+#define f32_to_string(buffer, num_digits, val)                                    \
+    sy_gcvt(buffer, sizeof((buffer)), val, num_digits)
+
+#define f32_to_string_offset(buffer, offset, num_digits, val)                     \
+    sy_gcvt((buffer) + (offset), sizeof((buffer)) - (offset), val, num_digits)
 
 #define array_create(array, array_capacity)                                    \
     do                                                                         \
@@ -26,6 +51,8 @@
     } while (0)
 
 #define array_back(array) ((array)->data + ((array)->size - 1))
+
+#define array_free(array) free((array)->data)
 
 #define safe_array_push(arr, value)                                            \
     do                                                                         \
