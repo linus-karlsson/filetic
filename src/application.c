@@ -576,7 +576,7 @@ void application_begin_frame(ApplicationContext* app)
     app->main_index_count = 0;
     rendering_properties_clear(&app->main_render);
 
-    if (is_ctrl_and_key_pressed(FTIC_KEY_T))
+    if (event_is_ctrl_and_key_pressed(FTIC_KEY_T))
     {
         array_push(&app->tabs, directory_tab_add("C:\\*"));
         app->tab_index = app->tabs.size - 1;
@@ -598,7 +598,7 @@ void application_begin_frame(ApplicationContext* app)
         open_window(app, window_id);
     }
 
-    if (is_ctrl_and_key_range_pressed(FTIC_KEY_1, FTIC_KEY_9))
+    if (event_is_ctrl_and_key_range_pressed(FTIC_KEY_1, FTIC_KEY_9))
     {
         const u32 index = event_get_key_event()->key - FTIC_KEY_1;
         if (index < app->tabs.size)

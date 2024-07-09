@@ -101,3 +101,6 @@ f32 ease_out_sine(const f32 x);
 f32 ease_out_cubic(const f32 x);
 
 u32 get_path_length(const char* path, u32 path_length);
+
+f32 radians(f32 deg);
+f32 abs_f32(f32 in);

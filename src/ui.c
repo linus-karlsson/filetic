@@ -1172,7 +1172,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
         !ui_context.any_window_hold)
     {
         const b8 mouse_button_clicked =
-            is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
+            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
 
         const MouseButtonEvent* mouse_button_event =
             event_get_mouse_button_event();
@@ -1455,12 +1455,12 @@ void ui_context_end()
 
 #endif
 
-    if (is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
+    if (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
     {
         ui_context.mouse_drag_box_point = event_get_mouse_position();
     }
 
-    if (is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT) &&
+    if (event_is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT) &&
         event_get_key_event()->alt_pressed)
     {
         const V2 mouse_position = event_get_mouse_position();
@@ -1634,7 +1634,7 @@ void ui_context_end()
                 {
                     if (j != (i32)dock_space->window_in_focus)
                     {
-                        if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+                        if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
                         {
                             dock_space_to_change = dock_space;
                             new_window_focus = j;
@@ -1677,7 +1677,7 @@ void ui_context_end()
 
                 if (should_check_collision && collided)
                 {
-                    if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+                    if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
                     {
                         close_tab = true;
                         dock_space_to_change = dock_space;
@@ -1711,7 +1711,7 @@ void ui_context_end()
 
             if (should_check_collision && !close_tab && !any_tab_hit &&
                 !any_hit && collision_point_in_aabb(mouse_position, &aabb) &&
-                is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
+                event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
             {
                 window->top_bar_offset = event_get_mouse_position();
                 window->top_bar_pressed = true;
@@ -2429,12 +2429,12 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
             input->input_index =
                 min((i32)input->buffer.size, input->input_index);
         }
-        if (is_key_pressed_repeat(FTIC_KEY_LEFT))
+        if (event_is_key_pressed_repeat(FTIC_KEY_LEFT))
         {
             input->input_index = max(input->input_index - 1, 0);
             input->time = 0.4f;
         }
-        if (is_key_pressed_repeat(FTIC_KEY_RIGHT))
+        if (event_is_key_pressed_repeat(FTIC_KEY_RIGHT))
         {
             input->input_index =
                 min(input->input_index + 1, (i32)input->buffer.size);
@@ -2466,7 +2466,7 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
                             1.0f, ui_context.font.line_height, NULL, NULL,
                             &input->chars, &ui_context.render.vertices);
     }
-    if (is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT))
+    if (event_is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT))
     {
         const V2 mouse_position = event_get_mouse_position();
         if (event_get_mouse_button_event()->activated)
@@ -2508,7 +2508,7 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
     }
     if (input->chars_selected.size)
     {
-        if (is_ctrl_and_key_pressed(FTIC_KEY_C))
+        if (event_is_ctrl_and_key_pressed(FTIC_KEY_C))
         {
             ui_input_buffer_copy_selection_to_clipboard(input);
         }
@@ -2605,8 +2605,8 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
         ui_context.row_current += size.width + ui_context.padding;
     }
 
-    if (is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT) ||
-        is_mouse_button_pressed(FTIC_MOUSE_BUTTON_RIGHT))
+    if (event_is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT) ||
+        event_is_mouse_button_pressed(FTIC_MOUSE_BUTTON_RIGHT))
     {
         input->active = hover_clicked_index.index == (i32)aabbs->size;
     }
@@ -2620,7 +2620,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
         typed = erase_char(input);
         typed |= add_from_key_buffer(size.width - 10.0f, input);
 
-        if (is_ctrl_and_key_pressed(FTIC_KEY_V))
+        if (event_is_ctrl_and_key_pressed(FTIC_KEY_V))
         {
             const char* clip_board = window_get_clipboard();
             if (clip_board)
@@ -2641,7 +2641,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
                 typed = true;
             }
         }
-        else if (is_ctrl_and_key_pressed(FTIC_KEY_X))
+        else if (event_is_ctrl_and_key_pressed(FTIC_KEY_X))
         {
             if (input->chars_selected.size)
             {
@@ -2723,7 +2723,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
               event_get_key_event()->alt_pressed);
 
     if (hit && selected_item_values &&
-        is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
     {
         if (!check_if_selected)
         {
@@ -2913,7 +2913,7 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
         lighter_color, lighter_color, drop_down_border_width, 0.0f);
 
     b8 in_focus = window_index == ui_context.window_in_focus;
-    if (in_focus && is_key_pressed_repeat(FTIC_KEY_TAB))
+    if (in_focus && event_is_key_pressed_repeat(FTIC_KEY_TAB))
     {
         if (event_get_key_event()->shift_pressed)
         {
@@ -2929,8 +2929,8 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
         }
     }
 
-    b8 mouse_button_clicked = is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
-    b8 enter_clicked = is_key_clicked(FTIC_KEY_ENTER);
+    b8 mouse_button_clicked = event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
+    b8 enter_clicked = event_is_key_clicked(FTIC_KEY_ENTER);
     b8 item_clicked = false;
     b8 any_drop_down_item_hit = false;
     b8 should_close = false;
@@ -2978,7 +2978,7 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
     }
     return should_close ||
            ((!any_drop_down_item_hit) && mouse_button_clicked) ||
-           is_key_clicked(FTIC_KEY_ESCAPE);
+           event_is_key_clicked(FTIC_KEY_ESCAPE);
 }
 
 void ui_window_add_text(V2 position, const char* text, b8 scrolling)
@@ -3080,8 +3080,8 @@ b8 ui_window_set_overlay()
     }
 
     return !window->area_hit &&
-           (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) ||
-            is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT));
+           (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) ||
+            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT));
 }
 
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)

@@ -246,8 +246,8 @@ V2 load_and_scale_preview_image(const ApplicationContext* application,
                                 const DirectoryItemArray* files,
                                 U32Array* textures)
 {
-    b8 right_key = is_key_pressed_repeat(FTIC_KEY_RIGHT);
-    b8 left_key = is_key_pressed_repeat(FTIC_KEY_LEFT);
+    b8 right_key = event_is_key_pressed_repeat(FTIC_KEY_RIGHT);
+    b8 left_key = event_is_key_pressed_repeat(FTIC_KEY_LEFT);
     if (right_key || left_key)
     {
         for (i32 i = 0; i < (i32)files->size; ++i)
@@ -311,7 +311,7 @@ void add_move_in_history_button(const AABB* aabb, const V4 icon_co,
         directory_move_in_history(history_add, selected_item_values,
                                   directory_history);
     }
-    if (!disable && is_mouse_button_clicked(mouse_button))
+    if (!disable && event_is_mouse_button_clicked(mouse_button))
     {
         directory_move_in_history(history_add, selected_item_values,
                                   directory_history);
@@ -345,7 +345,7 @@ void set_sorting_buttons(const ApplicationContext* application,
     if (hover)
     {
         name_button_color = high_light_color;
-        if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+        if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
         {
             DirectoryPage* current = directory_current(&tab->directory_history);
             if (current->sort_by != sort_by)
@@ -526,9 +526,9 @@ b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
 
     b8 item_clicked = false;
 
-    b8 mouse_button_clicked = is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
+    b8 mouse_button_clicked = event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
 
-    if (is_key_pressed_repeat(FTIC_KEY_TAB))
+    if (event_is_key_pressed_repeat(FTIC_KEY_TAB))
     {
         if (event_get_key_event()->shift_pressed)
         {
@@ -544,7 +544,7 @@ b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
         }
     }
 
-    b8 enter_clicked = is_key_clicked(FTIC_KEY_ENTER);
+    b8 enter_clicked = event_is_key_clicked(FTIC_KEY_ENTER);
 
     b8 any_drop_down_item_hit = false;
     b8 should_close = false;
@@ -601,7 +601,7 @@ b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
     }
     return should_close ||
            ((!any_drop_down_item_hit) && mouse_button_clicked) ||
-           is_key_clicked(FTIC_KEY_ESCAPE);
+           event_is_key_clicked(FTIC_KEY_ESCAPE);
 }
 
 void get_suggestions(const FontTTF* font, const V2 position,
@@ -843,14 +843,14 @@ int main(int argc, char** argv)
 
         if (tab->selected_item_values.paths.size)
         {
-            if (is_ctrl_and_key_pressed(FTIC_KEY_C))
+            if (event_is_ctrl_and_key_pressed(FTIC_KEY_C))
             {
                 // TODO: this is used in input fields
                 // platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
             else if (!show_preview &&
                      tab->selected_item_values.paths.size == 1 &&
-                     is_ctrl_and_key_pressed(FTIC_KEY_D))
+                     event_is_ctrl_and_key_pressed(FTIC_KEY_D))
             {
                 const char* path = tab->selected_item_values.paths.data[0];
 
@@ -895,13 +895,13 @@ int main(int argc, char** argv)
             }
         }
 
-        if (is_ctrl_and_key_pressed(FTIC_KEY_V))
+        if (event_is_ctrl_and_key_pressed(FTIC_KEY_V))
         {
             // TODO: this is used in input fields
             // directory_paste_in_directory(
             //   directory_current(&tab->directory_history));
         }
-        if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
+        if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
         {
             app.context_menu_open = true;
             app.context_menu.position = app.mouse_position;
@@ -1046,7 +1046,7 @@ int main(int argc, char** argv)
                                        &app.suggestion_data);
 
                     if (app.suggestion_data.change_directory ||
-                        is_key_clicked(FTIC_KEY_ENTER))
+                        event_is_key_clicked(FTIC_KEY_ENTER))
                     {
                         char* last_char =
                             array_back(&app.parent_directory_input.buffer);
@@ -1083,7 +1083,7 @@ int main(int argc, char** argv)
                     set_input_buffer_to_current_directory(
                         path, &app.parent_directory_input);
                 }
-                if (is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+                if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
                 {
                     if (!collision_point_in_aabb(app.mouse_position,
                                                  &app.suggestions.aabb))

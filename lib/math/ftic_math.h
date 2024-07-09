@@ -207,6 +207,7 @@ float v2_cross(V2 v1, V2 v2);
 V3 v3_cross(V3 v1, V3 v2);
 V3 v3_project(V3 v1, V3 v2);
 V3 v3_reject(V3 v1, V3 v2);
+V3 v3_rotate(V3 v3, float rad, V3 normal);
 float v2_distance(V2 v1, V2 v2);
 float v3_distance_squared(V3 v1, V3 v2);
 float v3_distance(V3 v1, V3 v2);
@@ -761,6 +762,18 @@ V3 v3_project(V3 v1, V3 v2)
 V3 v3_reject(V3 v1, V3 v2)
 {
     return v3_sub(v1, v3_project(v1, v2));
+}
+
+V3 v3_rotate(V3 v3, float rad, V3 normal)
+{
+    float cos_ = cosf(rad);
+    float sin_ = sinf(rad);
+
+    return v3_add(
+        v3_add(
+            v3_s_multi(v3, cos_),
+            v3_multi(v3_s_multi(v3_multi(v3, normal), (1.0f - cos_)), normal)),
+        v3_s_multi(v3_cross(v3, normal), sin_));
 }
 
 float v2_distance(V2 v1, V2 v2)

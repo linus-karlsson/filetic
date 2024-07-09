@@ -322,3 +322,13 @@ u32 get_path_length(const char* path, u32 path_length)
     }
     return 0;
 }
+
+f32 radians(f32 deg)
+{
+    return (f32)((deg * PI) / 180.0f);
+}
+
+f32 abs_f32(f32 in)
+{
+    return in < 0.0f ? in * -1.0f : in;
+}

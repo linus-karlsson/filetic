@@ -20,8 +20,7 @@ typedef struct Camera
 Camera camera_create_default();
 Camera camera_create(f32 speed, f32 sensitivity);
 
-b8 camera_update(Camera* camera, f32 delta_time, b8 off_the_ground, b8 edit_mode);
+b8 camera_update(Camera* camera, const V2 view_port, const f32 delta_time, b8* first_clicked, V2* last);
 void camera_print(const Camera* camera);
-
-V2 get_mouse_rotation(V2 view_port, f32 sens, b8* first_clicked, i16* last_x, i16* last_y, f32 delta_time);
+V2 get_mouse_rotation(const V2 view_port, const f32 sens, const f32 delta_time, V2* last, b8* first_clicked);
 
