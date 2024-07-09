@@ -90,6 +90,16 @@ void window_set_cursor(FTicWindow* window, int cursor)
     glfwSetCursor((GLFWwindow*)window, cursors[cursor]);
 }
 
+void window_set_cursor_position(FTicWindow* window, double x, double y)
+{
+    glfwSetCursorPos((GLFWwindow*)window, x, y);
+}
+
+void window_set_input_mode(FTicWindow* window, int mode, int value)
+{
+    glfwSetInputMode((GLFWwindow*)window, mode, value);
+}
+
 void window_set_on_drop_event(FTicWindow* window, OnDropCallback callback)
 {
     glfwSetDropCallback((GLFWwindow*)window, callback);

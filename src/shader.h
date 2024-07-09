@@ -1,6 +1,7 @@
 #pragma once
 #include "define.h"
 #include "math/ftic_math.h"
+#include "util.h"
 
 typedef struct ShaderProperties
 {
@@ -9,13 +10,6 @@ typedef struct ShaderProperties
     int view_location;
     int model_location;
 } ShaderProperties;
-
-typedef struct MVP
-{
-    M4 projection;
-    M4 view;
-    M4 model;
-} MVP;
 
 u32 shader_compile(u32 type, const u8* source);
 u32 shader_create(const char* vertex_file_path, const char* fragment_file_path);

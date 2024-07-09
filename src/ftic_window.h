@@ -6,6 +6,12 @@
 #define FTIC_RESIZE_V_CURSOR 3
 #define FTIC_MOVE_CURSOR 4
 
+#define FTIC_MODE_CURSOR 0x00033001
+#define FTIC_MODE_CURSOR_NORMAL 0x00034001
+#define FTIC_MODE_CURSOR_HIDDEN 0x00034002
+#define FTIC_MODE_CURSOR_DISABLED 0x00034003
+#define FTIC_MODE_CURSOR_CAPTURED 0x00034004
+
 #define TOTAL_CURSORS 5
 
 typedef void FTicWindow;
@@ -29,6 +35,8 @@ void window_set_on_drop_event(FTicWindow* window, OnDropCallback callback);
 void window_get_mouse_position(FTicWindow* window, double* x, double* y);
 
 void window_set_cursor(FTicWindow* window, int cursor);
+void window_set_cursor_position(FTicWindow* window, double x, double y);
+void window_set_input_mode(FTicWindow* window, int mode, int value);
 
 int window_should_close(FTicWindow* window);
 void window_wait_event();

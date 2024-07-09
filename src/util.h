@@ -11,6 +11,19 @@ typedef struct Vertex
     f32 texture_index;
 } Vertex;
 
+typedef struct VP
+{
+    M4 projection;
+    M4 view;
+} VP;
+
+typedef struct MVP
+{
+    M4 projection;
+    M4 view;
+    M4 model;
+} MVP;
+
 typedef struct IndexArray
 {
     u32 size;
