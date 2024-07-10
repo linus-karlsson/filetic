@@ -127,7 +127,7 @@
 #define FTIC_KEY_RIGHT_SUPER 347
 #define FTIC_KEY_MENU 348
 
-#define FTIC_KEY_LAST GLFW_KEY_MENU
+#define FTIC_KEY_LAST FTIC_KEY_MENU
 
 #define FTIC_MOUSE_BUTTON_1 0
 #define FTIC_MOUSE_BUTTON_2 1
@@ -200,5 +200,6 @@ b8 event_is_mouse_button_pressed_once(i32 button);
 b8 event_is_ctrl_and_key_pressed(i32 key);
 b8 event_is_ctrl_and_key_range_pressed(i32 key_low, i32 key_high);
 b8 event_is_key_clicked(i32 key);
-b8 event_is_key_pressed_repeat(i32 key);
 b8 event_is_key_pressed(i32 key);
+b8 event_is_key_pressed_once(i32 key);
+b8 event_is_key_pressed_repeat(i32 key);

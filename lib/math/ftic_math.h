@@ -1472,7 +1472,7 @@ M4 perspective(float fov, float aspect, float sy_near, float sy_far)
 {
     const float f = 1.0f / tanf((fov * 0.5f));
     const float X = f / aspect;
-    const float Y = -f;
+    const float Y = f;
     const float Z1 = (sy_far + sy_near) / (sy_near - sy_far);
     const float Z2 = (2.0f * sy_far * sy_near) / (sy_near - sy_far);
 

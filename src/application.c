@@ -619,15 +619,6 @@ void application_begin_frame(ApplicationContext* app)
         array_back(&app->tabs)->window_id = window_id;
         open_window(app, window_id);
     }
-
-    if (event_is_ctrl_and_key_range_pressed(FTIC_KEY_1, FTIC_KEY_9))
-    {
-        const u32 index = event_get_key_event()->key - FTIC_KEY_1;
-        if (index < app->tabs.size)
-        {
-            app->tab_index = index;
-        }
-    }
 }
 
 void application_end_frame(ApplicationContext* app)

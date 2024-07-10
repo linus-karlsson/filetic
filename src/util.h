@@ -15,6 +15,7 @@ typedef struct Vertex3D
 {
     V4 color;
     V3 position;
+    V3 normal;
     V2 texture_coordinates;
     f32 texture_index;
 } Vertex3D;
@@ -80,6 +81,7 @@ typedef struct SelectedItemValues
 {
     CharPtrArray paths;
     HashTableCharU32 selected_items;
+    char* last_selected;
 } SelectedItemValues;
 
 FileAttrib file_read(const char* file_path);

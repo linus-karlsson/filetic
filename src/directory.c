@@ -276,6 +276,7 @@ DirectoryTab directory_tab_add(const char* dir)
         hash_table_create_char_u32(100, hash_murmur);
 
     return (DirectoryTab){
+        .rename_input = ui_input_buffer_create(),
         .directory_history = directory_history,
         .selected_item_values = selected_item_values,
         .list_view = true,

@@ -30,6 +30,8 @@ typedef struct EventContext
 
     f64 last_event_time;
 
+    b8 key_pressed[FTIC_KEY_LAST];
+
 } EventContext;
 
 EventContext event_context = { .last_button = -1 };
@@ -43,6 +45,15 @@ internal void on_key_event(void* window, int key, int scancode, int action,
     event_context.key_event.shift_pressed = mods & FTIC_MOD_SHIFT;
     event_context.key_event.action = action;
     event_context.key_event.activated = true;
+
+    if (action == FTIC_RELEASE)
+    {
+        event_context.key_pressed[key] = false;
+    }
+    else
+    {
+        event_context.key_pressed[key] = true;
+    }
 
     event_context.last_event_time = window_get_time();
 }
@@ -238,6 +249,17 @@ b8 event_is_key_clicked(i32 key)
            event->key == key;
 }
 
+b8 event_is_key_pressed(i32 key)
+{
+    return event_context.key_pressed[key];
+}
+
+b8 event_is_key_pressed_once(i32 key)
+{
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == FTIC_PRESS && event->key == key;
+}
+
 b8 event_is_key_pressed_repeat(i32 key)
 {
     const KeyEvent* event = event_get_key_event();
@@ -246,9 +268,3 @@ b8 event_is_key_pressed_repeat(i32 key)
            event->key == key;
 }
 
-b8 event_is_key_pressed(i32 key)
-{
-    const KeyEvent* event = event_get_key_event();
-    return (event->action == FTIC_PRESS || event->action == FTIC_REPEAT) &&
-           event->key == key;
-}

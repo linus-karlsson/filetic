@@ -62,6 +62,7 @@ internal void parse_sizes(FileAttrib* file, u32* v, u32* vt, u32* vn, u32* f)
                 (*f) += (current_count - 2) * 3;
             }
         }
+        line.size = 0;
     }
     array_free(&line);
 }
@@ -177,6 +178,7 @@ internal void parse_buffer(ObjectLoad* object_load, FileAttrib* file)
                 f_parse(object_load, line.data + 2);
             }
         }
+        line.size = 0;
     }
 }
 

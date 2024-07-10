@@ -888,6 +888,26 @@ void platform_delete_files(const CharPtrArray* paths)
     }
 }
 
+void platform_rename_file(const char* path, char* new_name,
+                          const u32 name_length)
+{
+    u32 path_length = get_path_length(path, (u32)strlen(path));
+
+    char* to = string_copy(path, path_length, name_length + 2);
+    memcpy(to + path_length, new_name, name_length);
+
+    SHFILEOPSTRUCT file_op = {
+        .wFunc = FO_RENAME,
+        .pFrom = path,
+        .pTo = to,
+        .fFlags = FOF_ALLOWUNDO,
+    };
+
+    int result = SHFileOperation(&file_op);
+
+    free(to);
+}
+
 void platform_show_properties(i32 x, i32 y, const char* file_path)
 {
     wchar_t* w_file_path = char_to_wchar(file_path, strlen(file_path) + 1);

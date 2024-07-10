@@ -399,7 +399,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
         i32 selected_item = -1;
         if (ui_window_add_folder_list(list_position, list_item_height,
                                       &page->search_result_folder_array.array,
-                                      NULL, &selected_item))
+                                      NULL, NULL, NULL, &selected_item))
         {
             directory_open_folder(
                 page->search_result_folder_array.array.data[selected_item].path,
@@ -409,7 +409,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
             list_item_height * page->search_result_folder_array.array.size;
         if (ui_window_add_file_list(list_position, list_item_height,
                                     &page->search_result_file_array.array, NULL,
-                                    &selected_item))
+                                    NULL, NULL, &selected_item))
         {
             platform_open_file(
                 page->search_result_file_array.array.data[selected_item].path);
@@ -435,12 +435,14 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
     DirectoryPage* current = directory_current(&tab->directory_history);
     if (ui_window_begin(window, get_parent_directory_name(current), true))
     {
+        b8 reload = false;
         V2 list_position = v2f(10.0f, 10.0f);
         if (tab->list_view)
         {
             i32 selected_item = -1;
             if (ui_window_add_folder_list(list_position, list_item_height,
                                           &current->directory.sub_directories,
+                                          &reload, &tab->rename_input,
                                           &tab->selected_item_values,
                                           &selected_item))
             {
@@ -448,11 +450,13 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
                     current->directory.sub_directories.data[selected_item].path,
                     &tab->directory_history);
             }
+
             list_position.y +=
                 list_item_height * current->directory.sub_directories.size;
             if (ui_window_add_file_list(
                     list_position, list_item_height, &current->directory.files,
-                    &tab->selected_item_values, &selected_item))
+                    &reload, &tab->rename_input, &tab->selected_item_values,
+                    &selected_item))
             {
                 platform_open_file(
                     current->directory.files.data[selected_item].path);
@@ -479,6 +483,10 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
                         current->directory.files.data[result.second].path);
                 }
             }
+        }
+        if(reload)
+        {
+            directory_reload(current);
         }
         return ui_window_end();
     }
@@ -813,6 +821,9 @@ u32 load_object(Render* render, const char* path)
         vertex.position = object_load.vertex_positions.data[current_vert_index];
         vertex.color = v4f(1.0f, 1.0f, 1.0f, 1.0f);
 
+        vertex.normal =
+            object_load.normals.data[object_load.indices.data[i].normal_index];
+
         const u32 current_tex_index = object_load.indices.data[i].texture_index;
         vertex.texture_coordinates.x =
             object_load.texture_coordinates.data[current_tex_index].x;
@@ -852,6 +863,7 @@ int main(int argc, char** argv)
     array_create(&preview_textures, 10);
     i32 preview_index = -1;
     Camera preview_camera = camera_create_default();
+    V3 light_position = v3d();
 
     AABBArray parent_directory_aabbs = { 0 };
     array_create(&parent_directory_aabbs, 10);
@@ -869,7 +881,7 @@ int main(int argc, char** argv)
 
     enable_gldebugging();
     glEnable(GL_BLEND);
-    // glEnable(GL_MULTISAMPLE);
+    glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (!window_should_close(app.window))
     {
@@ -905,7 +917,8 @@ int main(int argc, char** argv)
                 activated = false;
             }
         }
-        b8 check_collision = true;
+
+        b8 check_collision = preview_index != 1;
 
         if (check_collision &&
             (collision_point_in_aabb(app.mouse_position,
@@ -918,7 +931,7 @@ int main(int argc, char** argv)
             check_collision = false;
         }
 
-        if (tab->selected_item_values.paths.size)
+        if (preview_index != 1 && tab->selected_item_values.paths.size)
         {
             if (event_is_ctrl_and_key_pressed(FTIC_KEY_C))
             {
@@ -982,13 +995,14 @@ int main(int argc, char** argv)
             }
         }
 
-        if (event_is_ctrl_and_key_pressed(FTIC_KEY_V))
+        if (preview_index != 1 && event_is_ctrl_and_key_pressed(FTIC_KEY_V))
         {
             // TODO: this is used in input fields
             // directory_paste_in_directory(
             //   directory_current(&tab->directory_history));
         }
-        if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
+        if (preview_index != 1 &&
+            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
         {
             app.context_menu_open = true;
             app.context_menu.position = app.mouse_position;
@@ -1244,9 +1258,10 @@ int main(int argc, char** argv)
                 {
                     V2 list_position = v2i(10.0f);
                     i32 selected_item = -1;
-                    if (ui_window_add_folder_list(
-                            list_position, list_item_height,
-                            &app.quick_access_folders, NULL, &selected_item))
+                    if (ui_window_add_folder_list(list_position,
+                                                  list_item_height,
+                                                  &app.quick_access_folders,
+                                                  NULL, NULL, NULL, &selected_item))
                     {
                         directory_open_folder(
                             app.quick_access_folders.data[selected_item].path,
@@ -1392,10 +1407,10 @@ int main(int argc, char** argv)
 
         if (preview_index == 1)
         {
-            glViewport((int)preview_camera.view_port.min.x,
-                       (int)preview_camera.view_port.min.y,
-                       (int)preview_camera.view_port.size.width,
-                       (int)preview_camera.view_port.size.height);
+            glViewport((int)roundf(preview_camera.view_port.min.x),
+                       (int)roundf(preview_camera.view_port.min.y),
+                       (int)roundf(preview_camera.view_port.size.width),
+                       (int)roundf(preview_camera.view_port.size.height));
 
             MVP mvp = {
                 .model = m4i(1.0f),
@@ -1403,9 +1418,19 @@ int main(int argc, char** argv)
                 .projection = preview_camera.view_projection.projection,
             };
 
+            mvp.model.data[0][0] = -preview_camera.orientation.x;
+            mvp.model.data[0][1] = -preview_camera.orientation.y;
+            mvp.model.data[0][2] = -preview_camera.orientation.z;
+
+            glEnable(GL_DEPTH_TEST);
             render_begin_draw(&app.render_3d, &mvp);
             render_draw(0, app.index_count_3d, &preview_camera.view_port);
             render_end_draw(&app.render_3d);
+            glDisable(GL_DEPTH_TEST);
+            if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+            {
+                preview_index = -1;
+            }
         }
 
 #endif

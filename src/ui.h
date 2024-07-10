@@ -193,8 +193,8 @@ void ui_window_start_position_animation(UiWindow* window, V2 start_position, V2 
 
 b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color, const V4 texture_coordinates, const f32 texture_index, const b8 disable);
 b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text);
-b8 ui_window_add_folder_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
-b8 ui_window_add_file_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
+b8 ui_window_add_folder_list(V2 position, const f32 item_height, const DirectoryItemArray* items, b8* reload, InputBuffer* rename_input, SelectedItemValues* selected_item_values, i32* item_selected);
+b8 ui_window_add_file_list(V2 position, const f32 item_height, const DirectoryItemArray* items, b8* reload, InputBuffer* rename_input, SelectedItemValues* selected_item_values, i32* item_selected);
 II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, const f32 item_height, SelectedItemValues* selected_item_values);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
