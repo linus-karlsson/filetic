@@ -36,6 +36,7 @@ typedef struct DirectoryTab
     u32 window_id;
     DirectoryHistory directory_history;
     SelectedItemValues selected_item_values;
+    b8 list_view;
 } DirectoryTab;
 
 typedef struct DirectoryTabArray

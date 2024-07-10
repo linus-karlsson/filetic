@@ -26,6 +26,13 @@
 #include "ui.h"
 #include "application.h"
 
+global const V4 full_icon_co = {
+    .x = 0.0f,
+    .y = 0.0f,
+    .z = 1.0f,
+    .w = 1.0f,
+};
+
 #define icon_1_co(width, height)                                               \
     {                                                                          \
         .x = 0.0f / width,                                                     \
@@ -305,8 +312,8 @@ void add_move_in_history_button(const AABB* aabb, const V4 icon_co,
                                 SelectedItemValues* selected_item_values,
                                 DirectoryHistory* directory_history)
 {
-    if (ui_window_add_icon_button(aabb->min, aabb->size, icon_co, 3.0f,
-                                  disable))
+    if (ui_window_add_icon_button(aabb->min, aabb->size, high_light_color,
+                                  icon_co, UI_ARROW_ICON_TEXTURE, disable))
     {
         directory_move_in_history(history_add, selected_item_values,
                                   directory_history);
@@ -427,24 +434,49 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
     if (ui_window_begin(window, get_parent_directory_name(current), true))
     {
         V2 list_position = v2f(10.0f, 10.0f);
-        i32 selected_item = -1;
-        if (ui_window_add_folder_list(list_position, list_item_height,
-                                      &current->directory.sub_directories,
-                                      &tab->selected_item_values,
-                                      &selected_item))
+        if (tab->list_view)
         {
-            directory_open_folder(
-                current->directory.sub_directories.data[selected_item].path,
-                &tab->directory_history);
+            i32 selected_item = -1;
+            if (ui_window_add_folder_list(list_position, list_item_height,
+                                          &current->directory.sub_directories,
+                                          &tab->selected_item_values,
+                                          &selected_item))
+            {
+                directory_open_folder(
+                    current->directory.sub_directories.data[selected_item].path,
+                    &tab->directory_history);
+            }
+            list_position.y +=
+                list_item_height * current->directory.sub_directories.size;
+            if (ui_window_add_file_list(
+                    list_position, list_item_height, &current->directory.files,
+                    &tab->selected_item_values, &selected_item))
+            {
+                platform_open_file(
+                    current->directory.files.data[selected_item].path);
+            }
         }
-        list_position.y +=
-            list_item_height * current->directory.sub_directories.size;
-        if (ui_window_add_file_list(list_position, list_item_height,
-                                    &current->directory.files,
-                                    &tab->selected_item_values, &selected_item))
+        else
         {
-            platform_open_file(
-                current->directory.files.data[selected_item].path);
+            II32 result = ui_window_add_directory_item_grid(
+                list_position, &current->directory.sub_directories,
+                &current->directory.files, 128.0f, &tab->selected_item_values);
+
+            if (result.first > -1)
+            {
+                if (result.first == 0)
+                {
+                    directory_open_folder(
+                        current->directory.sub_directories.data[result.second]
+                            .path,
+                        &tab->directory_history);
+                }
+                else
+                {
+                    platform_open_file(
+                        current->directory.files.data[result.second].path);
+                }
+            }
         }
         return ui_window_end();
     }
@@ -526,7 +558,8 @@ b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
 
     b8 item_clicked = false;
 
-    b8 mouse_button_clicked = event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
+    b8 mouse_button_clicked =
+        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
 
     if (event_is_key_pressed_repeat(FTIC_KEY_TAB))
     {
@@ -792,7 +825,7 @@ int main(int argc, char** argv)
 
     enable_gldebugging();
     glEnable(GL_BLEND);
-    glEnable(GL_MULTISAMPLE);
+    //glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (!window_should_close(app.window))
     {
@@ -956,14 +989,14 @@ int main(int argc, char** argv)
         look_for_dropped_files(directory_current(&tab->directory_history),
                                directory_to_drop_in);
 
-        const f32 top_bar_height = 52.0f;
+        const f32 top_bar_height = 44.0f;
         const f32 top_bar_menu_height = 10.0f + app.font.pixel_height;
-        const f32 bottom_bar_heighth = 25.0f;
+        const f32 bottom_bar_height = 25.0f;
 
         AABB dock_space = { .min = v2f(0.0f,
                                        top_bar_height + top_bar_menu_height) };
         dock_space.size = v2_sub(app.dimensions, dock_space.min);
-        dock_space.size.height -= bottom_bar_heighth;
+        dock_space.size.height -= bottom_bar_height;
         ui_context_begin(app.dimensions, &dock_space, app.delta_time,
                          check_collision);
         {
@@ -988,7 +1021,7 @@ int main(int argc, char** argv)
                 }
 
                 AABB button_aabb = { 0 };
-                button_aabb.size = v2i(40.0f),
+                button_aabb.size = v2i(top_bar_height - 10.0f),
                 button_aabb.min = v2f(10.0f, top_bar_menu_height + 5.0f);
 
                 ui_window_row_begin(0.0f);
@@ -1009,8 +1042,9 @@ int main(int argc, char** argv)
                 disable = !directory_can_go_up(
                     directory_current(&tab->directory_history)
                         ->directory.parent);
-                if (ui_window_add_icon_button(button_aabb.min, button_aabb.size,
-                                              arrow_up_icon_co, 3.0f, disable))
+                if (ui_window_add_icon_button(
+                        button_aabb.min, button_aabb.size, high_light_color,
+                        arrow_up_icon_co, UI_ARROW_ICON_TEXTURE, disable))
                 {
                     directory_go_up(&tab->directory_history);
                 }
@@ -1108,42 +1142,46 @@ int main(int argc, char** argv)
 
             UiWindow* bottom_bar = ui_window_get(app.bottom_bar_window);
             bottom_bar->position =
-                v2f(0.0f, app.dimensions.height - bottom_bar_heighth);
-            bottom_bar->size = v2f(app.dimensions.width, bottom_bar_heighth);
+                v2f(0.0f, app.dimensions.height - bottom_bar_height);
+            bottom_bar->size = v2f(app.dimensions.width, bottom_bar_height);
             bottom_bar->top_color = v4ic(0.2f);
             bottom_bar->bottom_color = v4ic(0.15f);
             if (ui_window_begin(app.bottom_bar_window, NULL, false))
             {
                 Directory current =
                     directory_current(&tab->directory_history)->directory;
-#if 0
-                char buffer[10] = { 0 };
-                sprintf_s(buffer, sizeof(buffer), "%u",
-                          current.sub_directories.size);
-
-                V2 position = v2f(10.0f, 2.0f);
-                ui_window_row_begin(10.0f);
-
-                ui_window_add_icon(position, v2i(20.0f), folder_icon_co, 2.0f);
-                ui_window_add_text(position, buffer, false);
-
-                memset(buffer, 0, sizeof(buffer));
-                sprintf_s(buffer, sizeof(buffer), "%u",
-                          current.sub_directories.size);
-                ui_window_add_icon(position, v2i(20.0f), file_icon_co, 2.0f);
-
-                position.x += ui_window_row_end() - 4.0f;
-                ui_window_add_text(position, buffer, false);
-#else
                 char buffer[64] = { 0 };
                 sprintf_s(buffer, sizeof(buffer), "Folders: %u  |  Files: %u",
                           current.sub_directories.size, current.files.size);
                 ui_window_add_text(v2f(10.0f, 0.0f), buffer, false);
-#endif
+
+                ui_window_row_begin(0.0f);
+
+                V2 list_grid_icon_position = v2f(
+                    bottom_bar->size.width - (2.0f * bottom_bar_height + 5.0f),
+                    0);
+
+                if (ui_window_add_icon_button(list_grid_icon_position,
+                                              v2i(bottom_bar_height),
+                                              border_color, full_icon_co,
+                                              UI_LIST_ICON_TEXTURE, false))
+                {
+                    tab->list_view = true;
+                }
+                if (ui_window_add_icon_button(list_grid_icon_position,
+                                              v2i(bottom_bar_height),
+                                              border_color, full_icon_co,
+                                              UI_GRID_ICON_TEXTURE, false))
+                {
+                    tab->list_view = false;
+                }
+
+                ui_window_row_end();
+
                 ui_window_end();
             }
 
-            const f32 list_item_height = app.font.pixel_height + 10.0f;
+            const f32 list_item_height = 30.0f;
 
             if (app.show_quick_access)
             {
@@ -1203,7 +1241,7 @@ int main(int argc, char** argv)
                         middle(app.dimensions.width, preview->size.width),
                         middle(app.dimensions.height, preview->size.height));
 
-                    if (ui_window_begin(app.preview_window,NULL, false))
+                    if (ui_window_begin(app.preview_window, NULL, false))
                     {
                         show_preview = !ui_window_set_overlay();
                         ui_window_add_text_colored(v2f(10.0f, 10.0f),

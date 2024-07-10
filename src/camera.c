@@ -143,7 +143,8 @@ b8 camera_update(Camera* camera, const V2 view_port, const f32 delta_time,
 
         camera->ori = v3_rotate(camera->ori, radians(rotation.x), camera->up);
     }
-    else if (mouse_button_event->activated && !*first_clicked)
+    else if (mouse_button_event->activated &&
+             mouse_button_event->action == FTIC_RELEASE && !*first_clicked)
     {
         window_set_input_mode(window_get_current(), FTIC_MODE_CURSOR,
                               FTIC_MODE_CURSOR_NORMAL);

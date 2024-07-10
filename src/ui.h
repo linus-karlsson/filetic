@@ -5,6 +5,31 @@
 #include "platform/platform.h"
 #include "font.h"
 
+#define UI_DEFAULT_TEXTURE 0.0f
+#define UI_FONT_TEXTURE 1.0f
+
+#define UI_ARROW_ICON_TEXTURE 2.0f
+#define UI_LIST_ICON_TEXTURE 3.0f
+#define UI_GRID_ICON_TEXTURE 4.0f
+
+#define UI_FOLDER_ICON_TEXTURE 5.0f
+#define UI_FILE_ICON_TEXTURE 6.0f
+#define UI_FILE_PNG_ICON_TEXTURE 7.0f
+#define UI_FILE_JPG_ICON_TEXTURE 8.0f
+#define UI_FILE_PDF_ICON_TEXTURE 9.0f
+#define UI_FILE_JAVA_ICON_TEXTURE 10.0f
+#define UI_FILE_CPP_ICON_TEXTURE 11.0f
+#define UI_FILE_C_ICON_TEXTURE 12.0f
+
+#define UI_FOLDER_ICON_BIG_TEXTURE 13.0f
+#define UI_FILE_ICON_BIG_TEXTURE 14.0f
+#define UI_FILE_PNG_ICON_BIG_TEXTURE 15.0f
+#define UI_FILE_JPG_ICON_BIG_TEXTURE 16.0f
+#define UI_FILE_PDF_ICON_BIG_TEXTURE 17.0f
+#define UI_FILE_JAVA_ICON_BIG_TEXTURE 18.0f
+#define UI_FILE_CPP_ICON_BIG_TEXTURE 19.0f
+#define UI_FILE_C_ICON_BIG_TEXTURE 20.0f
+
 typedef struct ScrollBar
 {
     f32 mouse_pointer_offset;
@@ -134,6 +159,12 @@ typedef struct DropDownMenu
                                  b8 item_clicked, V4* text_color, void* data);
 } DropDownMenu;
 
+typedef struct II32
+{
+    i32 first;
+    i32 second;
+}II32;
+
 InputBuffer ui_input_buffer_create();
 void ui_input_buffer_clear_selection(InputBuffer* input);
 char* ui_input_buffer_get_selection_as_string(InputBuffer* input);
@@ -160,11 +191,11 @@ f32 ui_window_row_end();
 void ui_window_start_size_animation(UiWindow* window, V2 start_size, V2 end_size);
 void ui_window_start_position_animation(UiWindow* window, V2 start_position, V2 end_position);
 
-b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index, const b8 disable);
+b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color, const V4 texture_coordinates, const f32 texture_index, const b8 disable);
 b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text);
-void ui_window_add_directory_list(V2 position);
 b8 ui_window_add_folder_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
 b8 ui_window_add_file_list(V2 position, const f32 item_height, const DirectoryItemArray* items, SelectedItemValues* selected_item_values, i32* item_selected);
+II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, const f32 item_height, SelectedItemValues* selected_item_values);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
 void ui_window_add_text(V2 position, const char* text, b8 scrolling);

@@ -278,6 +278,7 @@ DirectoryTab directory_tab_add(const char* dir)
     return (DirectoryTab){
         .directory_history = directory_history,
         .selected_item_values = selected_item_values,
+        .list_view = true,
     };
 }
 

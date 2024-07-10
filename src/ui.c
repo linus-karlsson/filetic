@@ -1086,17 +1086,56 @@ void ui_context_create()
     u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
     free(texture_properties.bytes);
 
+    // TODO: make all of these icons into a sprite sheet.
     u32 default_texture = create_default_texture();
-    u32 file_icon_texture = load_icon("res/icons/icon_sheet.png");
     u32 arrow_icon_texture =
         load_icon_as_white("res/icons/arrow_sprite_sheet.png");
+    u32 list_icon_texture = load_icon_as_white("res/icons/list.png");
+    u32 grid_icon_texture = load_icon_as_white("res/icons/grid.png");
+
+    u32 folder_icon_texture = load_icon("res/icons/folder.png");
+    u32 file_icon_texture = load_icon("res/icons/file.png");
+    u32 file_png_icon_texture = load_icon("res/icons/png.png");
+    u32 file_jpg_icon_texture = load_icon("res/icons/jpg.png");
+    u32 file_pdf_icon_texture = load_icon("res/icons/pdf.png");
+    u32 file_java_icon_texture = load_icon("res/icons/java.png");
+    u32 file_cpp_icon_texture = load_icon("res/icons/cpp.png");
+    u32 file_c_icon_texture = load_icon("res/icons/c.png");
+
+    u32 folder_icon_big_texture = load_icon("res/icons/folderbig.png");
+    u32 file_icon_big_texture = load_icon("res/icons/filebig.png");
+    u32 file_png_icon_big_texture = load_icon("res/icons/pngbig.png");
+    u32 file_jpg_icon_big_texture = load_icon("res/icons/jpgbig.png");
+    u32 file_pdf_icon_big_texture = load_icon("res/icons/pdfbig.png");
+    u32 file_java_icon_big_texture = load_icon("res/icons/javabig.png");
+    u32 file_cpp_icon_big_texture = load_icon("res/icons/cppbig.png");
+    u32 file_c_icon_big_texture = load_icon("res/icons/cbig.png");
 
     U32Array textures = { 0 };
-    array_create(&textures, 10);
+    array_create(&textures, 21);
     array_push(&textures, default_texture);
     array_push(&textures, font_texture);
-    array_push(&textures, file_icon_texture);
     array_push(&textures, arrow_icon_texture);
+    array_push(&textures, list_icon_texture);
+    array_push(&textures, grid_icon_texture);
+
+    array_push(&textures, folder_icon_texture);
+    array_push(&textures, file_icon_texture);
+    array_push(&textures, file_png_icon_texture);
+    array_push(&textures, file_jpg_icon_texture);
+    array_push(&textures, file_pdf_icon_texture);
+    array_push(&textures, file_java_icon_texture);
+    array_push(&textures, file_cpp_icon_texture);
+    array_push(&textures, file_c_icon_texture);
+
+    array_push(&textures, folder_icon_big_texture);
+    array_push(&textures, file_icon_big_texture);
+    array_push(&textures, file_png_icon_big_texture);
+    array_push(&textures, file_jpg_icon_big_texture);
+    array_push(&textures, file_pdf_icon_big_texture);
+    array_push(&textures, file_java_icon_big_texture);
+    array_push(&textures, file_cpp_icon_big_texture);
+    array_push(&textures, file_c_icon_big_texture);
 
     ui_context.render = rendering_properties_initialize(
         shader, textures, &vertex_buffer_layout, 100 * 4, 100 * 4);
@@ -1634,7 +1673,8 @@ void ui_context_end()
                 {
                     if (j != (i32)dock_space->window_in_focus)
                     {
-                        if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+                        if (event_is_mouse_button_clicked(
+                                FTIC_MOUSE_BUTTON_LEFT))
                         {
                             dock_space_to_change = dock_space;
                             new_window_focus = j;
@@ -1658,9 +1698,10 @@ void ui_context_end()
                 if (tab_window->title)
                 {
                     index_offset_and_count.second += text_generation(
-                        ui_context.font.chars, tab_window->title, 1.0f,
-                        text_position, 1.0f, ui_context.font.line_height, NULL,
-                        &title_advance, NULL, &ui_context.render.vertices);
+                        ui_context.font.chars, tab_window->title,
+                        UI_FONT_TEXTURE, text_position, 1.0f,
+                        ui_context.font.line_height, NULL, &title_advance, NULL,
+                        &ui_context.render.vertices);
                 }
 
                 V2 button_position =
@@ -2342,7 +2383,7 @@ f32 ui_window_row_end()
     return result;
 }
 
-b8 ui_window_add_icon_button(V2 position, const V2 size,
+b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color,
                              const V4 texture_coordinates,
                              const f32 texture_index, const b8 disable)
 {
@@ -2383,10 +2424,10 @@ b8 ui_window_add_icon_button(V2 position, const V2 size,
     };
     array_push(aabbs, button_aabb);
 
-    if (hover)
+    if (hover && event_get_mouse_button_event()->action == FTIC_RELEASE)
     {
         quad(&ui_context.render.vertices, button_aabb.min, button_aabb.size,
-             high_light_color, 0.0f);
+             hover_color, 0.0f);
         window->rendering_index_count += 6;
     }
 
@@ -2459,12 +2500,12 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
     input->chars.size = 0;
     if (input->buffer.size)
     {
-        index_count +=
-            text_generation(ui_context.font.chars, input->buffer.data, 1.0f,
-                            v2f(text_position.x,
-                                text_position.y + ui_context.font.pixel_height),
-                            1.0f, ui_context.font.line_height, NULL, NULL,
-                            &input->chars, &ui_context.render.vertices);
+        index_count += text_generation(
+            ui_context.font.chars, input->buffer.data, UI_FONT_TEXTURE,
+            v2f(text_position.x,
+                text_position.y + ui_context.font.pixel_height),
+            1.0f, ui_context.font.line_height, NULL, NULL, &input->chars,
+            &ui_context.render.vertices);
     }
     if (event_is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT))
     {
@@ -2679,8 +2720,8 @@ internal u32 display_text_and_truncate_if_necissary(const V2 position,
         string_swap(text + j, saved_name); // Truncate
     }
     u32 index_count =
-        text_generation(ui_context.font.chars, text, 1.0f, position, 1.0f,
-                        ui_context.font.pixel_height, NULL, NULL, NULL,
+        text_generation(ui_context.font.chars, text, UI_FONT_TEXTURE, position,
+                        1.0f, ui_context.font.pixel_height, NULL, NULL, NULL,
                         &ui_context.render.vertices);
     if (too_long)
     {
@@ -2696,25 +2737,22 @@ internal b8 item_in_view(const f32 position_y, const f32 height,
     return closed_interval(-height, value, window_height + height);
 }
 
-internal b8 directory_item(V2 starting_position, V2 item_dimensions,
-                           const f32 icon_index, V4 texture_coordinates,
-                           const DirectoryItem* item,
-                           SelectedItemValues* selected_item_values)
+internal b8 check_directory_item_collision(
+    V2 starting_position, V2 item_dimensions, const DirectoryItem* item,
+    V4* color, b8* selected, SelectedItemValues* selected_item_values)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
-    UiWindow* window = ui_context.windows.data + window_index;
     AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    b8 selected = false;
     u32* check_if_selected = NULL;
     if (selected_item_values)
     {
         check_if_selected = hash_table_get_char_u32(
             &selected_item_values->selected_items, item->path);
-        selected = check_if_selected ? true : false;
+        *selected = check_if_selected ? true : false;
     }
 
     AABB aabb = { .min = starting_position, .size = item_dimensions };
@@ -2733,7 +2771,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
             hash_table_insert_char_u32(&selected_item_values->selected_items,
                                        path, 1);
             array_push(&selected_item_values->paths, path);
-            selected = true;
+            *selected = true;
         }
         else
         {
@@ -2741,53 +2779,107 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
         }
     }
 
-    V4 color = clear_color;
+    *color = clear_color;
     V4 left_side_color = clear_color;
-    if (hit || selected)
+    if (hit || *selected)
     {
-        const V4 end_color = selected ? v4ic(0.45f) : v4ic(0.3f);
+        const V4 end_color = *selected ? v4ic(0.45f) : v4ic(0.3f);
 #if 0
         color = v4_lerp(selected ? v4ic(0.5f) : border_color, end_color,
                         ((f32)sin(pulse_x) + 1.0f) / 2.0f);
 #else
-        color = end_color;
+        *color = end_color;
 #endif
-
-        starting_position.x += 8.0f;
-        item_dimensions.width -= 6.0f;
     }
-    array_push(aabbs, aabb);
-    quad_gradiant_l_r(&ui_context.render.vertices, aabb.min, aabb.size, color,
-                      clear_color, 0.0f);
-    window->rendering_index_count += 6;
 
-    if (v4_equal(texture_coordinates, file_icon_co))
+    return hit;
+}
+
+internal f32 get_file_icon_based_on_extension(const f32 icon_index,
+                                              const char* name)
+{
+    b8 small = icon_index == UI_FILE_ICON_TEXTURE;
+    if (small || icon_index == UI_FILE_ICON_BIG_TEXTURE)
     {
-        const char* extension =
-            file_get_extension(item->name, (u32)strlen(item->name));
+        const char* extension = file_get_extension(name, (u32)strlen(name));
         if (extension)
         {
-            if (!strcmp(extension, ".png"))
+            if (strcmp(extension, ".png") == 0)
             {
-                texture_coordinates = png_icon_co;
+                return small ? UI_FILE_PNG_ICON_TEXTURE
+                             : UI_FILE_PNG_ICON_BIG_TEXTURE;
             }
-            else if (!strcmp(extension, ".pdf"))
+            else if (strcmp(extension, ".jpg") == 0)
             {
-                texture_coordinates = pdf_icon_co;
+                return small ? UI_FILE_JPG_ICON_TEXTURE
+                             : UI_FILE_JPG_ICON_BIG_TEXTURE;
+            }
+            else if (strcmp(extension, ".pdf") == 0)
+            {
+                return small ? UI_FILE_PDF_ICON_TEXTURE
+                             : UI_FILE_PDF_ICON_BIG_TEXTURE;
+            }
+            else if (strcmp(extension, ".cpp") == 0)
+            {
+                return small ? UI_FILE_CPP_ICON_TEXTURE
+                             : UI_FILE_CPP_ICON_BIG_TEXTURE;
+            }
+            else if (strcmp(extension, ".c") == 0 || strcmp(extension, ".h") == 0)
+            {
+                return small ? UI_FILE_C_ICON_TEXTURE
+                             : UI_FILE_C_ICON_BIG_TEXTURE;
+            }
+            else if (strcmp(extension, ".java") == 0)
+            {
+                return small ? UI_FILE_JAVA_ICON_TEXTURE
+                             : UI_FILE_JAVA_ICON_BIG_TEXTURE;
             }
         }
     }
-    // Icon
-    aabb =
-        quad_co(&ui_context.render.vertices,
-                v2f(starting_position.x + 5.0f, starting_position.y + 3.0f),
-                v2f(20.0f, 20.0f), v4i(1.0f), texture_coordinates, icon_index);
+    return icon_index;
+}
+
+internal b8 directory_item(V2 starting_position, V2 item_dimensions,
+                           f32 icon_index, const DirectoryItem* item,
+                           SelectedItemValues* selected_item_values)
+{
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+    HoverClickedIndex hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data[window_index];
+
+    V4 color = clear_color;
+    b8 selected = false;
+    b8 hit =
+        check_directory_item_collision(starting_position, item_dimensions, item,
+                                       &color, &selected, selected_item_values);
+
+    array_push(aabbs,
+               quad_gradiant_l_r(&ui_context.render.vertices, starting_position,
+                                 item_dimensions, color, clear_color, 0.0f));
+    window->rendering_index_count += 6;
+
+    if (selected || hit)
+    {
+        starting_position.x += 8.0f;
+        item_dimensions.width -= 6.0f;
+    }
+
+    icon_index = get_file_icon_based_on_extension(icon_index, item->name);
+
+    const V2 icon_size = v2i(24.0f);
+    AABB icon_aabb =
+        quad(&ui_context.render.vertices,
+             v2f(starting_position.x + 5.0f, starting_position.y + 3.0f),
+             icon_size, v4i(1.0f), icon_index);
     window->rendering_index_count += 6;
 
     V2 text_position =
-        v2_s_add(starting_position, ui_context.font.pixel_height + 3.0f);
+        v2_s_add(starting_position, ui_context.font.pixel_height + 5.0f);
 
-    text_position.x += aabb.size.x;
+    text_position.x += icon_aabb.size.width - 5.0f;
 
     f32 x_advance = 0.0f;
     if (item->size) // NOTE(Linus): Add the size text to the right side
@@ -2800,21 +2892,71 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
         size_text_position.x =
             starting_position.x + item_dimensions.width - x_advance - 5.0f;
         window->rendering_index_count += text_generation(
-            ui_context.font.chars, buffer, 1.0f, size_text_position, 1.0f,
-            ui_context.font.pixel_height, NULL, NULL, NULL,
+            ui_context.font.chars, buffer, UI_FONT_TEXTURE, size_text_position,
+            1.0f, ui_context.font.pixel_height, NULL, NULL, NULL,
             &ui_context.render.vertices);
     }
     window->rendering_index_count += display_text_and_truncate_if_necissary(
         text_position,
-        (item_dimensions.width - aabb.size.x - 20.0f - x_advance), item->name);
+        (item_dimensions.width - icon_aabb.size.x - 20.0f - x_advance),
+        item->name);
+
+    return hit && hover_clicked_index.double_clicked;
+}
+
+internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
+                                f32 icon_index, const DirectoryItem* item,
+                                SelectedItemValues* selected_item_values)
+{
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+    HoverClickedIndex hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data[window_index];
+
+    V4 color = clear_color;
+    b8 selected = false;
+    b8 hit =
+        check_directory_item_collision(starting_position, item_dimensions, item,
+                                       &color, &selected, selected_item_values);
+
+    array_push(aabbs, quad(&ui_context.render.vertices, starting_position,
+                           item_dimensions, color, 0.0f));
+    window->rendering_index_count += 6;
+
+    icon_index = get_file_icon_based_on_extension(icon_index, item->name);
+
+    const V2 icon_size = v2i(128.0f);
+    AABB icon_aabb =
+        quad(&ui_context.render.vertices,
+             v2f(starting_position.x +
+                     middle(item_dimensions.width, icon_size.width),
+                 starting_position.y + 3.0f),
+             icon_size, v4i(1.0f), icon_index);
+    window->rendering_index_count += 6;
+
+    const f32 total_available_width_for_text = item_dimensions.width;
+
+    f32 x_advance = text_x_advance(ui_context.font.chars, item->name,
+                                   (u32)strlen(item->name), 1.0f);
+
+    x_advance = min(x_advance, total_available_width_for_text);
+
+    V2 text_position = starting_position;
+    text_position.x += middle(total_available_width_for_text, x_advance);
+    text_position.y += ui_context.font.pixel_height;
+    text_position.y += icon_aabb.size.height;
+
+    window->rendering_index_count += display_text_and_truncate_if_necissary(
+        text_position, total_available_width_for_text, item->name);
 
     return hit && hover_clicked_index.double_clicked;
 }
 
 i32 ui_window_add_directory_item_item_list(
     V2 position, const DirectoryItemArray* items, const f32 icon_index,
-    const V4 texture_coordinates, const f32 item_height,
-    SelectedItemValues* selected_item_values)
+    const f32 item_height, SelectedItemValues* selected_item_values)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
@@ -2824,17 +2966,18 @@ i32 ui_window_add_directory_item_item_list(
 
     position.y += window->current_scroll_offset;
     position.x += window->current_scroll_offset_width;
+
+    V2 item_dimensions =
+        v2f(window->size.width - relative_position.x, item_height);
+
     i32 hit_index = -1;
     for (i32 i = 0; i < (i32)items->size; ++i)
     {
-        if (item_in_view(position.y, item_height,
+        if (item_in_view(position.y, item_dimensions.height,
                          position.y + window->size.height))
         {
-            V2 item_dimensions =
-                v2f(window->size.width - relative_position.x, item_height);
             if (directory_item(position, item_dimensions, icon_index,
-                               texture_coordinates, &items->data[i],
-                               selected_item_values))
+                               &items->data[i], selected_item_values))
             {
                 hit_index = i;
             }
@@ -2848,12 +2991,102 @@ i32 ui_window_add_directory_item_item_list(
     return hit_index;
 }
 
-void ui_window_add_selected(V2 position, char* text, const b8 selected)
+internal void display_grid_item(const V2 position, const i32 index,
+                                const DirectoryItemArray* folders,
+                                const DirectoryItemArray* files,
+                                const V2 item_dimensions, II32* hit_index,
+                                SelectedItemValues* selected_item_values)
 {
+    if (index < (i32)folders->size)
+    {
+        DirectoryItem* item = folders->data + index;
+        if (directory_item_grid(position, item_dimensions,
+                                UI_FOLDER_ICON_BIG_TEXTURE, item,
+                                selected_item_values))
+        {
+            hit_index->first = 0;
+            hit_index->second = index;
+        }
+    }
+    else
+    {
+        const i32 new_index = index - folders->size;
+        DirectoryItem* item = files->data + new_index;
+        if (directory_item_grid(position, item_dimensions,
+                                UI_FILE_ICON_BIG_TEXTURE, item,
+                                selected_item_values))
+        {
+            hit_index->first = 1;
+            hit_index->second = index - new_index;
+        }
+    }
 }
 
-void ui_window_add_directory_list(V2 position)
+II32 ui_window_add_directory_item_grid(V2 position,
+                                       const DirectoryItemArray* folders,
+                                       const DirectoryItemArray* files,
+                                       const f32 item_height,
+                                       SelectedItemValues* selected_item_values)
 {
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    V2 relative_position = position;
+    v2_add_equal(&position, window->first_item_position);
+
+    position.y += window->current_scroll_offset;
+    position.x += window->current_scroll_offset_width;
+
+    V2 item_dimensions = v2i(item_height);
+    item_dimensions.height += (ui_context.font.pixel_height + 5.0f);
+
+    const u32 item_count = folders->size + files->size;
+    const f32 total_area_space = window->size.width - relative_position.x;
+    const f32 grid_padding = 5.0f;
+    const i32 columns = max(
+        (i32)(total_area_space / (item_dimensions.width + grid_padding)), 1);
+    const i32 rows = item_count / columns;
+    const i32 last_row = item_count % columns;
+
+    const f32 start_x = position.x;
+
+    II32 hit_index = { .first = -1, .second = -1 };
+    for (i32 row = 0; row < rows; ++row)
+    {
+        if (item_in_view(position.y, item_dimensions.height,
+                         position.y + window->size.height))
+        {
+            for (i32 column = 0; column < columns; ++column)
+            {
+                const i32 index = (row * columns) + column;
+                display_grid_item(position, index, folders, files,
+                                  item_dimensions, &hit_index,
+                                  selected_item_values);
+                position.x += item_dimensions.width + grid_padding;
+            }
+            position.x = start_x;
+        }
+        position.y += item_dimensions.height + grid_padding;
+        relative_position.y += item_dimensions.height + grid_padding;
+    }
+    if (item_in_view(position.y, item_dimensions.height,
+                     position.y + window->size.height))
+    {
+        for (i32 column = 0; column < last_row; ++column)
+        {
+            const i32 index = (rows * columns) + column;
+            display_grid_item(position, index, folders, files, item_dimensions,
+                              &hit_index, selected_item_values);
+            position.x += item_height + grid_padding;
+        }
+    }
+    relative_position.y +=
+        (item_dimensions.height + grid_padding) * (last_row > 0);
+
+    window->total_height = max(
+        window->total_height, relative_position.y + item_height + grid_padding);
+
+    return hit_index;
 }
 
 b8 ui_window_add_folder_list(V2 position, const f32 item_height,
@@ -2862,7 +3095,7 @@ b8 ui_window_add_folder_list(V2 position, const f32 item_height,
                              i32* item_selected)
 {
     i32 selected_index = ui_window_add_directory_item_item_list(
-        position, items, 2.0f, folder_icon_co, item_height,
+        position, items, UI_FOLDER_ICON_TEXTURE, item_height,
         selected_item_values);
     if (item_selected) *item_selected = selected_index;
     return selected_index != -1;
@@ -2874,7 +3107,8 @@ b8 ui_window_add_file_list(V2 position, const f32 item_height,
                            i32* item_selected)
 {
     i32 selected_index = ui_window_add_directory_item_item_list(
-        position, items, 2.0f, file_icon_co, item_height, selected_item_values);
+        position, items, UI_FILE_ICON_TEXTURE, item_height,
+        selected_item_values);
     if (item_selected) *item_selected = selected_index;
     return selected_index != -1;
 }
@@ -2929,7 +3163,8 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
         }
     }
 
-    b8 mouse_button_clicked = event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
+    b8 mouse_button_clicked =
+        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
     b8 enter_clicked = event_is_key_clicked(FTIC_KEY_ENTER);
     b8 item_clicked = false;
     b8 any_drop_down_item_hit = false;
@@ -3001,9 +3236,9 @@ void ui_window_add_text(V2 position, const char* text, b8 scrolling)
     u32 new_lines = 0;
     f32 x_advance = 0.0f;
     window->rendering_index_count +=
-        text_generation(ui_context.font.chars, text, 1.0f, position, 1.0f,
-                        ui_context.font.line_height, &new_lines, &x_advance,
-                        NULL, &ui_context.render.vertices);
+        text_generation(ui_context.font.chars, text, UI_FONT_TEXTURE, position,
+                        1.0f, ui_context.font.line_height, &new_lines,
+                        &x_advance, NULL, &ui_context.render.vertices);
 
     if (ui_context.row)
     {
@@ -3042,7 +3277,7 @@ void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text,
     u32 new_lines = 0;
     f32 x_advance = 0.0f;
     window->rendering_index_count += text_generation_colored_char(
-        ui_context.font.chars, text, 1.0f, position, 1.0f,
+        ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f,
         ui_context.font.line_height, &new_lines, &x_advance, NULL,
         &ui_context.render.vertices);
 
@@ -3172,9 +3407,9 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color,
             v2f(position.x + 10.0f,
                 position.y + ui_context.font.pixel_height + 1.0f);
         window->rendering_index_count +=
-            text_generation(ui_context.font.chars, text, 1.0f, text_position,
-                            1.0f, ui_context.font.line_height, NULL, NULL, NULL,
-                            &ui_context.render.vertices);
+            text_generation(ui_context.font.chars, text, UI_FONT_TEXTURE,
+                            text_position, 1.0f, ui_context.font.line_height,
+                            NULL, NULL, NULL, &ui_context.render.vertices);
     }
 
     return collided && hover_clicked_index.clicked;
