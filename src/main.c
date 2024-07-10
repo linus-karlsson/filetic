@@ -437,6 +437,7 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
     {
         tab->directory_list.reload = false;
         tab->directory_list.item_to_change = NULL;
+        tab->directory_list.item_selected = false;
 
         V2 list_position = v2f(10.0f, 10.0f);
         if (tab->list_view)
@@ -488,6 +489,10 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
                                  tab->directory_list.input.buffer.data,
                                  tab->directory_list.input.buffer.size);
             directory_reload(current);
+        }
+        if(!tab->directory_list.item_selected)
+        {
+            tab->directory_list.selected_item_values.last_selected = NULL;
         }
         return ui_window_end();
     }
@@ -944,7 +949,7 @@ int main(int argc, char** argv)
             {
                 const char* path =
                     tab->directory_list.selected_item_values.paths.data[0];
-                platform_get_context_menu_options(path, NULL);
+                platform_get_context_menu_options(app.window, path, NULL);
             }
             else if (preview_index == -1 &&
                      tab->directory_list.selected_item_values.paths.size == 1 &&

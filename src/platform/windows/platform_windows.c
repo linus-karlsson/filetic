@@ -4,8 +4,15 @@
 
 #include <stdio.h>
 #include <Windows.h>
+
+#include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#define GLFW_EXPOSE_NATIVE_WGL
+#define GLFW_NATIVE_INCLUDE_NONE
+#include <GLFW/glfw3native.h>
 #include <shlwapi.h>
 #include <ShlObj.h>
+#include <shobjidl.h>
 #include <stdlib.h>
 #include <time.h>
 #include <ole2.h>
@@ -1186,7 +1193,8 @@ void platform_start_drag_drop(const CharPtrArray* paths)
     drop_source->vtbl->Release((IDropSource*)drop_source);
 }
 
-void platform_get_context_menu_options(const char* path, CharPtrArray* options)
+void platform_get_context_menu_options(void* window, const char* path,
+                                       CharPtrArray* options)
 {
     CoInitialize(NULL);
 
@@ -1197,7 +1205,9 @@ void platform_get_context_menu_options(const char* path, CharPtrArray* options)
     HRESULT hr = SHParseDisplayName((LPWSTR)w_path, NULL, &pidl, 0, &sfgao);
     if (FAILED(hr))
     {
+        log_last_error();
         CoUninitialize();
+        return;
     }
 
     IShellFolder* psfParent = NULL;
@@ -1206,22 +1216,34 @@ void platform_get_context_menu_options(const char* path, CharPtrArray* options)
         SHBindToParent(pidl, &IID_IShellFolder, (void**)&psfParent, &pidlChild);
     if (FAILED(hr))
     {
+        log_last_error();
         CoTaskMemFree((void*)pidl);
         CoUninitialize();
+        return;
     }
 
     IContextMenu* pcm = NULL;
     psfParent->lpVtbl->GetUIObjectOf(psfParent, NULL, 1, &pidlChild,
                                      &IID_IContextMenu, NULL, (void**)&pcm);
+    if (FAILED(hr))
+    {
+        log_last_error();
+        psfParent->lpVtbl->Release(psfParent);
+        CoTaskMemFree((void*)pidl);
+        CoUninitialize();
+        return;
+    }
 
     HMENU hMenu = CreatePopupMenu();
     if (hMenu)
     {
         pcm->lpVtbl->QueryContextMenu(pcm, hMenu, 0, 1, 0x7FFF, CMF_NORMAL);
-
+        int cmd = 0;
+#if 0
         int count = GetMenuItemCount(hMenu);
         for (int i = 0; i < count; ++i)
         {
+
             MENUITEMINFOW mii = { sizeof(MENUITEMINFOW) };
             mii.fMask = MIIM_STRING;
             wchar_t buffer[256];
@@ -1233,7 +1255,30 @@ void platform_get_context_menu_options(const char* path, CharPtrArray* options)
                 int j = 0;
             }
         }
+#else
+            HWND hwnd = glfwGetWin32Window(window);
 
+            POINT pt;
+            GetCursorPos(&pt);
+            cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                                     pt.x, pt.y, 0, hwnd, NULL);
+            if (cmd)
+            {
+                CMINVOKECOMMANDINFOEX cmi = { 0 };
+                cmi.cbSize = sizeof(CMINVOKECOMMANDINFOEX);
+                cmi.fMask = 0;
+                cmi.hwnd = hwnd;
+                cmi.lpVerb = MAKEINTRESOURCEA(cmd - 1);
+                cmi.lpParameters = NULL;
+                cmi.lpDirectory = NULL;
+                cmi.nShow = SW_SHOWNORMAL;
+                cmi.dwHotKey = 0;
+                cmi.hIcon = NULL;
+
+                pcm->lpVtbl->InvokeCommand(pcm, (LPCMINVOKECOMMANDINFO)&cmi);
+            }
+
+#endif
         DestroyMenu(hMenu);
     }
 

@@ -2828,6 +2828,11 @@ internal b8 check_directory_item_collision(V2 starting_position,
                                            item->path);
         }
     }
+    
+    if(list)
+    {
+        list->item_selected |= *selected;
+    }
 
     if (item->rename && list && !hover_clicked_index.double_clicked)
     {

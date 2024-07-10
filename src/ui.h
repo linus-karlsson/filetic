@@ -173,6 +173,7 @@ typedef struct List
     AABB input_field;
     f64 input_pressed;
     b8 reload;
+    b8 item_selected;
 } List;
 
 InputBuffer ui_input_buffer_create();
