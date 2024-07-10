@@ -35,10 +35,8 @@ typedef struct DirectoryHistory
 typedef struct DirectoryTab
 {
     u32 window_id;
-    II32 rename_index;
-    InputBuffer rename_input;
     DirectoryHistory directory_history;
-    SelectedItemValues selected_item_values;
+    List directory_list;
     b8 list_view;
 } DirectoryTab;
 

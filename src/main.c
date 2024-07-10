@@ -399,7 +399,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
         i32 selected_item = -1;
         if (ui_window_add_folder_list(list_position, list_item_height,
                                       &page->search_result_folder_array.array,
-                                      NULL, NULL, NULL, &selected_item))
+                                      NULL, &selected_item))
         {
             directory_open_folder(
                 page->search_result_folder_array.array.data[selected_item].path,
@@ -409,7 +409,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
             list_item_height * page->search_result_folder_array.array.size;
         if (ui_window_add_file_list(list_position, list_item_height,
                                     &page->search_result_file_array.array, NULL,
-                                    NULL, NULL, &selected_item))
+                                    &selected_item))
         {
             platform_open_file(
                 page->search_result_file_array.array.data[selected_item].path);
@@ -435,28 +435,26 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
     DirectoryPage* current = directory_current(&tab->directory_history);
     if (ui_window_begin(window, get_parent_directory_name(current), true))
     {
-        b8 reload = false;
+        tab->directory_list.reload = false;
+        tab->directory_list.item_to_change = NULL;
+
         V2 list_position = v2f(10.0f, 10.0f);
         if (tab->list_view)
         {
             i32 selected_item = -1;
             if (ui_window_add_folder_list(list_position, list_item_height,
                                           &current->directory.sub_directories,
-                                          &reload, &tab->rename_input,
-                                          &tab->selected_item_values,
-                                          &selected_item))
+                                          &tab->directory_list, &selected_item))
             {
                 directory_open_folder(
                     current->directory.sub_directories.data[selected_item].path,
                     &tab->directory_history);
             }
-
             list_position.y +=
                 list_item_height * current->directory.sub_directories.size;
-            if (ui_window_add_file_list(
-                    list_position, list_item_height, &current->directory.files,
-                    &reload, &tab->rename_input, &tab->selected_item_values,
-                    &selected_item))
+            if (ui_window_add_file_list(list_position, list_item_height,
+                                        &current->directory.files,
+                                        &tab->directory_list, &selected_item))
             {
                 platform_open_file(
                     current->directory.files.data[selected_item].path);
@@ -466,7 +464,7 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
         {
             II32 result = ui_window_add_directory_item_grid(
                 list_position, &current->directory.sub_directories,
-                &current->directory.files, 128.0f, &tab->selected_item_values);
+                &current->directory.files, 128.0f, &tab->directory_list);
 
             if (result.first > -1)
             {
@@ -484,8 +482,11 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
                 }
             }
         }
-        if(reload)
+        if (tab->directory_list.reload)
         {
+            platform_rename_file(tab->directory_list.item_to_change->path,
+                                 tab->directory_list.input.buffer.data,
+                                 tab->directory_list.input.buffer.size);
             directory_reload(current);
         }
         return ui_window_end();
@@ -908,7 +909,7 @@ int main(int argc, char** argv)
 
         if (activated && mouse_button_event->action == FTIC_PRESS &&
             mouse_move_event->activated &&
-            tab->selected_item_values.paths.size > 0)
+            tab->directory_list.selected_item_values.paths.size > 0)
         {
             distance = v2_distance(last_mouse_position, app.mouse_position);
             if (distance >= 10.0f)
@@ -931,7 +932,8 @@ int main(int argc, char** argv)
             check_collision = false;
         }
 
-        if (preview_index != 1 && tab->selected_item_values.paths.size)
+        if (preview_index != 1 &&
+            tab->directory_list.selected_item_values.paths.size)
         {
             if (event_is_ctrl_and_key_pressed(FTIC_KEY_C))
             {
@@ -939,16 +941,18 @@ int main(int argc, char** argv)
                 // platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
             else if (preview_index == -1 &&
-                     tab->selected_item_values.paths.size == 1 &&
+                     tab->directory_list.selected_item_values.paths.size == 1 &&
                      event_is_ctrl_and_key_pressed(FTIC_KEY_D))
             {
-                const char* path = tab->selected_item_values.paths.data[0];
+                const char* path =
+                    tab->directory_list.selected_item_values.paths.data[0];
 
                 if (load_preview_image(path, &preview_image_dimensions,
                                        &preview_textures))
                 {
                     current_path = string_copy(path, (u32)strlen(path), 0);
-                    directory_clear_selected_items(&tab->selected_item_values);
+                    directory_clear_selected_items(
+                        &tab->directory_list.selected_item_values);
                     preview_index = 0;
                 }
                 else
@@ -982,7 +986,7 @@ int main(int argc, char** argv)
         for (u32 i = 0; i < app.tabs.size; ++i)
         {
             DirectoryTab* current = app.tabs.data + i;
-            if (current->selected_item_values.paths.size)
+            if (current->directory_list.selected_item_values.paths.size)
             {
                 if (check_collision && !key_event->ctrl_pressed &&
                     mouse_button_event->activated &&
@@ -990,7 +994,7 @@ int main(int argc, char** argv)
                     mouse_button_event->button == FTIC_MOUSE_BUTTON_1)
                 {
                     directory_clear_selected_items(
-                        &app.tabs.data[i].selected_item_values);
+                        &app.tabs.data[i].directory_list.selected_item_values);
                 }
             }
         }
@@ -1014,7 +1018,8 @@ int main(int argc, char** argv)
             MainDropDownSelectionData data = {
                 .quick_access = &app.quick_access_folders,
                 .directory = directory_current(&tab->directory_history),
-                .selected_paths = &tab->selected_item_values.paths,
+                .selected_paths =
+                    &tab->directory_list.selected_item_values.paths,
             };
             app.context_menu_open =
                 !drop_down_menu_add(&app.context_menu, &app, &data);
@@ -1095,17 +1100,19 @@ int main(int argc, char** argv)
                 ui_window_row_begin(0.0f);
 
                 b8 disable = tab->directory_history.current_index <= 0;
-                add_move_in_history_button(&button_aabb, arrow_back_icon_co,
-                                           disable, FTIC_MOUSE_BUTTON_4, -1,
-                                           &tab->selected_item_values,
-                                           &tab->directory_history);
+                add_move_in_history_button(
+                    &button_aabb, arrow_back_icon_co, disable,
+                    FTIC_MOUSE_BUTTON_4, -1,
+                    &tab->directory_list.selected_item_values,
+                    &tab->directory_history);
 
                 disable = tab->directory_history.history.size <=
                           tab->directory_history.current_index + 1;
-                add_move_in_history_button(&button_aabb, arrow_right_icon_co,
-                                           disable, FTIC_MOUSE_BUTTON_4, 1,
-                                           &tab->selected_item_values,
-                                           &tab->directory_history);
+                add_move_in_history_button(
+                    &button_aabb, arrow_right_icon_co, disable,
+                    FTIC_MOUSE_BUTTON_4, 1,
+                    &tab->directory_list.selected_item_values,
+                    &tab->directory_history);
 
                 disable = !directory_can_go_up(
                     directory_current(&tab->directory_history)
@@ -1258,10 +1265,9 @@ int main(int argc, char** argv)
                 {
                     V2 list_position = v2i(10.0f);
                     i32 selected_item = -1;
-                    if (ui_window_add_folder_list(list_position,
-                                                  list_item_height,
-                                                  &app.quick_access_folders,
-                                                  NULL, NULL, NULL, &selected_item))
+                    if (ui_window_add_folder_list(
+                            list_position, list_item_height,
+                            &app.quick_access_folders, NULL, &selected_item))
                     {
                         directory_open_folder(
                             app.quick_access_folders.data[selected_item].path,

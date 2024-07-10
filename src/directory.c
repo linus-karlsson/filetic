@@ -276,9 +276,11 @@ DirectoryTab directory_tab_add(const char* dir)
         hash_table_create_char_u32(100, hash_murmur);
 
     return (DirectoryTab){
-        .rename_input = ui_input_buffer_create(),
+        .directory_list = {
+            .input = ui_input_buffer_create(),
+            .selected_item_values = selected_item_values,
+        },
         .directory_history = directory_history,
-        .selected_item_values = selected_item_values,
         .list_view = true,
     };
 }
@@ -290,8 +292,9 @@ void directory_tab_clear(DirectoryTab* tab)
         platform_reset_directory(
             &tab->directory_history.history.data[j].directory);
     }
-    free(tab->directory_history.history.data);
-    directory_clear_selected_items(&tab->selected_item_values);
+    array_free(&tab->directory_history.history);
+    ui_input_buffer_delete(&tab->directory_list.input);
+    directory_clear_selected_items(&tab->directory_list.selected_item_values);
 }
 
 void directory_clear_selected_items(SelectedItemValues* selected_item_values)
