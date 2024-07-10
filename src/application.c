@@ -343,28 +343,48 @@ internal void main_render_initialize(RenderingProperties* main_render,
 
     u32 default_texture = create_default_texture();
 
-    u32 file_icon_texture = load_icon("res/icons/icon_sheet.png");
-    u32 arrow_icon_texture =
-        load_icon_as_white("res/icons/arrow_sprite_sheet.png");
+    u32 shader = shader_create("./res/shaders/vertex.glsl",
+                               "./res/shaders/fragment.glsl");
 
-    u32 main_shader = shader_create("./res/shaders/vertex.glsl",
-                                    "./res/shaders/fragment.glsl");
+    ftic_assert(shader);
 
-    u32 preview_shader = shader_create("./res/shaders/vertex.glsl",
-                                       "./res/shaders/fragment.glsl");
-    ftic_assert(main_shader);
-    ftic_assert(preview_shader);
+    const u32 texture_count = 4;
+    U32Array textures = { 0 };
+    array_create(&textures, texture_count);
+    array_push(&textures, default_texture);
+    array_push(&textures, font_texture);
 
-    const u32 main_texture_count = 4;
-    U32Array main_textures = { 0 };
-    array_create(&main_textures, main_texture_count);
-    array_push(&main_textures, default_texture);
-    array_push(&main_textures, font_texture);
-    array_push(&main_textures, file_icon_texture);
-    array_push(&main_textures, arrow_icon_texture);
+    array_create(&main_render->vertices, 100 * 4);
+    u32 vertex_buffer_id = vertex_buffer_create(
+        NULL, main_render->vertices.capacity, sizeof(Vertex), GL_STREAM_DRAW);
+    main_render->vertex_buffer_capacity = main_render->vertices.capacity;
 
-    *main_render = rendering_properties_initialize(
-        main_shader, main_textures, &vertex_buffer_layout, 100 * 4, 100 * 6);
+    array_create(&main_render->indices, 100 * 6);
+    generate_indicies(&main_render->indices, 0, 100);
+    u32 index_buffer_id = index_buffer_create(main_render->indices.data,
+                                              main_render->indices.size,
+                                              sizeof(u32), GL_STATIC_DRAW);
+    free(main_render->indices.data);
+
+    main_render->render = render_create(shader, textures, &vertex_buffer_layout,
+                                        vertex_buffer_id, index_buffer_id);
+}
+
+internal void render_3d_initialize(Render* render)
+{
+    VertexBufferLayout vertex_buffer_layout = default_vertex_3d_buffer_layout();
+    u32 default_texture = create_default_texture();
+
+    u32 shader = shader_create("./res/shaders/vertex3d.glsl",
+                               "./res/shaders/fragment.glsl");
+    ftic_assert(shader);
+
+    const u32 texture_count = 2;
+    U32Array textures = { 0 };
+    array_create(&textures, texture_count);
+    array_push(&textures, default_texture);
+
+    *render = render_create(shader, textures, &vertex_buffer_layout, 0, 0);
 }
 
 u8* application_initialize(ApplicationContext* app)
@@ -397,7 +417,10 @@ u8* application_initialize(ApplicationContext* app)
         .height = height_atlas,
         .bytes = font_bitmap,
     };
+
     main_render_initialize(&app->main_render, &font_texture_properties);
+
+    render_3d_initialize(&app->render_3d);
 
     array_create(&app->tabs, 10);
     app->tab_index = 0;
@@ -538,13 +561,8 @@ void application_uninitialize(ApplicationContext* app)
 
     ui_context_destroy();
 
-    buffer_delete(app->main_render.vertex_buffer_id);
-    buffer_delete(app->main_render.index_buffer_id);
-    for (u32 i = 0; i < app->main_render.textures.size; ++i)
-    {
-        texture_delete(app->main_render.textures.data[i]);
-    }
-    free(app->main_render.textures.data);
+    render_destroy(&app->main_render.render);
+    free(app->main_render.vertices.data);
 
     quick_access_save(&app->quick_access_folders);
 

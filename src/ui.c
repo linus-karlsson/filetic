@@ -1137,8 +1137,23 @@ void ui_context_create()
     array_push(&textures, file_cpp_icon_big_texture);
     array_push(&textures, file_c_icon_big_texture);
 
-    ui_context.render = rendering_properties_initialize(
-        shader, textures, &vertex_buffer_layout, 100 * 4, 100 * 4);
+    array_create(&ui_context.render.vertices, 100 * 4);
+    u32 vertex_buffer_id =
+        vertex_buffer_create(NULL, ui_context.render.vertices.capacity,
+                             sizeof(Vertex), GL_STREAM_DRAW);
+    ui_context.render.vertex_buffer_capacity =
+        ui_context.render.vertices.capacity;
+
+    array_create(&ui_context.render.indices, 100 * 6);
+    generate_indicies(&ui_context.render.indices, 0, 100);
+    u32 index_buffer_id = index_buffer_create(ui_context.render.indices.data,
+                                              ui_context.render.indices.size,
+                                              sizeof(u32), GL_STATIC_DRAW);
+    free(ui_context.render.indices.data);
+
+    ui_context.render.render =
+        render_create(shader, textures, &vertex_buffer_layout, vertex_buffer_id,
+                      index_buffer_id);
 
     ui_context.default_textures_offset = textures.size;
 
@@ -1156,7 +1171,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
     ui_context.check_collisions = check_collisions;
     ui_context.dock_space = *dock_space;
     ui_context.dimensions = dimensions;
-    ui_context.render.textures.size = ui_context.default_textures_offset;
+    ui_context.render.render.textures.size = ui_context.default_textures_offset;
 
     ui_context.delta_time = delta_time;
 
@@ -1772,14 +1787,16 @@ void ui_context_end()
     }
     */
 
-    rendering_properties_check_and_grow_buffers(
+    rendering_properties_check_and_grow_vertex_buffer(&ui_context.render);
+    rendering_properties_check_and_grow_index_buffer(
         &ui_context.render, ui_context.current_index_offset);
 
-    buffer_set_sub_data(ui_context.render.vertex_buffer_id, GL_ARRAY_BUFFER, 0,
+    buffer_set_sub_data(ui_context.render.render.vertex_buffer_id,
+                        GL_ARRAY_BUFFER, 0,
                         sizeof(Vertex) * ui_context.render.vertices.size,
                         ui_context.render.vertices.data);
 
-    rendering_properties_begin_draw(&ui_context.render, &ui_context.mvp);
+    render_begin_draw(&ui_context.render.render, &ui_context.mvp);
     for (u32 i = 0; i < dock_spaces.size; ++i)
     {
         DockNode* node = dock_spaces.data[i];
@@ -1794,19 +1811,18 @@ void ui_context_end()
                             (window->position.y + window->size.height);
             scissor.size = window->size;
         }
-        rendering_properties_draw(window->rendering_index_offset,
-                                  window->rendering_index_count, &scissor);
+        render_draw(window->rendering_index_offset,
+                    window->rendering_index_count, &scissor);
 
         UU32 index_offset_and_count =
             dock_spaces_index_offsets_and_counts.data[i];
-        rendering_properties_draw(index_offset_and_count.first,
-                                  index_offset_and_count.second, &scissor);
+        render_draw(index_offset_and_count.first, index_offset_and_count.second,
+                    &scissor);
     }
     AABB whole_screen_scissor = { .size = ui_context.dimensions };
-    rendering_properties_draw(ui_context.extra_index_offset,
-                              ui_context.extra_index_count,
-                              &whole_screen_scissor);
-    rendering_properties_end_draw(&ui_context.render);
+    render_draw(ui_context.extra_index_offset, ui_context.extra_index_count,
+                &whole_screen_scissor);
+    render_end_draw(&ui_context.render.render);
 
     if (dock_space_to_change)
     {
@@ -2824,7 +2840,8 @@ internal f32 get_file_icon_based_on_extension(const f32 icon_index,
                 return small ? UI_FILE_CPP_ICON_TEXTURE
                              : UI_FILE_CPP_ICON_BIG_TEXTURE;
             }
-            else if (strcmp(extension, ".c") == 0 || strcmp(extension, ".h") == 0)
+            else if (strcmp(extension, ".c") == 0 ||
+                     strcmp(extension, ".h") == 0)
             {
                 return small ? UI_FILE_C_ICON_TEXTURE
                              : UI_FILE_C_ICON_BIG_TEXTURE;
@@ -3331,8 +3348,8 @@ void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)
     position.x += window->current_scroll_offset_width;
     position.y += window->current_scroll_offset;
 
-    f32 texture_index = (f32)ui_context.render.textures.size;
-    array_push(&ui_context.render.textures, image);
+    f32 texture_index = (f32)ui_context.render.render.textures.size;
+    array_push(&ui_context.render.render.textures, image);
 
     quad(&ui_context.render.vertices, position, image_dimensions, v4i(1.0f),
          texture_index);

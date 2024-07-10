@@ -11,6 +11,14 @@ typedef struct Vertex
     f32 texture_index;
 } Vertex;
 
+typedef struct Vertex3D
+{
+    V4 color;
+    V3 position;
+    V2 texture_coordinates;
+    f32 texture_index;
+} Vertex3D;
+
 typedef struct VP
 {
     M4 projection;
@@ -38,6 +46,13 @@ typedef struct VertexArray
     u32 capacity;
     Vertex* data;
 } VertexArray;
+
+typedef struct Vertex3DArray
+{
+    u32 size;
+    u32 capacity;
+    Vertex3D* data;
+} Vertex3DArray;
 
 typedef struct FileAttrib
 {

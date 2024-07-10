@@ -31,45 +31,29 @@ Camera camera_create(f32 speed, f32 sensitivity)
     return result;
 }
 
-V2 get_mouse_rotation(const V2 view_port, const f32 sens, const f32 delta_time,
-                      V2* last, b8* first_clicked)
+V2 get_mouse_rotation(Camera* camera, const f32 delta_time)
 {
-    V2 half = v2_s_multi(view_port, 0.5f);
+    FTicWindow* window = window_get_current();
+
+    V2 half = v2_s_multi(camera->view_port, 0.5f);
 
     V2 mouse_position = event_get_mouse_position();
-    if (mouse_position.x >= view_port.width - 300 || mouse_position.x <= 300)
+
+    if (camera->first_clicked)
     {
-        window_set_cursor_position(window_get_current(), half.width,
-                                   mouse_position.y);
-        mouse_position.x = half.width;
-        last->x = mouse_position.x;
-    }
-    if (mouse_position.y >= view_port.height - 200 || mouse_position.y <= 200)
-    {
-        window_set_cursor_position(window_get_current(), mouse_position.x,
-                                   half.height);
-        mouse_position.y = half.height;
-        last->y = mouse_position.y;
+        window_set_cursor_position(window, half.width, half.height);
+        camera->first_clicked = false;
     }
 
     V2 rotation = { 0 };
+    rotation.x = camera->sens * (f32)((mouse_position.y - half.height)) * delta_time;
+    rotation.y = camera->sens * (f32)((mouse_position.x - half.width)) * delta_time;
 
-    if (!*first_clicked)
-    {
-        rotation.x = sens * (f32)((mouse_position.x - last->x)) * delta_time;
-        rotation.y = sens * (f32)((mouse_position.y - last->y)) * delta_time;
-    }
-    else
-    {
-        *first_clicked = false;
-    }
-
-    *last = mouse_position;
+    window_set_cursor_position(window, half.width, half.height);
     return rotation;
 }
 
-b8 camera_update(Camera* camera, const V2 view_port, const f32 delta_time,
-                 b8* first_clicked, V2* last)
+b8 camera_update(Camera* camera, const f32 delta_time)
 {
 
     b8 moved = false;
@@ -128,8 +112,7 @@ b8 camera_update(Camera* camera, const V2 view_port, const f32 delta_time,
     {
         window_set_input_mode(window_get_current(), FTIC_MODE_CURSOR,
                               FTIC_MODE_CURSOR_HIDDEN);
-        V2 rotation = get_mouse_rotation(view_port, camera->sens, delta_time,
-                                         last, first_clicked);
+        V2 rotation = get_mouse_rotation(camera, delta_time);
 
         V3 temp_orientation =
             v3_rotate(camera->ori, radians(rotation.y),
@@ -144,11 +127,11 @@ b8 camera_update(Camera* camera, const V2 view_port, const f32 delta_time,
         camera->ori = v3_rotate(camera->ori, radians(rotation.x), camera->up);
     }
     else if (mouse_button_event->activated &&
-             mouse_button_event->action == FTIC_RELEASE && !*first_clicked)
+             mouse_button_event->action == FTIC_RELEASE && !camera->first_clicked)
     {
         window_set_input_mode(window_get_current(), FTIC_MODE_CURSOR,
                               FTIC_MODE_CURSOR_NORMAL);
-        *first_clicked = true;
+        camera->first_clicked = true;
     }
     return moved;
 }

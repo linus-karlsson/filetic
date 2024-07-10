@@ -15,12 +15,14 @@ typedef struct Camera
     f32 old_speed;
     f32 sens;
 
+    V2 view_port;
+    b8 first_clicked;
 } Camera;
 
 Camera camera_create_default();
 Camera camera_create(f32 speed, f32 sensitivity);
 
-b8 camera_update(Camera* camera, const V2 view_port, const f32 delta_time, b8* first_clicked, V2* last);
+b8 camera_update(Camera* camera, const f32 delta_time);
 void camera_print(const Camera* camera);
-V2 get_mouse_rotation(const V2 view_port, const f32 sens, const f32 delta_time, V2* last, b8* first_clicked);
+V2 get_mouse_rotation(Camera* camera, const f32 delta_time);
 

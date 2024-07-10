@@ -82,12 +82,28 @@ VertexBufferLayout default_vertex_buffer_layout()
     vertex_buffer_layout_create(4, sizeof(Vertex), &vertex_buffer_layout);
     vertex_buffer_layout_push_float(&vertex_buffer_layout, 4,
                                     offsetof(Vertex, color));
-    vertex_buffer_layout_push_float(&vertex_buffer_layout, 3,
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 2,
                                     offsetof(Vertex, position));
     vertex_buffer_layout_push_float(&vertex_buffer_layout, 2,
                                     offsetof(Vertex, texture_coordinates));
     vertex_buffer_layout_push_float(&vertex_buffer_layout, 1,
                                     offsetof(Vertex, texture_index));
+
+    return vertex_buffer_layout;
+}
+
+VertexBufferLayout default_vertex_3d_buffer_layout()
+{
+    VertexBufferLayout vertex_buffer_layout = { 0 };
+    vertex_buffer_layout_create(4, sizeof(Vertex3D), &vertex_buffer_layout);
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 4,
+                                    offsetof(Vertex3D, color));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 3,
+                                    offsetof(Vertex3D, position));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 2,
+                                    offsetof(Vertex3D, texture_coordinates));
+    vertex_buffer_layout_push_float(&vertex_buffer_layout, 1,
+                                    offsetof(Vertex3D, texture_index));
 
     return vertex_buffer_layout;
 }

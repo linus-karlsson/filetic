@@ -35,6 +35,7 @@ void index_buffer_orphan(u32 index_buffer_id, const u32 new_size, const u32 usag
 void vertex_buffer_layout_create(const u32 capacity, const u32 type_size, VertexBufferLayout* vertex_buffer_layout);
 void vertex_buffer_layout_push_float(VertexBufferLayout* vertex_buffer_layout, const u32 count, const u32 offset);
 VertexBufferLayout default_vertex_buffer_layout();
+VertexBufferLayout default_vertex_3d_buffer_layout();
 
 u32  vertex_array_create();
 void vertex_array_bind(const u32 vertex_array);

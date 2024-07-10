@@ -25,6 +25,7 @@
 #include "util.h"
 #include "ui.h"
 #include "application.h"
+#include "object_load.h"
 
 global const V4 full_icon_co = {
     .x = 0.0f,
@@ -795,6 +796,40 @@ void parse_file(FileAttrib* file, ColoredCharacterArray* array)
     free(word.data);
 }
 
+void load_object(Render* render, const char* path)
+{
+    ObjectLoad object_load = { 0 };
+    object_load_model(&object_load, path);
+
+    Vertex3DArray vertices = { 0 };
+    array_create(&vertices, object_load.indices.size);
+    IndexArray indices = { 0 };
+    array_create(&indices, object_load.indices.size);
+    for (u32 i = 0; i < object_load.indices.size; ++i)
+    {
+        Vertex3D vertex = { 0 };
+        const u32 current_vert_index = object_load.indices.data[i].vertex_index;
+        vertex.position = object_load.vertex_positions.data[current_vert_index];
+        vertex.color = v4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+        const u32 current_tex_index = object_load.indices.data[i].texture_index;
+        vertex.texture_coordinates.x =
+            object_load.texture_coordinates.data[current_tex_index].x;
+        vertex.texture_coordinates.y =
+            1.0f - object_load.texture_coordinates.data[current_tex_index].y;
+
+        vertex.texture_index = 0;
+
+        array_push(&vertices, vertex);
+        array_push(&indices, i);
+    }
+
+    u32 vertex_buffer_id = vertex_buffer_create(
+        vertices.data, vertices.capacity, sizeof(Vertex), GL_STATIC_DRAW);
+
+    object_load_free(&object_load);
+}
+
 int main(int argc, char** argv)
 {
     ApplicationContext app = { 0 };
@@ -802,12 +837,12 @@ int main(int argc, char** argv)
 
     V2 preview_image_dimensions = v2d();
     char* current_path = NULL;
-    b8 show_preview = false;
     FileAttrib preview_file = { 0 };
     ColoredCharacterArray preview_file_colored = { 0 };
     array_create(&preview_file_colored, 1000);
     U32Array preview_textures = { 0 };
     array_create(&preview_textures, 10);
+    i32 preview_index = -1;
 
     AABBArray parent_directory_aabbs = { 0 };
     array_create(&parent_directory_aabbs, 10);
@@ -825,7 +860,7 @@ int main(int argc, char** argv)
 
     enable_gldebugging();
     glEnable(GL_BLEND);
-    //glEnable(GL_MULTISAMPLE);
+    // glEnable(GL_MULTISAMPLE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     while (!window_should_close(app.window))
     {
@@ -881,24 +916,34 @@ int main(int argc, char** argv)
                 // TODO: this is used in input fields
                 // platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
-            else if (!show_preview &&
+            else if (preview_index == -1 &&
                      tab->selected_item_values.paths.size == 1 &&
                      event_is_ctrl_and_key_pressed(FTIC_KEY_D))
             {
                 const char* path = tab->selected_item_values.paths.data[0];
 
-                show_preview = true;
                 if (load_preview_image(path, &preview_image_dimensions,
                                        &preview_textures))
                 {
                     current_path = string_copy(path, (u32)strlen(path), 0);
                     directory_clear_selected_items(&tab->selected_item_values);
+                    preview_index = 0;
                 }
                 else
                 {
-                    preview_file = file_read(path);
-                    parse_file(&preview_file, &preview_file_colored);
-                    show_preview = true;
+                    const char* extension =
+                        file_get_extension(path, (u32)strlen(path));
+                    if (strcmp(extension, ".obj") == 0)
+                    {
+                        preview_index = 1;
+                        load_object(&app.render_3d, path);
+                    }
+                    else
+                    {
+                        preview_file = file_read(path);
+                        parse_file(&preview_file, &preview_file_colored);
+                        preview_index = 2;
+                    }
                 }
             }
             else if (key_event->activated && key_event->action == 1 &&
@@ -1206,9 +1251,9 @@ int main(int argc, char** argv)
                 &app.search_page, app.search_result_window, list_item_height,
                 &tab->directory_history);
 
-            if (show_preview)
+            if (preview_index != -1)
             {
-                if (preview_textures.size > 0)
+                if (preview_index == 0)
                 {
                     UiWindow* preview = ui_window_get(app.preview_window);
 
@@ -1225,12 +1270,15 @@ int main(int argc, char** argv)
 
                     if (ui_window_begin(app.preview_window, NULL, false))
                     {
-                        show_preview = !ui_window_set_overlay();
+                        if (!ui_window_set_overlay()) preview_index = -1;
                         ui_window_add_image(v2d(), image_dimensions,
                                             preview_textures.data[0]);
 
                         ui_window_end();
                     }
+                }
+                else if (preview_index == 1)
+                {
                 }
                 else
                 {
@@ -1243,7 +1291,7 @@ int main(int argc, char** argv)
 
                     if (ui_window_begin(app.preview_window, NULL, false))
                     {
-                        show_preview = !ui_window_set_overlay();
+                        if (!ui_window_set_overlay()) preview_index = -1;
                         ui_window_add_text_colored(v2f(10.0f, 10.0f),
                                                    &preview_file_colored, true);
                         // ui_window_add_text(v2f(10.0f, 10.0f),
@@ -1304,19 +1352,20 @@ int main(int argc, char** argv)
         }
         ui_context_end();
 
-        rendering_properties_check_and_grow_buffers(&app.main_render,
-                                                    app.main_index_count);
+        rendering_properties_check_and_grow_vertex_buffer(&app.main_render);
+        rendering_properties_check_and_grow_index_buffer(&app.main_render,
+                                                         app.main_index_count);
 
-        buffer_set_sub_data(app.main_render.vertex_buffer_id, GL_ARRAY_BUFFER,
-                            0, sizeof(Vertex) * app.main_render.vertices.size,
+        buffer_set_sub_data(app.main_render.render.vertex_buffer_id,
+                            GL_ARRAY_BUFFER, 0,
+                            sizeof(Vertex) * app.main_render.vertices.size,
                             app.main_render.vertices.data);
 
         AABB whole_screen_scissor = { .size = app.dimensions };
 
-        rendering_properties_begin_draw(&app.main_render, &app.mvp);
-        rendering_properties_draw(0, app.main_index_count,
-                                  &whole_screen_scissor);
-        rendering_properties_end_draw(&app.main_render);
+        render_begin_draw(&app.main_render.render, &app.mvp);
+        render_draw(0, app.main_index_count, &whole_screen_scissor);
+        render_end_draw(&app.main_render.render);
 #endif
 
         application_end_frame(&app);

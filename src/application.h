@@ -113,6 +113,9 @@ typedef struct ApplicationContext
     u32 main_index_count;
     b8 show_search_page;
 
+    Render render_3d;
+    u32 index_count_3d;
+
     U32Array free_window_ids;
     U32Array windows;
     U32Array tab_windows;
