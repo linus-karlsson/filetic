@@ -940,6 +940,12 @@ int main(int argc, char** argv)
                 // TODO: this is used in input fields
                 // platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
+            else if(event_is_key_pressed_once(FTIC_KEY_F))
+            {
+                const char* path =
+                    tab->directory_list.selected_item_values.paths.data[0];
+                platform_get_context_menu_options(path, NULL);
+            }
             else if (preview_index == -1 &&
                      tab->directory_list.selected_item_values.paths.size == 1 &&
                      event_is_ctrl_and_key_pressed(FTIC_KEY_D))

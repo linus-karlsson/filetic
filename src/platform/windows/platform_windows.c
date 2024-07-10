@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <Windows.h>
+#include <shlwapi.h>
 #include <ShlObj.h>
 #include <stdlib.h>
 #include <time.h>
@@ -1184,3 +1185,62 @@ void platform_start_drag_drop(const CharPtrArray* paths)
     data_object->vtbl->Release((IDataObject*)data_object);
     drop_source->vtbl->Release((IDropSource*)drop_source);
 }
+
+void platform_get_context_menu_options(const char* path, CharPtrArray* options)
+{
+    CoInitialize(NULL);
+
+    wchar_t* w_path = char_to_wchar(path, strlen(path) + 1);
+
+    LPITEMIDLIST pidl = NULL;
+    SFGAOF sfgao;
+    HRESULT hr = SHParseDisplayName((LPWSTR)w_path, NULL, &pidl, 0, &sfgao);
+    if (FAILED(hr))
+    {
+        CoUninitialize();
+    }
+
+    IShellFolder* psfParent = NULL;
+    PCUITEMID_CHILD pidlChild = NULL;
+    hr =
+        SHBindToParent(pidl, &IID_IShellFolder, (void**)&psfParent, &pidlChild);
+    if (FAILED(hr))
+    {
+        CoTaskMemFree((void*)pidl);
+        CoUninitialize();
+    }
+
+    IContextMenu* pcm = NULL;
+    psfParent->lpVtbl->GetUIObjectOf(psfParent, NULL, 1, &pidlChild,
+                                     &IID_IContextMenu, NULL, (void**)&pcm);
+
+    HMENU hMenu = CreatePopupMenu();
+    if (hMenu)
+    {
+        pcm->lpVtbl->QueryContextMenu(pcm, hMenu, 0, 1, 0x7FFF, CMF_NORMAL);
+
+        int count = GetMenuItemCount(hMenu);
+        for (int i = 0; i < count; ++i)
+        {
+            MENUITEMINFOW mii = { sizeof(MENUITEMINFOW) };
+            mii.fMask = MIIM_STRING;
+            wchar_t buffer[256];
+            mii.dwTypeData = buffer;
+            mii.cch = sizeof(buffer) / sizeof(wchar_t);
+
+            if (GetMenuItemInfoW(hMenu, i, TRUE, &mii))
+            {
+                int j = 0;
+            }
+        }
+
+        DestroyMenu(hMenu);
+    }
+
+    pcm->lpVtbl->Release(pcm);
+    psfParent->lpVtbl->Release(psfParent);
+    CoTaskMemFree((void*)pidl);
+
+    CoUninitialize();
+}
+

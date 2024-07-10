@@ -206,6 +206,13 @@ typedef struct CharPtrArray
     char** data;
 } CharPtrArray;
 
+typedef struct CharPtrArray
+{
+    u32 size;
+    u32 capacity;
+    char** data;
+} CharPtrArray;
+
 global const V4 clear_color = {
     .r = 0.1f,
     .g = 0.1f,

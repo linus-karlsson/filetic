@@ -120,4 +120,4 @@ void platform_show_properties(i32 x, i32 y, const char* file_path);
 void platform_listen_to_directory_change(void* data);
 
 void platform_get_executable_directory(CharArray* buffer);
-
+void platform_get_context_menu_options(const char* path, CharPtrArray* options);
