@@ -18,9 +18,11 @@ void main()
 {
     gl_Position = proj * view * mat4(1.0f) * vec4(vPosition, 1.0);
 
-    vec3 light_pos = vec3(model[0]);
-    float intensity = dot(vNormal, light_pos);
-    vec3 final_color = vColor.rgb * intensity;
+    vec3 light_dir = vec3(model[0]);
+    float intensity = max(dot(vNormal, light_dir), 0.0);
+
+    float ambient = 0.1;
+    vec3 final_color = vColor.rgb * (ambient + (1.0 - ambient) * intensity);
     fColor = vec4(final_color, vColor.a);
 
     fTexCoord = vTexCoord;

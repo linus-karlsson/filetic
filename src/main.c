@@ -1310,8 +1310,8 @@ int main(int argc, char** argv)
                 else if (preview_index == 1)
                 {
                     AABB view_port = {
-                        .min = v2i(10.0f),
-                        .size = v2_s_sub(app.dimensions, 20.0f),
+                        .min = v2i(0.0f),
+                        .size = v2_s_sub(app.dimensions, 0.0f),
                     };
                     preview_camera.view_port = view_port;
                     preview_camera.view_projection.projection = perspective(
@@ -1413,10 +1413,12 @@ int main(int argc, char** argv)
 
         if (preview_index == 1)
         {
+#if 0
             glViewport((int)roundf(preview_camera.view_port.min.x),
                        (int)roundf(preview_camera.view_port.min.y),
                        (int)roundf(preview_camera.view_port.size.width),
                        (int)roundf(preview_camera.view_port.size.height));
+#endif
 
             MVP mvp = {
                 .model = m4i(1.0f),
