@@ -2,27 +2,28 @@
 #include "define.h"
 #include "math/ftic_math.h"
 #include "util.h"
+#include "collision.h"
 
 typedef struct Camera
 {
     VP view_projection;
-    V3 acc;
-    V3 vel;
-    V3 pos;
-    V3 ori;
+    V3 acceleration;
+    V3 velocity;
+    V3 position;
+    V3 orientation;
     V3 up;
     f32 speed;
     f32 old_speed;
     f32 sens;
 
-    V2 view_port;
+    AABB view_port;
     b8 first_clicked;
 } Camera;
 
 Camera camera_create_default();
 Camera camera_create(f32 speed, f32 sensitivity);
 
-b8 camera_update(Camera* camera, const f32 delta_time);
+b8 camera_update(Camera* camera, const f64 delta_time);
 void camera_print(const Camera* camera);
-V2 get_mouse_rotation(Camera* camera, const f32 delta_time);
+V2 get_mouse_rotation(Camera* camera, const f64 delta_time);
 

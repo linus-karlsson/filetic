@@ -355,15 +355,18 @@ internal void main_render_initialize(RenderingProperties* main_render,
     array_push(&textures, font_texture);
 
     array_create(&main_render->vertices, 100 * 4);
-    u32 vertex_buffer_id = vertex_buffer_create(
-        NULL, main_render->vertices.capacity, sizeof(Vertex), GL_STREAM_DRAW);
+    u32 vertex_buffer_id = vertex_buffer_create();
+    vertex_buffer_orphan(vertex_buffer_id,
+                         main_render->vertices.capacity * sizeof(Vertex),
+                         GL_STREAM_DRAW, NULL);
     main_render->vertex_buffer_capacity = main_render->vertices.capacity;
 
     array_create(&main_render->indices, 100 * 6);
     generate_indicies(&main_render->indices, 0, 100);
-    u32 index_buffer_id = index_buffer_create(main_render->indices.data,
-                                              main_render->indices.size,
-                                              sizeof(u32), GL_STATIC_DRAW);
+    u32 index_buffer_id = index_buffer_create();
+    index_buffer_orphan(index_buffer_id,
+                        main_render->indices.size * sizeof(u32), GL_STATIC_DRAW,
+                        main_render->indices.data);
     free(main_render->indices.data);
 
     main_render->render = render_create(shader, textures, &vertex_buffer_layout,
@@ -384,7 +387,8 @@ internal void render_3d_initialize(Render* render)
     array_create(&textures, texture_count);
     array_push(&textures, default_texture);
 
-    *render = render_create(shader, textures, &vertex_buffer_layout, 0, 0);
+    *render = render_create(shader, textures, &vertex_buffer_layout,
+                            vertex_buffer_create(), index_buffer_create());
 }
 
 u8* application_initialize(ApplicationContext* app)

@@ -1138,17 +1138,19 @@ void ui_context_create()
     array_push(&textures, file_c_icon_big_texture);
 
     array_create(&ui_context.render.vertices, 100 * 4);
-    u32 vertex_buffer_id =
-        vertex_buffer_create(NULL, ui_context.render.vertices.capacity,
-                             sizeof(Vertex), GL_STREAM_DRAW);
+    u32 vertex_buffer_id = vertex_buffer_create();
+    vertex_buffer_orphan(vertex_buffer_id,
+                         ui_context.render.vertices.capacity * sizeof(Vertex),
+                         GL_STREAM_DRAW, NULL);
     ui_context.render.vertex_buffer_capacity =
         ui_context.render.vertices.capacity;
 
     array_create(&ui_context.render.indices, 100 * 6);
     generate_indicies(&ui_context.render.indices, 0, 100);
-    u32 index_buffer_id = index_buffer_create(ui_context.render.indices.data,
-                                              ui_context.render.indices.size,
-                                              sizeof(u32), GL_STATIC_DRAW);
+    u32 index_buffer_id = index_buffer_create();
+    index_buffer_orphan(index_buffer_id,
+                        ui_context.render.indices.size * sizeof(u32),
+                        GL_STATIC_DRAW, ui_context.render.indices.data);
     free(ui_context.render.indices.data);
 
     ui_context.render.render =

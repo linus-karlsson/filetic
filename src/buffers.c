@@ -3,13 +3,11 @@
 #include <stdlib.h>
 #include <glad/glad.h>
 
-u32 vertex_buffer_create(const void* data, const u32 count, const u32 size,
-                         const u32 usage)
+u32 vertex_buffer_create()
 {
     u32 vertex_buffer = 0;
     glGenBuffers(1, &vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, size * count, data, usage);
     return vertex_buffer;
 }
 
@@ -30,13 +28,11 @@ void vertex_buffer_orphan(u32 vertex_buffer_id, const u32 new_size,
     glBufferData(GL_ARRAY_BUFFER, new_size, data, usage);
 }
 
-u32 index_buffer_create(const void* data, const u32 count, const u32 size,
-                        const u32 usage)
+u32 index_buffer_create()
 {
     u32 index_buffer = 0;
     glGenBuffers(1, &index_buffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, count * size, data, usage);
     return index_buffer;
 }
 
@@ -51,7 +47,7 @@ void index_buffer_unbind()
 }
 
 void index_buffer_orphan(u32 index_buffer_id, const u32 new_size,
-                          const u32 usage, const void* data)
+                         const u32 usage, const void* data)
 {
     index_buffer_bind(index_buffer_id);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, new_size, data, usage);

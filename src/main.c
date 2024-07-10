@@ -26,6 +26,7 @@
 #include "ui.h"
 #include "application.h"
 #include "object_load.h"
+#include "camera.h"
 
 global const V4 full_icon_co = {
     .x = 0.0f,
@@ -796,7 +797,7 @@ void parse_file(FileAttrib* file, ColoredCharacterArray* array)
     free(word.data);
 }
 
-void load_object(Render* render, const char* path)
+u32 load_object(Render* render, const char* path)
 {
     ObjectLoad object_load = { 0 };
     object_load_model(&object_load, path);
@@ -824,10 +825,17 @@ void load_object(Render* render, const char* path)
         array_push(&indices, i);
     }
 
-    u32 vertex_buffer_id = vertex_buffer_create(
-        vertices.data, vertices.capacity, sizeof(Vertex), GL_STATIC_DRAW);
+    vertex_buffer_orphan(render->vertex_buffer_id,
+                         vertices.size * sizeof(Vertex3D), GL_STATIC_DRAW,
+                         vertices.data);
+    index_buffer_orphan(render->index_buffer_id, indices.size * sizeof(u32),
+                        GL_STATIC_DRAW, indices.data);
+    u32 index_count = indices.size;
 
+    array_free(&indices);
+    array_free(&vertices);
     object_load_free(&object_load);
+    return index_count;
 }
 
 int main(int argc, char** argv)
@@ -843,6 +851,7 @@ int main(int argc, char** argv)
     U32Array preview_textures = { 0 };
     array_create(&preview_textures, 10);
     i32 preview_index = -1;
+    Camera preview_camera = camera_create_default();
 
     AABBArray parent_directory_aabbs = { 0 };
     array_create(&parent_directory_aabbs, 10);
@@ -936,7 +945,7 @@ int main(int argc, char** argv)
                     if (strcmp(extension, ".obj") == 0)
                     {
                         preview_index = 1;
-                        load_object(&app.render_3d, path);
+                        app.index_count_3d = load_object(&app.render_3d, path);
                     }
                     else
                     {
@@ -1279,6 +1288,20 @@ int main(int argc, char** argv)
                 }
                 else if (preview_index == 1)
                 {
+                    AABB view_port = {
+                        .min = v2i(10.0f),
+                        .size = v2_s_sub(app.dimensions, 20.0f),
+                    };
+                    preview_camera.view_port = view_port;
+                    preview_camera.view_projection.projection = perspective(
+                        PI * 0.5f, view_port.size.width / view_port.size.height,
+                        0.1f, 100.0f);
+                    preview_camera.view_projection.view =
+                        view(preview_camera.position,
+                             v3_add(preview_camera.position,
+                                    preview_camera.orientation),
+                             preview_camera.up);
+                    camera_update(&preview_camera, app.delta_time);
                 }
                 else
                 {
@@ -1366,6 +1389,25 @@ int main(int argc, char** argv)
         render_begin_draw(&app.main_render.render, &app.mvp);
         render_draw(0, app.main_index_count, &whole_screen_scissor);
         render_end_draw(&app.main_render.render);
+
+        if (preview_index == 1)
+        {
+            glViewport((int)preview_camera.view_port.min.x,
+                       (int)preview_camera.view_port.min.y,
+                       (int)preview_camera.view_port.size.width,
+                       (int)preview_camera.view_port.size.height);
+
+            MVP mvp = {
+                .model = m4i(1.0f),
+                .view = preview_camera.view_projection.view,
+                .projection = preview_camera.view_projection.projection,
+            };
+
+            render_begin_draw(&app.render_3d, &mvp);
+            render_draw(0, app.index_count_3d, &preview_camera.view_port);
+            render_end_draw(&app.render_3d);
+        }
+
 #endif
 
         application_end_frame(&app);

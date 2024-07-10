@@ -22,12 +22,12 @@ typedef struct VertexBufferLayout
     VertexBufferItemArray items;
 } VertexBufferLayout;
 
-u32  vertex_buffer_create(const void* data, const u32 count, const u32 size, const u32 usage);
+u32  vertex_buffer_create();
 void vertex_buffer_bind(const u32 vertex_buffer);
 void vertex_buffer_unbind();
 void vertex_buffer_orphan(u32 vertex_buffer_id, const u32 new_size, const u32 usage, const void* data);
 
-u32  index_buffer_create(const void* data, const u32 count, const u32 size, const u32 usage);
+u32  index_buffer_create();
 void index_buffer_bind(const u32 index_buffer);
 void index_buffer_unbind();
 void index_buffer_orphan(u32 index_buffer_id, const u32 new_size, const u32 usage, const void* data);

@@ -2,6 +2,7 @@
 #include "opengl_util.h"
 #include "texture.h"
 #include <glad/glad.h>
+#include <math.h>
 
 Render render_create(const u32 shader_id, const U32Array textures,
                      const VertexBufferLayout* vertex_buffer_layout,
@@ -9,7 +10,6 @@ Render render_create(const u32 shader_id, const U32Array textures,
 {
     Render render = { 0 };
     render.vertex_buffer_id = vertex_buffer_id;
-
     render.vertex_array_id = vertex_array_create();
     vertex_array_bind(render.vertex_array_id);
     vertex_array_add_buffer(render.vertex_array_id, render.vertex_buffer_id,
@@ -101,9 +101,8 @@ void render_draw(const u32 index_offset, const u32 index_count,
     if (index_count)
     {
         glEnable(GL_SCISSOR_TEST);
-
-        glScissor((int)scissor->min.x, (int)scissor->min.y,
-                  (int)scissor->size.width, (int)scissor->size.height);
+        glScissor((int)roundf(scissor->min.x), (int)roundf(scissor->min.y),
+                  (int)roundf(scissor->size.width), (int)roundf(scissor->size.height));
 
         GLintptr offset = index_offset * sizeof(u32);
         glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT,
