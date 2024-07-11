@@ -771,19 +771,95 @@ internal b8 get_word(const FileAttrib* file, u32* index, CharArray* buffer,
 }
 
 const char* primitive_key_words[] = {
-    "const", "for", "if", "else", "case", "switch", "while",
+    "const", "continue", "break", "for",  "if",     "static",
+    "else",  "struct",   "enum",  "case", "switch", "while",
 };
 
 const char* user_key_words[] = {
-    "int",  "char", "u64", "u32",  "u16",   "u8",   "b8",
-    "i32",  "f32",  "f64", "V2",   "char*", "u64*", "u32*",
-    "u16*", "u8*",  "b8*", "i32*", "f32*",  "f64*", "V2*", "void", "void*"
+    "int", "char", "u64", "u32", "u16", "u8", "b8",
+    "i32", "f32",  "f64", "V2",  "V3",  "V4", "void",
 };
+
+const char* define_key_words[] = {
+    "#include", "#define", "global", "internal", "typedef",
+};
+
+b8 search_keywords(const char** keywords, const u32 keyword_count,
+                   const CharArray* word, UU32* start_end)
+{
+    for (u32 i = 0; i < keyword_count; ++i)
+    {
+        const char* keyword = keywords[i];
+        const char* found_pos = strstr(word->data, keyword);
+        if (found_pos != NULL)
+        {
+            start_end->first = (u32)(found_pos - word->data);
+            if (start_end->first != 0)
+            {
+                if (word->data[start_end->first - 1] != '(')
+                {
+                    start_end->first = 0;
+                    start_end->second = 0;
+                    return false;
+                }
+            }
+            start_end->second = start_end->first + (u32)strlen(keyword);
+            if (start_end->second != word->size)
+            {
+                if (word->data[start_end->second] != ')' &&
+                    word->data[start_end->second] != '*')
+                {
+                    start_end->first = 0;
+                    start_end->second = 0;
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+b8 contains_key_word(const CharArray* word, V4* color, UU32* start_end)
+{
+    b8 found = search_keywords(primitive_key_words,
+                               static_array_size(primitive_key_words), word,
+                               start_end);
+
+    if (found)
+    {
+        *color = v4f(1.0f, 0.34117f, 0.2f, 1.0f);
+    }
+    else
+    {
+        found = search_keywords(
+            user_key_words, static_array_size(user_key_words), word, start_end);
+        if (found)
+        {
+            *color = v4f(1.0f, 0.527f, 0.0f, 1.0f);
+        }
+        else
+        {
+            found = search_keywords(define_key_words,
+                                    static_array_size(define_key_words), word,
+                                    start_end);
+            if (found)
+            {
+                *color = v4f(0.527f, 0.68f, 0.527f, 1.0f);
+            }
+        }
+    }
+
+    return found;
+}
 
 internal void word_to_color(const CharArray* word, ColoredCharacterArray* array)
 {
     V4 color = v4f(0.95f, 0.95f, 1.0f, 1.0f);
+    V4 color2 = color;
+    V4 function_color = v4f(0.686f, 0.686f, 0.0f, 1.0f);
     b8 found = false;
+#if 0
     for (u32 i = 0; i < static_array_size(primitive_key_words); ++i)
     {
         if (strcmp(word->data, primitive_key_words[i]) == 0)
@@ -816,6 +892,54 @@ internal void word_to_color(const CharArray* word, ColoredCharacterArray* array)
             array_push(array, value);
         }
     }
+#else
+    UU32 start_end = { 0 };
+    found = contains_key_word(word, &color, &start_end);
+    if (found)
+    {
+        u32 index = 0;
+        for (u32 i = 0; i < word->size; ++i)
+        {
+            if (word->data[i] == '(')
+            {
+                index = i;
+                break;
+            }
+        }
+        for (u32 i = 0; i < index; ++i)
+        {
+            ColoredCharacter value = {
+                .color = function_color,
+                .character = word->data[i],
+            };
+            array_push(array, value);
+        }
+        for (u32 i = index; i < start_end.first; ++i)
+        {
+            ColoredCharacter value = {
+                .color = color2,
+                .character = word->data[i],
+            };
+            array_push(array, value);
+        }
+        for (u32 i = start_end.first; i < start_end.second; ++i)
+        {
+            ColoredCharacter value = {
+                .color = color,
+                .character = word->data[i],
+            };
+            array_push(array, value);
+        }
+        for (u32 i = start_end.second; i < word->size; ++i)
+        {
+            ColoredCharacter value = {
+                .color = color2,
+                .character = word->data[i],
+            };
+            array_push(array, value);
+        }
+    }
+#endif
     else
     {
         u32 index = 0;
@@ -830,7 +954,7 @@ internal void word_to_color(const CharArray* word, ColoredCharacterArray* array)
         for (u32 i = 0; i < index; ++i)
         {
             ColoredCharacter value = {
-                .color = v4f(0.475f, 0.756f, 0.0429f, 1.0f),
+                .color = function_color,
                 .character = word->data[i],
             };
             array_push(array, value);

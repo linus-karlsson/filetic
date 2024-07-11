@@ -177,6 +177,12 @@ typedef struct List
     b8 item_selected;
 } List;
 
+typedef struct UU32
+{
+    u32 first;
+    u32 second;
+} UU32;
+
 InputBuffer ui_input_buffer_create();
 void ui_input_buffer_delete(InputBuffer* input);
 void ui_input_buffer_clear_selection(InputBuffer* input);

@@ -166,12 +166,6 @@ typedef struct UiContext
 
 } UiContext;
 
-typedef struct UU32
-{
-    u32 first;
-    u32 second;
-} UU32;
-
 typedef struct UU32Array
 {
     u32 size;
