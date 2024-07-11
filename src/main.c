@@ -515,38 +515,6 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
         }
         else
         {
-            const MouseButtonEvent* mouse_button_event =
-                event_get_mouse_button_event();
-            const KeyEvent* key_event = event_get_key_event();
-
-            if (check_collision && mouse_button_event->activated &&
-                mouse_button_event->action == 0 &&
-                (mouse_button_event->button == FTIC_MOUSE_BUTTON_1 ||
-                 mouse_button_event->button == FTIC_MOUSE_BUTTON_RIGHT))
-            {
-                const char* last_selected =
-                    tab->directory_list.selected_item_values.last_selected;
-
-                u32* check_if_selected = hash_table_get_char_u32(
-                    &tab->directory_list.selected_item_values.selected_items,
-                    last_selected);
-                if (!check_if_selected)
-                {
-                    if (!key_event->ctrl_pressed)
-                    {
-                        directory_clear_selected_items(
-                            &tab->directory_list.selected_item_values);
-                    }
-                    const u32 length = (u32)strlen(last_selected);
-                    char* path = string_copy(last_selected, length, 2);
-                    hash_table_insert_char_u32(
-                        &tab->directory_list.selected_item_values
-                             .selected_items,
-                        path, 1);
-                    array_push(&tab->directory_list.selected_item_values.paths,
-                               path);
-                }
-            }
         }
         return ui_window_end();
     }
@@ -1410,6 +1378,7 @@ int main(int argc, char** argv)
                 {
                     free(preview_file.buffer);
                     preview_file = (FileAttrib){ 0 };
+                    preview_file_colored.size = 0;
                 }
             }
 

@@ -1,6 +1,7 @@
 #include "font.h"
 #include "opengl_util.h"
 #include <stb/stb_truetype.h>
+#include <string.h>
 
 void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
                     u32 glyph_count, u32 glyph_offset,
@@ -34,16 +35,15 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
 }
 
 internal b8 render_character(const char character, const CharacterTTF* c_ttf,
-                               const float texture_index, const f32 scale,
-                               const f32 line_height, const f32 start_x,
-                               const V4 color, u32* new_lines,
-                               f32* x_max_advance, u32* count, V2* pos,
-                               SelectionCharacterArray* selection_chars,
-                               VertexArray* array)
+                             const float texture_index, const f32 line_height,
+                             const f32 start_x, const V4 color, u32* new_lines,
+                             f32* x_max_advance, u32* count, V2* pos,
+                             SelectionCharacterArray* selection_chars,
+                             VertexArray* array)
 {
     if (character == '\n')
     {
-        pos->y += line_height * scale;
+        pos->y += line_height;
         pos->x = start_x;
         *new_lines += 1;
         return false;
@@ -51,14 +51,14 @@ internal b8 render_character(const char character, const CharacterTTF* c_ttf,
     else if (character == '\t')
     {
         const CharacterTTF* c = c_ttf + (' ' - 32);
-        pos->x += c->x_advance * scale * 4;
+        pos->x += c->x_advance * 4;
     }
-    if (closed_interval(0, (character - 32), 96))
+    else if (closed_interval(0, (character - 32), 96))
     {
         const CharacterTTF* c = c_ttf + (character - 32);
 
-        V2 size = v2_s_multi(c->dimensions, scale);
-        V2 curr_pos = v2_add(*pos, v2_s_multi(c->offset, scale));
+        V2 size = c->dimensions;
+        V2 curr_pos = v2_add(*pos, c->offset);
         AABB aabb = quad_co(array, curr_pos, size, color, c->text_coords,
                             texture_index);
 
@@ -71,7 +71,7 @@ internal b8 render_character(const char character, const CharacterTTF* c_ttf,
             };
             array_push(selection_chars, selection_char);
         }
-        pos->x += c->x_advance * scale;
+        pos->x += c->x_advance;
         *x_max_advance = max(*x_max_advance, pos->x);
         *count += 1;
     }
@@ -92,7 +92,7 @@ u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
     for (; *text; text++)
     {
         char current_char = *text;
-        render_character(current_char, c_ttf, texture_index, scale, line_height,
+        render_character(current_char, c_ttf, texture_index, line_height,
                          start_x, color, &new_lines, &x_max_advance, &count,
                          &pos, selection_chars, array);
     }
@@ -107,6 +107,31 @@ u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,
     return count * 6;
 }
 
+internal void add_line_number(const char* buffer, const i32 buffer_length,
+                              const i32 digits, const CharacterTTF* c_ttf,
+                              const float texture_index, const f32 line_height,
+                              const f32 start_x, u32* new_lines,
+                              f32* x_max_advance, u32* count, V2* pos,
+                              SelectionCharacterArray* selection_chars,
+                              VertexArray* array)
+{
+    for (i32 j = 0; j < buffer_length; ++j)
+    {
+        render_character(buffer[j], c_ttf, texture_index, line_height, start_x,
+                         v4ic(1.0f), new_lines, x_max_advance, count, pos,
+                         selection_chars, array);
+    }
+    for (i32 j = 0; j < (digits - buffer_length); ++j)
+    {
+        render_character(' ', c_ttf, texture_index, line_height, start_x,
+                         v4ic(1.0f), new_lines, x_max_advance, count, pos,
+                         selection_chars, array);
+    }
+    render_character('\t', c_ttf, texture_index, line_height, start_x,
+                     v4ic(1.0f), new_lines, x_max_advance, count, pos,
+                     selection_chars, array);
+}
+
 u32 text_generation_colored_char(const CharacterTTF* c_ttf,
                                  const ColoredCharacterArray* text,
                                  float texture_index, V2 pos, f32 scale,
@@ -115,16 +140,44 @@ u32 text_generation_colored_char(const CharacterTTF* c_ttf,
                                  SelectionCharacterArray* selection_chars,
                                  VertexArray* array)
 {
+    u32 total_new_lines = 0;
+    for (u32 i = 0; i < text->size; ++i)
+    {
+        total_new_lines += (text->data[i].character == '\n');
+    }
+
+    i32 digits = 0;
+    while (total_new_lines && ++digits)
+    {
+        total_new_lines /= 10;
+    }
+
     u32 count = 0;
     f32 start_x = pos.x;
     u32 new_lines = 0;
     f32 x_max_advance = 0.0f;
+    if (text->size)
+    {
+        char zero = '0';
+        add_line_number(&zero, 1, digits, c_ttf, texture_index, line_height,
+                        start_x, &new_lines, &x_max_advance, &count, &pos,
+                        selection_chars, array);
+    }
     for (u32 i = 0; i < text->size; ++i)
     {
         ColoredCharacter* current = text->data + i;
-        render_character(current->character, c_ttf, texture_index, scale,
-                         line_height, start_x, current->color, &new_lines,
-                         &x_max_advance, &count, &pos, selection_chars, array);
+        if (!render_character(current->character, c_ttf, texture_index,
+                              line_height, start_x, current->color, &new_lines,
+                              &x_max_advance, &count, &pos, selection_chars,
+                              array))
+        {
+            char buffer[256] = { 0 };
+            value_to_string(buffer, "%u", new_lines);
+            add_line_number(buffer, (i32)strlen(buffer), digits, c_ttf,
+                            texture_index, line_height, start_x, &new_lines,
+                            &x_max_advance, &count, &pos, selection_chars,
+                            array);
+        }
     }
     if (new_lines_count)
     {

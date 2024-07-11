@@ -117,6 +117,7 @@ typedef struct UiWindow
     b8 area_hit;
     b8 top_bar;
     b8 top_bar_pressed;
+    b8 release_from_dock_space;
     b8 top_bar_hold;
     u8 resize_dragging;
     u8 resizeable;
