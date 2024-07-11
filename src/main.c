@@ -771,16 +771,18 @@ internal b8 get_word(const FileAttrib* file, u32* index, CharArray* buffer,
 }
 
 const char* primitive_key_words[] = {
-    "const", "void", "for", "if", "else", "case", "switch", "while",
+    "const", "for", "if", "else", "case", "switch", "while",
 };
 
 const char* user_key_words[] = {
-    "int", "u64", "u32", "u16", "u8", "b8", "i32", "f32", "f64", "V2",
+    "int",  "char", "u64", "u32",  "u16",   "u8",   "b8",
+    "i32",  "f32",  "f64", "V2",   "char*", "u64*", "u32*",
+    "u16*", "u8*",  "b8*", "i32*", "f32*",  "f64*", "V2*", "void", "void*"
 };
 
 internal void word_to_color(const CharArray* word, ColoredCharacterArray* array)
 {
-    V4 color = v4ic(1.0f);
+    V4 color = v4f(0.95f, 0.95f, 1.0f, 1.0f);
     b8 found = false;
     for (u32 i = 0; i < static_array_size(primitive_key_words); ++i)
     {
@@ -788,6 +790,7 @@ internal void word_to_color(const CharArray* word, ColoredCharacterArray* array)
         {
             color = v4f(1.0f, 0.34117f, 0.2f, 1.0f);
             found = true;
+            break;
         }
     }
     if (!found)
@@ -796,17 +799,50 @@ internal void word_to_color(const CharArray* word, ColoredCharacterArray* array)
         {
             if (strcmp(word->data, user_key_words[i]) == 0)
             {
-                color = v4f(1.0f, 0.5f, 0.2f, 1.0f);
+                color = v4f(1.0f, 0.527f, 0.0f, 1.0f);
+                found = true;
+                break;
             }
         }
     }
-    for (u32 i = 0; i < word->size; ++i)
+    if (found)
     {
-        ColoredCharacter value = {
-            .color = color,
-            .character = word->data[i],
-        };
-        array_push(array, value);
+        for (u32 i = 0; i < word->size; ++i)
+        {
+            ColoredCharacter value = {
+                .color = color,
+                .character = word->data[i],
+            };
+            array_push(array, value);
+        }
+    }
+    else
+    {
+        u32 index = 0;
+        for (u32 i = 0; i < word->size; ++i)
+        {
+            if (word->data[i] == '(')
+            {
+                index = i;
+                break;
+            }
+        }
+        for (u32 i = 0; i < index; ++i)
+        {
+            ColoredCharacter value = {
+                .color = v4f(0.475f, 0.756f, 0.0429f, 1.0f),
+                .character = word->data[i],
+            };
+            array_push(array, value);
+        }
+        for (u32 i = index; i < word->size; ++i)
+        {
+            ColoredCharacter value = {
+                .color = color,
+                .character = word->data[i],
+            };
+            array_push(array, value);
+        }
     }
 }
 
