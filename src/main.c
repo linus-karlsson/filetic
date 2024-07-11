@@ -429,8 +429,12 @@ char* get_parent_directory_name(DirectoryPage* current)
                            (u32)strlen(current->directory.parent));
 }
 
+void directory_tab_remove_selected()
+{
+}
+
 b8 show_directory_window(const u32 window, const f32 list_item_height,
-                         DirectoryTab* tab)
+                         const b8 check_collision, DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
     if (ui_window_begin(window, get_parent_directory_name(current), true))
@@ -450,6 +454,9 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
                 directory_open_folder(
                     current->directory.sub_directories.data[selected_item].path,
                     &tab->directory_history);
+
+                directory_clear_selected_items(
+                    &tab->directory_list.selected_item_values);
             }
             list_position.y +=
                 list_item_height * current->directory.sub_directories.size;
@@ -490,9 +497,56 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
                                  tab->directory_list.input.buffer.size);
             directory_reload(current);
         }
-        if(!tab->directory_list.item_selected)
+        if (!tab->directory_list.item_selected &&
+            !tab->directory_list.input.active)
         {
-            tab->directory_list.selected_item_values.last_selected = NULL;
+            if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+            {
+                if (tab->directory_list.selected_item_values.last_selected)
+                {
+                    free(
+                        tab->directory_list.selected_item_values.last_selected);
+                    tab->directory_list.selected_item_values.last_selected =
+                        NULL;
+                }
+                directory_clear_selected_items(
+                    &tab->directory_list.selected_item_values);
+            }
+        }
+        else
+        {
+            const MouseButtonEvent* mouse_button_event =
+                event_get_mouse_button_event();
+            const KeyEvent* key_event = event_get_key_event();
+
+            if (check_collision && mouse_button_event->activated &&
+                mouse_button_event->action == 0 &&
+                (mouse_button_event->button == FTIC_MOUSE_BUTTON_1 ||
+                 mouse_button_event->button == FTIC_MOUSE_BUTTON_RIGHT))
+            {
+                const char* last_selected =
+                    tab->directory_list.selected_item_values.last_selected;
+
+                u32* check_if_selected = hash_table_get_char_u32(
+                    &tab->directory_list.selected_item_values.selected_items,
+                    last_selected);
+                if (!check_if_selected)
+                {
+                    if (!key_event->ctrl_pressed)
+                    {
+                        directory_clear_selected_items(
+                            &tab->directory_list.selected_item_values);
+                    }
+                    const u32 length = (u32)strlen(last_selected);
+                    char* path = string_copy(last_selected, length, 2);
+                    hash_table_insert_char_u32(
+                        &tab->directory_list.selected_item_values
+                             .selected_items,
+                        path, 1);
+                    array_push(&tab->directory_list.selected_item_values.paths,
+                               path);
+                }
+            }
         }
         return ui_window_end();
     }
@@ -945,12 +999,6 @@ int main(int argc, char** argv)
                 // TODO: this is used in input fields
                 // platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
-            else if(event_is_key_pressed_once(FTIC_KEY_F))
-            {
-                const char* path =
-                    tab->directory_list.selected_item_values.paths.data[0];
-                platform_get_context_menu_options(app.window, path, NULL);
-            }
             else if (preview_index == -1 &&
                      tab->directory_list.selected_item_values.paths.size == 1 &&
                      event_is_ctrl_and_key_pressed(FTIC_KEY_D))
@@ -994,6 +1042,7 @@ int main(int argc, char** argv)
             }
         }
 
+        /*
         for (u32 i = 0; i < app.tabs.size; ++i)
         {
             DirectoryTab* current = app.tabs.data + i;
@@ -1002,27 +1051,21 @@ int main(int argc, char** argv)
                 if (check_collision && !key_event->ctrl_pressed &&
                     mouse_button_event->activated &&
                     mouse_button_event->action == 0 &&
-                    mouse_button_event->button == FTIC_MOUSE_BUTTON_1)
+                    (mouse_button_event->button == FTIC_MOUSE_BUTTON_1 ||
+                     mouse_button_event->button == FTIC_MOUSE_BUTTON_RIGHT))
                 {
                     directory_clear_selected_items(
                         &app.tabs.data[i].directory_list.selected_item_values);
                 }
             }
         }
+        */
 
         if (preview_index != 1 && event_is_ctrl_and_key_pressed(FTIC_KEY_V))
         {
             // TODO: this is used in input fields
             // directory_paste_in_directory(
             //   directory_current(&tab->directory_history));
-        }
-        if (preview_index != 1 &&
-            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
-        {
-            app.context_menu_open = true;
-            app.context_menu.position = app.mouse_position;
-            app.context_menu.position.x += 18.0f;
-            app.context_menu.x = 0.0f;
         }
         if (app.context_menu_open)
         {
@@ -1311,7 +1354,7 @@ int main(int argc, char** argv)
 
                     if (ui_window_begin(app.preview_window, NULL, false))
                     {
-                        if (!ui_window_set_overlay()) preview_index = -1;
+                        if (ui_window_set_overlay()) preview_index = -1;
                         ui_window_add_image(v2d(), image_dimensions,
                                             preview_textures.data[0]);
 
@@ -1346,7 +1389,7 @@ int main(int argc, char** argv)
 
                     if (ui_window_begin(app.preview_window, NULL, false))
                     {
-                        if (!ui_window_set_overlay()) preview_index = -1;
+                        if (ui_window_set_overlay()) preview_index = -1;
                         ui_window_add_text_colored(v2f(10.0f, 10.0f),
                                                    &preview_file_colored, true);
                         // ui_window_add_text(v2f(10.0f, 10.0f),
@@ -1378,7 +1421,7 @@ int main(int argc, char** argv)
                     app.tab_index = i;
                 }
                 if (show_directory_window(window_id, list_item_height,
-                                          app.tabs.data + i))
+                                          check_collision, app.tabs.data + i))
                 {
                     DirectoryTab tab_to_remove = app.tabs.data[i];
                     for (u32 j = i; j < app.tabs.size - 1; ++j)
@@ -1406,6 +1449,26 @@ int main(int argc, char** argv)
             }
         }
         ui_context_end();
+
+        if (preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
+            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
+        {
+            if (tab->directory_list.selected_item_values.paths.size)
+            {
+                platform_get_context_menu_options(
+                    app.window,
+                    tab->directory_list.selected_item_values.paths.data[0],
+                    NULL);
+                directory_reload(directory_current(&tab->directory_history));
+            }
+            else
+            {
+                app.context_menu_open = true;
+                app.context_menu.position = app.mouse_position;
+                app.context_menu.position.x += 18.0f;
+                app.context_menu.x = 0.0f;
+            }
+        }
 
         rendering_properties_check_and_grow_vertex_buffer(&app.main_render);
         rendering_properties_check_and_grow_index_buffer(&app.main_render,

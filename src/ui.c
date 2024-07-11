@@ -2787,51 +2787,39 @@ internal b8 check_directory_item_collision(V2 starting_position,
               event_get_key_event()->alt_pressed);
 
     b8 mouse_button_clicked =
-        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
+        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) ||
+        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT);
 
     b8 clicked_on_same = false;
     if (hit && list && mouse_button_clicked)
     {
-        if (!check_if_selected)
+        if (list)
         {
-            const u32 path_length = (u32)strlen(item->path);
-            char* path = string_copy(item->path, path_length, 2);
-            hash_table_insert_char_u32(
-                &list->selected_item_values.selected_items, path, 1);
-            array_push(&list->selected_item_values.paths, path);
-            *selected = true;
-            if (list->selected_item_values.last_selected)
+            list->item_selected = true;
+        }
+        const u32 path_length = (u32)strlen(item->path);
+        *selected = true;
+        if (list->selected_item_values.last_selected)
+        {
+            if (strcmp(list->selected_item_values.last_selected, item->path) ==
+                0)
             {
-                if (strcmp(list->selected_item_values.last_selected,
-                           item->path) == 0)
-                {
-                    list->input_pressed = window_get_time();
-                    item->rename = true;
-                    clicked_on_same = true;
-                }
-                else
-                {
-                    free(list->selected_item_values.last_selected);
-                    list->selected_item_values.last_selected =
-                        string_copy(item->path, path_length, 0);
-                }
+                list->input_pressed = window_get_time();
+                item->rename = true;
+                clicked_on_same = true;
             }
             else
             {
+                free(list->selected_item_values.last_selected);
                 list->selected_item_values.last_selected =
                     string_copy(item->path, path_length, 0);
             }
         }
         else
         {
-            directory_remove_selected_item(&list->selected_item_values,
-                                           item->path);
+            list->selected_item_values.last_selected =
+                string_copy(item->path, path_length, 0);
         }
-    }
-    
-    if(list)
-    {
-        list->item_selected |= *selected;
     }
 
     if (item->rename && list && !hover_clicked_index.double_clicked)
@@ -3054,7 +3042,10 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index,
             if (directory_item(position, item_dimensions, icon_index, item,
                                list))
             {
-                list->item_to_change = item;
+                if(list)
+                {
+                    list->item_to_change = item;
+                }
                 double_clicked_index = i;
             }
             if (item->rename && list && list->input.active)

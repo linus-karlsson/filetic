@@ -33,7 +33,7 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
     free(file.buffer);
 }
 
-internal void render_character(const char character, const CharacterTTF* c_ttf,
+internal b8 render_character(const char character, const CharacterTTF* c_ttf,
                                const float texture_index, const f32 scale,
                                const f32 line_height, const f32 start_x,
                                const V4 color, u32* new_lines,
@@ -46,7 +46,7 @@ internal void render_character(const char character, const CharacterTTF* c_ttf,
         pos->y += line_height * scale;
         pos->x = start_x;
         *new_lines += 1;
-        return;
+        return false;
     }
     else if (character == '\t')
     {
@@ -75,6 +75,7 @@ internal void render_character(const char character, const CharacterTTF* c_ttf,
         *x_max_advance = max(*x_max_advance, pos->x);
         *count += 1;
     }
+    return true;
 }
 
 u32 text_generation_color(const CharacterTTF* c_ttf, const char* text,

@@ -1256,27 +1256,27 @@ void platform_get_context_menu_options(void* window, const char* path,
             }
         }
 #else
-            HWND hwnd = glfwGetWin32Window(window);
+        HWND hwnd = glfwGetWin32Window(window);
 
-            POINT pt;
-            GetCursorPos(&pt);
-            cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
-                                     pt.x, pt.y, 0, hwnd, NULL);
-            if (cmd)
-            {
-                CMINVOKECOMMANDINFOEX cmi = { 0 };
-                cmi.cbSize = sizeof(CMINVOKECOMMANDINFOEX);
-                cmi.fMask = 0;
-                cmi.hwnd = hwnd;
-                cmi.lpVerb = MAKEINTRESOURCEA(cmd - 1);
-                cmi.lpParameters = NULL;
-                cmi.lpDirectory = NULL;
-                cmi.nShow = SW_SHOWNORMAL;
-                cmi.dwHotKey = 0;
-                cmi.hIcon = NULL;
+        POINT pt;
+        GetCursorPos(&pt);
+        cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y,
+                             0, hwnd, NULL);
+        if (cmd)
+        {
+            CMINVOKECOMMANDINFOEX cmi = { 0 };
+            cmi.cbSize = sizeof(CMINVOKECOMMANDINFOEX);
+            cmi.fMask = 0;
+            cmi.hwnd = hwnd;
+            cmi.lpVerb = MAKEINTRESOURCEA(cmd - 1);
+            cmi.lpParameters = NULL;
+            cmi.lpDirectory = NULL;
+            cmi.nShow = SW_SHOWNORMAL;
+            cmi.dwHotKey = 0;
+            cmi.hIcon = NULL;
 
-                pcm->lpVtbl->InvokeCommand(pcm, (LPCMINVOKECOMMANDINFO)&cmi);
-            }
+            pcm->lpVtbl->InvokeCommand(pcm, (LPCMINVOKECOMMANDINFO)&cmi);
+        }
 
 #endif
         DestroyMenu(hMenu);
