@@ -471,7 +471,7 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
         else
         {
             II32 result = ui_window_add_directory_item_grid(
-                list_position, &current->directory.sub_directories,
+                v2f(0.0f, list_position.y), &current->directory.sub_directories,
                 &current->directory.files, 128.0f, &tab->directory_list);
 
             if (result.first > -1)

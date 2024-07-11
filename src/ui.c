@@ -3197,13 +3197,18 @@ II32 ui_window_add_directory_item_grid(V2 position,
     item_dimensions.height += (ui_context.font.pixel_height + 5.0f);
 
     const u32 item_count = folders->size + files->size;
+    const f32 grid_padding = 10.0f;
     const f32 total_area_space = window->size.width - relative_position.x;
-    const f32 grid_padding = 5.0f;
     const i32 columns = max(
         (i32)(total_area_space / (item_dimensions.width + grid_padding)), 1);
     const i32 rows = item_count / columns;
     const i32 last_row = item_count % columns;
 
+    const f32 total_items_width = columns * item_dimensions.width;
+    const f32 remaining_space = total_area_space - total_items_width;
+    const f32 grid_padding_width = max(remaining_space / (columns + 1), 0.0f);
+
+    position.x += grid_padding_width;
     const f32 start_x = position.x;
 
     II32 hit_index = { .first = -1, .second = -1 };
@@ -3217,7 +3222,7 @@ II32 ui_window_add_directory_item_grid(V2 position,
                 const i32 index = (row * columns) + column;
                 display_grid_item(position, index, folders, files,
                                   item_dimensions, &hit_index, list);
-                position.x += item_dimensions.width + grid_padding;
+                position.x += item_dimensions.width + grid_padding_width;
             }
             position.x = start_x;
         }
