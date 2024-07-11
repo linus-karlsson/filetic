@@ -27,6 +27,12 @@ typedef struct DirectoryItem
     u64 size;
     char* name;
     char* path;
+
+    V2 position_before_animation;
+    V2 position_after_animation;
+    f32 position_animation_precent; 
+
+    b8 position_animation_on;
     b8 rename;
 } DirectoryItem;
 

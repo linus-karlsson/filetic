@@ -2010,6 +2010,26 @@ internal void window_animate(UiWindow* window)
     }
 }
 
+internal V2 directory_item_animate_position(DirectoryItem* item)
+{
+    const f32 animation_speed = 5.0f;
+    V2 position = v2d();
+    if (item->position_animation_precent >= 1.0f)
+    {
+        position = item->position_after_animation;
+    }
+    else
+    {
+        position = v2_lerp(item->position_before_animation,
+                           item->position_after_animation,
+                           ease_out_cubic(item->position_animation_precent));
+
+        item->position_animation_precent +=
+            clampf32_low((f32)ui_context.delta_time, 0.0f) * animation_speed;
+    }
+    return position;
+}
+
 b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar)
 {
     const u32 window_index = ui_context.id_to_index.data[window_id];
@@ -2858,6 +2878,11 @@ internal b8 check_directory_item_collision(V2 starting_position,
                     &list->selected_item_values.selected_items, path, 1);
                 array_push(&list->selected_item_values.paths, path);
             }
+            else
+            {
+                directory_remove_selected_item(&list->selected_item_values,
+                                               item->path);
+            }
 
             if (list->selected_item_values.last_selected)
             {
@@ -2995,11 +3020,30 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
                                  item_dimensions, color, clear_color, 0.0f));
     window->rendering_index_count += 6;
 
+    const f32 animated_position_x = directory_item_animate_position(item).x;
+
     if (selected || hit)
     {
-        starting_position.x += 8.0f;
-        item_dimensions.width -= 6.0f;
+        if (!item->position_animation_on)
+        {
+            item->position_animation_on = true;
+            item->position_before_animation = v2i(animated_position_x);
+            item->position_after_animation = v2i(10.0f);
+            item->position_animation_precent = 0.0f;
+        }
     }
+    else
+    {
+        if (item->position_animation_on)
+        {
+            item->position_animation_on = false;
+            item->position_before_animation = v2i(animated_position_x);
+            item->position_after_animation = v2i(0.0f);
+            item->position_animation_precent = 0.0f;
+        }
+    }
+    starting_position.x += animated_position_x;
+    item_dimensions.width -= animated_position_x;
 
     icon_index = get_file_icon_based_on_extension(icon_index, item->name);
 
