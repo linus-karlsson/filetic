@@ -3000,6 +3000,31 @@ internal f32 get_file_icon_based_on_extension(const f32 icon_index,
     return icon_index;
 }
 
+internal void animate_based_on_selection(const b8 selected, const b8 hit,
+                                         const V2 before, DirectoryItem* item)
+{
+    if (selected || hit)
+    {
+        if (!item->position_animation_on)
+        {
+            item->position_animation_on = true;
+            item->position_before_animation = before;
+            item->position_after_animation = v2i(10.0f);
+            item->position_animation_precent = 0.0f;
+        }
+    }
+    else
+    {
+        if (item->position_animation_on)
+        {
+            item->position_animation_on = false;
+            item->position_before_animation = before;
+            item->position_after_animation = v2i(0.0f);
+            item->position_animation_precent = 0.0f;
+        }
+    }
+}
+
 internal b8 directory_item(V2 starting_position, V2 item_dimensions,
                            f32 icon_index, DirectoryItem* item, List* list)
 {
@@ -3020,30 +3045,10 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
                                  item_dimensions, color, clear_color, 0.0f));
     window->rendering_index_count += 6;
 
-    const f32 animated_position_x = directory_item_animate_position(item).x;
-
-    if (selected || hit)
-    {
-        if (!item->position_animation_on)
-        {
-            item->position_animation_on = true;
-            item->position_before_animation = v2i(animated_position_x);
-            item->position_after_animation = v2i(10.0f);
-            item->position_animation_precent = 0.0f;
-        }
-    }
-    else
-    {
-        if (item->position_animation_on)
-        {
-            item->position_animation_on = false;
-            item->position_before_animation = v2i(animated_position_x);
-            item->position_after_animation = v2i(0.0f);
-            item->position_animation_precent = 0.0f;
-        }
-    }
-    starting_position.x += animated_position_x;
-    item_dimensions.width -= animated_position_x;
+    const V2 animated = directory_item_animate_position(item);
+    animate_based_on_selection(selected, hit, v2i(animated.x), item);
+    starting_position.x += animated.x;
+    item_dimensions.width -= animated.x;
 
     icon_index = get_file_icon_based_on_extension(icon_index, item->name);
 
@@ -3096,6 +3101,11 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
     b8 selected = false;
     b8 hit = check_directory_item_collision(starting_position, item_dimensions,
                                             item, &color, &selected, list);
+
+    const V2 animated = directory_item_animate_position(item);
+    animate_based_on_selection(selected, hit, animated, item);
+    v2_sub_equal(&starting_position, animated);
+    v2_add_equal(&item_dimensions, animated);
 
     array_push(aabbs, quad(&ui_context.render.vertices, starting_position,
                            item_dimensions, color, 0.0f));
@@ -3281,7 +3291,7 @@ II32 ui_window_add_directory_item_grid(V2 position,
             const i32 index = (rows * columns) + column;
             display_grid_item(position, index, folders, files, item_dimensions,
                               &hit_index, list);
-            position.x += item_height + grid_padding;
+            position.x += item_dimensions.width + grid_padding_width;
         }
     }
     relative_position.y +=

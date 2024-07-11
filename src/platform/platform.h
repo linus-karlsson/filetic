@@ -50,6 +50,30 @@ typedef struct Directory
     DirectoryItemArray sub_directories;
 } Directory;
 
+typedef struct MenuItem MenuItem;
+
+typedef struct MenuItemArray
+{
+    u32 size;
+    u32 capacity;
+    MenuItem* data;
+} MenuItemArray;
+
+struct MenuItem
+{
+    i32 id;
+    char* text;
+    MenuItemArray submenu_items;
+};
+
+typedef struct ContextMenu
+{
+    void* psf_parent;
+    void* pcm;
+    void* pidl;
+    MenuItemArray items;
+} ContextMenu;
+
 
 void platform_init(const char* title, u16 width, u16 height, Platform** platform);
 void platform_shut_down(Platform* platform);
@@ -126,4 +150,8 @@ void platform_show_properties(i32 x, i32 y, const char* file_path);
 void platform_listen_to_directory_change(void* data);
 
 void platform_get_executable_directory(CharArray* buffer);
-void platform_get_context_menu_options(void* window, const char* path, CharPtrArray* options);
+
+void platform_context_menu_create(ContextMenu* menu, const char* path);
+void platform_context_menu_destroy(ContextMenu* menu);
+
+void platform_open_context(void* window, const char* path);

@@ -1193,8 +1193,48 @@ void platform_start_drag_drop(const CharPtrArray* paths)
     drop_source->vtbl->Release((IDropSource*)drop_source);
 }
 
-void platform_get_context_menu_options(void* window, const char* path,
-                                       CharPtrArray* options)
+char* wchar_to_char(const wchar_t* w_buffer)
+{
+    size_t w_len = wcslen(w_buffer);
+    size_t c_len = WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, NULL,
+                                       0, NULL, NULL);
+
+    char* c_buffer = (char*)calloc(c_len + 1, sizeof(char));
+    WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, c_buffer, (int)c_len,
+                        NULL, NULL);
+
+    return c_buffer;
+}
+
+internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
+{
+    int count = GetMenuItemCount(h_menu);
+    for (int i = 0; i < count; ++i)
+    {
+        wchar_t buffer[256] = { 0 };
+
+        MENUITEMINFOW mii = {
+            .cbSize = sizeof(MENUITEMINFOW),
+            .fMask = MIIM_STRING | MIIM_ID | MIIM_SUBMENU,
+            .dwTypeData = buffer,
+            .cch = sizeof(buffer) / sizeof(wchar_t),
+        };
+        if (GetMenuItemInfoW(h_menu, i, TRUE, &mii))
+        {
+            MenuItem item = { 0 };
+            item.id = mii.wID;
+            item.text = wchar_to_char(buffer);
+            if (mii.hSubMenu)
+            {
+                array_create(&item.submenu_items, 2);
+                get_menu_items(mii.hSubMenu, &item.submenu_items);
+            }
+            array_push(menu_items, item);
+        }
+    }
+}
+
+void platform_context_menu_create(ContextMenu* menu, const char* path)
 {
     CoInitialize(NULL);
 
@@ -1210,10 +1250,10 @@ void platform_get_context_menu_options(void* window, const char* path,
         return;
     }
 
-    IShellFolder* psfParent = NULL;
-    PCUITEMID_CHILD pidlChild = NULL;
+    IShellFolder* psf_parent = NULL;
+    PCUITEMID_CHILD pidl_child = NULL;
     hr =
-        SHBindToParent(pidl, &IID_IShellFolder, (void**)&psfParent, &pidlChild);
+        SHBindToParent(pidl, &IID_IShellFolder, (void**)&psf_parent, &pidl_child);
     if (FAILED(hr))
     {
         log_last_error();
@@ -1223,45 +1263,105 @@ void platform_get_context_menu_options(void* window, const char* path,
     }
 
     IContextMenu* pcm = NULL;
-    psfParent->lpVtbl->GetUIObjectOf(psfParent, NULL, 1, &pidlChild,
+    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child,
                                      &IID_IContextMenu, NULL, (void**)&pcm);
     if (FAILED(hr))
     {
         log_last_error();
-        psfParent->lpVtbl->Release(psfParent);
+        psf_parent->lpVtbl->Release(psf_parent);
         CoTaskMemFree((void*)pidl);
         CoUninitialize();
         return;
     }
 
-    HMENU hMenu = CreatePopupMenu();
-    if (hMenu)
+    HMENU h_menu = CreatePopupMenu();
+    if (h_menu)
     {
-        pcm->lpVtbl->QueryContextMenu(pcm, hMenu, 0, 1, 0x7FFF, CMF_NORMAL);
+        pcm->lpVtbl->QueryContextMenu(pcm, h_menu, 0, 1, 0x7FFF, CMF_NORMAL);
+        array_create(&menu->items, 2);
+        get_menu_items(h_menu, &menu->items);
+        DestroyMenu(h_menu);
+    }
+    menu->pcm = pcm;
+    menu->pidl = (void*)pidl;
+    menu->psf_parent = psf_parent;
+}
+
+internal void free_sub_menus(MenuItemArray* submenu)
+{
+    for (u32 i = 0; i < submenu->size; ++i)
+    {
+        free_sub_menus(&submenu->data[i].submenu_items);
+        free(submenu->data[i].text);
+    }
+    if (submenu->data)
+    {
+        array_free(submenu);
+    }
+}
+
+void platform_context_menu_destroy(ContextMenu* menu)
+{
+    free_sub_menus(&menu->items);
+    ((IContextMenu*)menu->pcm)->lpVtbl->Release((IContextMenu*)menu->pcm);
+    ((IShellFolder*)menu->psf_parent)
+        ->lpVtbl->Release((IShellFolder*)menu->psf_parent);
+    CoTaskMemFree(menu->pidl);
+    CoUninitialize();
+}
+
+void platform_open_context(void* window, const char* path)
+{
+    CoInitialize(NULL);
+
+    wchar_t* w_path = char_to_wchar(path, strlen(path) + 1);
+
+    LPITEMIDLIST pidl = NULL;
+    SFGAOF sfgao;
+    HRESULT hr = SHParseDisplayName((LPWSTR)w_path, NULL, &pidl, 0, &sfgao);
+    if (FAILED(hr))
+    {
+        log_last_error();
+        CoUninitialize();
+        return;
+    }
+
+    IShellFolder* psf_parent = NULL;
+    PCUITEMID_CHILD pidl_child = NULL;
+    hr = SHBindToParent(pidl, &IID_IShellFolder, (void**)&psf_parent,
+                        &pidl_child);
+    if (FAILED(hr))
+    {
+        log_last_error();
+        CoTaskMemFree((void*)pidl);
+        CoUninitialize();
+        return;
+    }
+
+    IContextMenu* pcm = NULL;
+    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child,
+                                      &IID_IContextMenu, NULL, (void**)&pcm);
+    if (FAILED(hr))
+    {
+        log_last_error();
+        psf_parent->lpVtbl->Release(psf_parent);
+        CoTaskMemFree((void*)pidl);
+        CoUninitialize();
+        return;
+    }
+
+    HMENU h_menu = CreatePopupMenu();
+    if (h_menu)
+    {
+        pcm->lpVtbl->QueryContextMenu(pcm, h_menu, 0, 1, 0x7FFF, CMF_NORMAL);
         int cmd = 0;
-#if 0
-        int count = GetMenuItemCount(hMenu);
-        for (int i = 0; i < count; ++i)
-        {
 
-            MENUITEMINFOW mii = { sizeof(MENUITEMINFOW) };
-            mii.fMask = MIIM_STRING;
-            wchar_t buffer[256];
-            mii.dwTypeData = buffer;
-            mii.cch = sizeof(buffer) / sizeof(wchar_t);
-
-            if (GetMenuItemInfoW(hMenu, i, TRUE, &mii))
-            {
-                int j = 0;
-            }
-        }
-#else
         HWND hwnd = glfwGetWin32Window(window);
 
         POINT pt;
         GetCursorPos(&pt);
-        cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y,
-                             0, hwnd, NULL);
+        cmd = TrackPopupMenu(h_menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x,
+                             pt.y, 0, hwnd, NULL);
         if (cmd)
         {
             CMINVOKECOMMANDINFOEX cmi = { 0 };
@@ -1278,12 +1378,11 @@ void platform_get_context_menu_options(void* window, const char* path,
             pcm->lpVtbl->InvokeCommand(pcm, (LPCMINVOKECOMMANDINFO)&cmi);
         }
 
-#endif
-        DestroyMenu(hMenu);
+        DestroyMenu(h_menu);
     }
 
     pcm->lpVtbl->Release(pcm);
-    psfParent->lpVtbl->Release(psfParent);
+    psf_parent->lpVtbl->Release(psf_parent);
     CoTaskMemFree((void*)pidl);
 
     CoUninitialize();

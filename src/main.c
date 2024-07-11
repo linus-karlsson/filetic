@@ -882,6 +882,8 @@ int main(int argc, char** argv)
     ApplicationContext app = { 0 };
     u8* font_bitmap = application_initialize(&app);
 
+    ContextMenu menu = { 0 };
+
     V2 preview_image_dimensions = v2d();
     char* current_path = NULL;
     FileAttrib preview_file = { 0 };
@@ -1424,11 +1426,16 @@ int main(int argc, char** argv)
         {
             if (tab->directory_list.selected_item_values.paths.size)
             {
-                platform_get_context_menu_options(
+#if 0
+                platform_context_menu_create(
+                    &menu,
+                    tab->directory_list.selected_item_values.paths.data[0]);
+#else
+                platform_open_context(
                     app.window,
-                    tab->directory_list.selected_item_values.paths.data[0],
-                    NULL);
+                    tab->directory_list.selected_item_values.paths.data[0]);
                 directory_reload(directory_current(&tab->directory_history));
+#endif
             }
             else
             {
