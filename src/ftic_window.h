@@ -4,7 +4,11 @@
 #define FTIC_HAND_CURSOR 1
 #define FTIC_RESIZE_H_CURSOR 2
 #define FTIC_RESIZE_V_CURSOR 3
-#define FTIC_MOVE_CURSOR 4
+#define FTIC_RESIZE_NWSE_CURSOR 4
+#define FTIC_RESIZE_NESW_CURSOR 5
+#define FTIC_MOVE_CURSOR 6
+
+#define TOTAL_CURSORS 7
 
 #define FTIC_MODE_CURSOR 0x00033001
 #define FTIC_MODE_CURSOR_NORMAL 0x00034001
@@ -12,7 +16,6 @@
 #define FTIC_MODE_CURSOR_DISABLED 0x00034003
 #define FTIC_MODE_CURSOR_CAPTURED 0x00034004
 
-#define TOTAL_CURSORS 5
 
 typedef void FTicWindow;
 typedef void (*OnKeyCallback)(void* window, int key, int scancode, int action, int mods);

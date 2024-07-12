@@ -6,6 +6,8 @@
 
 global GLFWcursor* cursors[TOTAL_CURSORS] = { 0 };
 
+global int last_cursor = FTIC_NORMAL_CURSOR;
+
 FTicWindow* window_create(const char* title, int width, int height)
 {
     if (!glfwInit())
@@ -26,8 +28,10 @@ FTicWindow* window_create(const char* title, int width, int height)
         glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
     cursors[FTIC_RESIZE_V_CURSOR] =
         glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
-    cursors[FTIC_RESIZE_V_CURSOR] =
-        glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+    cursors[FTIC_RESIZE_NWSE_CURSOR] =
+        glfwCreateStandardCursor(GLFW_RESIZE_NWSE_CURSOR);
+    cursors[FTIC_RESIZE_NESW_CURSOR] =
+        glfwCreateStandardCursor(GLFW_RESIZE_NESW_CURSOR);
     cursors[FTIC_MOVE_CURSOR] = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 
     if (!window)
@@ -87,7 +91,15 @@ void window_get_mouse_position(FTicWindow* window, double* x, double* y)
 
 void window_set_cursor(FTicWindow* window, int cursor)
 {
-    glfwSetCursor((GLFWwindow*)window, cursors[cursor]);
+    if (cursor != FTIC_NORMAL_CURSOR)
+    {
+        last_cursor = cursor;
+        glfwSetCursor((GLFWwindow*)window, cursors[cursor]);
+    }
+    else if (last_cursor == FTIC_NORMAL_CURSOR)
+    {
+        glfwSetCursor((GLFWwindow*)window, cursors[cursor]);
+    }
 }
 
 void window_set_cursor_position(FTicWindow* window, double x, double y)
@@ -122,6 +134,8 @@ void window_poll_event()
 
 void window_swap(FTicWindow* window)
 {
+    last_cursor = FTIC_NORMAL_CURSOR;
+
     glfwSwapBuffers((GLFWwindow*)window);
 }
 

@@ -1079,6 +1079,55 @@ internal f32 gamma_correct(f32 value, f32 gamma)
     return powf(value, 1.0f / gamma);
 }
 
+internal void get_window_resize_aabbs(UiWindow* window, AABB* left, AABB* top,
+                                      AABB* right, AABB* bottom)
+{
+    const f32 size = 6.0f;
+    const f32 half_size = size * 0.5f;
+    *left = (AABB){
+        .min = v2f(window->position.x - half_size, window->position.y),
+        .size = v2f(size, window->size.height),
+    };
+    *right = (AABB){
+        .min = v2f(window->position.x + window->size.width - half_size,
+                   window->position.y),
+        .size = left->size,
+    };
+    *top = (AABB){
+        .min = v2f(window->position.x, window->position.y - half_size),
+        .size = v2f(window->size.width, size),
+    };
+    *bottom = (AABB){
+        .min = v2f(window->position.x,
+                   window->position.y + window->size.height - half_size),
+        .size = top->size,
+    };
+}
+
+internal void set_resize_cursor(u8 resize)
+{
+
+    if ((check_bit(resize, RESIZE_LEFT) && check_bit(resize, RESIZE_TOP)) ||
+        (check_bit(resize, RESIZE_RIGHT) && check_bit(resize, RESIZE_BOTTOM)))
+    {
+        window_set_cursor(window_get_current(), FTIC_RESIZE_NWSE_CURSOR);
+    }
+    else if ((check_bit(resize, RESIZE_LEFT) &&
+              check_bit(resize, RESIZE_BOTTOM)) ||
+             (check_bit(resize, RESIZE_RIGHT) && check_bit(resize, RESIZE_TOP)))
+    {
+        window_set_cursor(window_get_current(), FTIC_RESIZE_NESW_CURSOR);
+    }
+    else if (check_bit(resize, RESIZE_LEFT) || check_bit(resize, RESIZE_RIGHT))
+    {
+        window_set_cursor(window_get_current(), FTIC_RESIZE_H_CURSOR);
+    }
+    else if (check_bit(resize, RESIZE_TOP) || check_bit(resize, RESIZE_BOTTOM))
+    {
+        window_set_cursor(window_get_current(), FTIC_RESIZE_V_CURSOR);
+    }
+}
+
 void ui_context_create()
 {
     array_create(&ui_context.id_to_index, 100);
@@ -1290,6 +1339,62 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
             UiWindow* window = ui_context.windows.data + window_index;
 
             if (window->hide) continue;
+
+            if (window->resizeable && !window->docked &&
+                !window->resize_dragging)
+            {
+                AABB left, top, right, bottom;
+                get_window_resize_aabbs(window, &left, &top, &right, &bottom);
+
+                const b8 mouse_button_pressed_once =
+                    event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT);
+
+                u8 any_collision = RESIZE_NONE;
+                if (collision_point_in_aabb(mouse_position, &left))
+                {
+                    if (mouse_button_pressed_once)
+                    {
+                        window->resize_dragging |= RESIZE_LEFT;
+                    }
+                    any_collision |= RESIZE_LEFT;
+                }
+                else if (collision_point_in_aabb(mouse_position, &right))
+                {
+                    if (mouse_button_pressed_once)
+                    {
+                        window->resize_dragging |= RESIZE_RIGHT;
+                    }
+                    any_collision |= RESIZE_RIGHT;
+                }
+
+                if (collision_point_in_aabb(mouse_position, &top))
+                {
+                    if (mouse_button_pressed_once)
+                    {
+                        window->resize_dragging |= RESIZE_TOP;
+                    }
+                    any_collision |= RESIZE_TOP;
+                }
+                else if (collision_point_in_aabb(mouse_position, &bottom))
+                {
+                    if (mouse_button_pressed_once)
+                    {
+                        window->resize_dragging |= RESIZE_BOTTOM;
+                    }
+                    any_collision |= RESIZE_BOTTOM;
+                }
+
+                if (window->resize_dragging)
+                {
+                    window->resize_pointer_offset = event_get_mouse_position();
+                    window->resize_size_offset = window->size;
+                }
+                if (any_collision)
+                {
+                    set_resize_cursor(any_collision);
+                    goto collision_check_done;
+                }
+            }
 
             const AABBArray* aabbs =
                 ui_context.window_aabbs.data + window_index;
@@ -2150,23 +2255,52 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
         const V2 offset = v2_sub(window->resize_pointer_offset, mouse_position);
         if (check_bit(window->resize_dragging, RESIZE_LEFT))
         {
-            window->position.x = mouse_position.x;
             window->size.width = window->resize_size_offset.width + offset.x;
+            if (window->size.width > 200.0f)
+            {
+                window->position.x = mouse_position.x;
+            }
+            else
+            {
+                window->position.x =
+                    mouse_position.x - (200.0f - (window->size.width));
+                window->size.width = 200.0f;
+            }
         }
         else if (check_bit(window->resize_dragging, RESIZE_RIGHT))
         {
             window->size.width = window->resize_size_offset.width - offset.x;
+            if (window->size.width < 200.0f)
+            {
+                window->size.width = 200.0f;
+            }
         }
 
         if (check_bit(window->resize_dragging, RESIZE_TOP))
         {
-            window->position.y = mouse_position.y;
             window->size.height = window->resize_size_offset.height + offset.y;
+            if (window->size.height > 200.0f)
+            {
+                window->position.y = mouse_position.y;
+            }
+            else
+            {
+                window->position.y =
+                    mouse_position.y - (200.0f - (window->size.height));
+                window->size.height = 200.0f;
+            }
         }
         else if (check_bit(window->resize_dragging, RESIZE_BOTTOM))
         {
             window->size.height = window->resize_size_offset.height - offset.y;
+            if (window->size.height < 200.0f)
+            {
+                window->size.height = 200.0f;
+            }
         }
+
+        set_resize_cursor(window->resize_dragging);
+
         window->size_animation_on = false;
         window->position_animation_on = false;
 
@@ -2386,31 +2520,6 @@ internal void add_scroll_bar_width(UiWindow* window, AABBArray* aabbs,
     }
 }
 
-internal void get_window_resize_aabbs(UiWindow* window, AABB* left, AABB* top,
-                                      AABB* right, AABB* bottom)
-{
-    const f32 size = 6.0f;
-    const f32 half_size = size * 0.5f;
-    *left = (AABB){
-        .min = v2f(window->position.x - half_size, window->position.y),
-        .size = v2f(size, window->size.height),
-    };
-    *right = (AABB){
-        .min = v2f(window->position.x + window->size.width - half_size,
-                   window->position.y),
-        .size = left->size,
-    };
-    *top = (AABB){
-        .min = v2f(window->position.x, window->position.y - half_size),
-        .size = v2f(window->size.width, size),
-    };
-    *bottom = (AABB){
-        .min = v2f(window->position.x,
-                   window->position.y + window->size.height - half_size),
-        .size = top->size,
-    };
-}
-
 b8 ui_window_end()
 {
     const u32 window_index =
@@ -2452,52 +2561,6 @@ b8 ui_window_end()
     }
     quad_border(&ui_context.render.vertices, &window->rendering_index_count,
                 window->position, window->size, color, 1.0f, 0.0f);
-
-    if (window->resizeable && !window->docked && !window->resize_dragging)
-    {
-        AABB left, top, right, bottom;
-        get_window_resize_aabbs(window, &left, &top, &right, &bottom);
-
-        const b8 mouse_button_pressed =
-            event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT);
-
-        const V2 mouse_position = event_get_mouse_position();
-        if (collision_point_in_aabb(mouse_position, &left))
-        {
-            if (mouse_button_pressed)
-            {
-                window->resize_dragging |= RESIZE_LEFT;
-            }
-        }
-        else if (collision_point_in_aabb(mouse_position, &right))
-        {
-            if (mouse_button_pressed)
-            {
-                window->resize_dragging |= RESIZE_RIGHT;
-            }
-        }
-
-        if (collision_point_in_aabb(mouse_position, &top))
-        {
-            if (mouse_button_pressed)
-            {
-                window->resize_dragging |= RESIZE_TOP;
-            }
-        }
-        else if (collision_point_in_aabb(mouse_position, &bottom))
-        {
-            if (mouse_button_pressed)
-            {
-                window->resize_dragging |= RESIZE_BOTTOM;
-            }
-        }
-
-        if (window->resize_dragging)
-        {
-            window->resize_pointer_offset = event_get_mouse_position();
-            window->resize_size_offset = window->size;
-        }
-    }
 
     // NOTE(Linus): += also works
     ui_context.current_index_offset =
