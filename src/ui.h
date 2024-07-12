@@ -72,6 +72,9 @@ typedef struct DockNode
 
 #define RESIZE_NONE 0
 #define RESIZE_RIGHT BIT_1
+#define RESIZE_LEFT BIT_2
+#define RESIZE_BOTTOM BIT_3
+#define RESIZE_TOP BIT_4
 
 typedef struct UiWindow
 {
@@ -82,9 +85,8 @@ typedef struct UiWindow
     V2 first_item_position;
     V2 top_bar_offset;
 
-    V2 resize_offset;
-    V2 last_resize_offset;
     V2 resize_pointer_offset;
+    V2 resize_size_offset;
     V4 top_color;
     V4 bottom_color;
 
@@ -121,8 +123,9 @@ typedef struct UiWindow
     b8 top_bar_pressed;
     b8 release_from_dock_space;
     b8 top_bar_hold;
+
     u8 resize_dragging;
-    u8 resizeable;
+    b8 resizeable;
 
     b8 any_holding;
     b8 size_animation_on;
@@ -203,7 +206,7 @@ void ui_dock_space_end();
 u32 ui_window_create();
 UiWindow* ui_window_get(u32 window_id);
 u32 ui_window_in_focus();
-b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar);
+b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable);
 b8 ui_window_end();
 
 void ui_window_row_begin(const f32 padding);

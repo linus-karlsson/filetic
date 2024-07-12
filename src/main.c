@@ -390,7 +390,7 @@ void show_search_result_window(SearchPage* page, const u32 window,
                                const f32 list_item_height,
                                DirectoryHistory* directory_history)
 {
-    if (ui_window_begin(window, "Search result", true))
+    if (ui_window_begin(window, "Search result", true, true))
     {
         platform_mutex_lock(&page->search_result_file_array.mutex);
         platform_mutex_lock(&page->search_result_folder_array.mutex);
@@ -437,7 +437,7 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
                          const b8 check_collision, DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
-    if (ui_window_begin(window, get_parent_directory_name(current), true))
+    if (ui_window_begin(window, get_parent_directory_name(current), true, true))
     {
         tab->directory_list.reload = false;
         tab->directory_list.item_to_change = NULL;
@@ -1264,7 +1264,7 @@ int main(int argc, char** argv)
             top_bar->top_color = v4ic(0.2f);
             top_bar->bottom_color = v4ic(0.15f);
 
-            if (ui_window_begin(app.top_bar_window, NULL, false))
+            if (ui_window_begin(app.top_bar_window, NULL, false, false))
             {
                 V2 drop_down_position = v2d();
                 i32 index_clicked =
@@ -1404,7 +1404,7 @@ int main(int argc, char** argv)
             bottom_bar->size = v2f(app.dimensions.width, bottom_bar_height);
             bottom_bar->top_color = v4ic(0.2f);
             bottom_bar->bottom_color = v4ic(0.15f);
-            if (ui_window_begin(app.bottom_bar_window, NULL, false))
+            if (ui_window_begin(app.bottom_bar_window, NULL, false, false))
             {
                 Directory current =
                     directory_current(&tab->directory_history)->directory;
@@ -1444,7 +1444,7 @@ int main(int argc, char** argv)
             if (app.show_quick_access)
             {
                 if (ui_window_begin(app.quick_access_window, "Quick access",
-                                    true))
+                                    true, true))
                 {
                     V2 list_position = v2i(10.0f);
                     i32 selected_item = -1;
@@ -1480,8 +1480,10 @@ int main(int argc, char** argv)
                     preview->position = v2f(
                         middle(app.dimensions.width, preview->size.width),
                         middle(app.dimensions.height, preview->size.height));
+                    preview->top_color = clear_color;
+                    preview->bottom_color = clear_color;
 
-                    if (ui_window_begin(app.preview_window, NULL, false))
+                    if (ui_window_begin(app.preview_window, NULL, false, false))
                     {
                         if (ui_window_set_overlay()) preview_index = -1;
                         ui_window_add_image(v2d(), image_dimensions,
@@ -1519,7 +1521,7 @@ int main(int argc, char** argv)
                     preview->top_color = v4ic(0.0f);
                     preview->bottom_color = v4ic(0.0f);
 
-                    if (ui_window_begin(app.preview_window, NULL, false))
+                    if (ui_window_begin(app.preview_window, NULL, false, false))
                     {
                         if (ui_window_set_overlay()) preview_index = -1;
                         ui_window_add_text_colored(v2f(10.0f, 10.0f),
