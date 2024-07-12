@@ -1053,7 +1053,6 @@ int main(int argc, char** argv)
     array_create(&preview_textures, 10);
     i32 preview_index = -1;
     Camera preview_camera = camera_create_default();
-    V3 light_position = v3d();
 
     AABBArray parent_directory_aabbs = { 0 };
     array_create(&parent_directory_aabbs, 10);
@@ -1517,6 +1516,9 @@ int main(int argc, char** argv)
                         middle(app.dimensions.width, preview->size.width),
                         middle(app.dimensions.height, preview->size.height));
 
+                    preview->top_color = v4ic(0.0f);
+                    preview->bottom_color = v4ic(0.0f);
+
                     if (ui_window_begin(app.preview_window, NULL, false))
                     {
                         if (ui_window_set_overlay()) preview_index = -1;
@@ -1551,6 +1553,10 @@ int main(int argc, char** argv)
                 {
                     app.tab_index = i;
                 }
+
+                ui_window_get(window_id)->alpha =
+                    i == app.tab_index ? 1.0f : 0.7f;
+
                 if (show_directory_window(window_id, list_item_height,
                                           check_collision, app.tabs.data + i))
                 {
@@ -1636,6 +1642,7 @@ int main(int argc, char** argv)
                 .projection = preview_camera.view_projection.projection,
             };
 
+
             mvp.model.data[0][0] = -preview_camera.orientation.x;
             mvp.model.data[0][1] = -preview_camera.orientation.y;
             mvp.model.data[0][2] = -preview_camera.orientation.z;
@@ -1648,6 +1655,11 @@ int main(int argc, char** argv)
             if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
             {
                 preview_index = -1;
+            }
+
+            if(event_is_key_pressed_once(FTIC_KEY_R))
+            {
+                preview_camera = camera_create_default();
             }
         }
 

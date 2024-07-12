@@ -964,6 +964,7 @@ internal void insert_window(DockNode* node, const u32 id, const b8 docked)
         .bottom_color = clear_color,
         .dock_node = node,
         .docked = docked,
+        .alpha = 1.0f,
     };
     array_push(&ui_context.windows, window);
 
@@ -2008,17 +2009,16 @@ internal V2 directory_item_animate_position(DirectoryItem* item)
 {
     const f32 animation_speed = 5.0f;
     V2 position = v2d();
-    if (item->position_animation_precent >= 1.0f)
+    if (item->animation_precent >= 1.0f)
     {
-        position = item->position_after_animation;
+        position = item->after_animation;
     }
     else
     {
-        position = v2_lerp(item->position_before_animation,
-                           item->position_after_animation,
-                           ease_out_cubic(item->position_animation_precent));
+        position = v2_lerp(item->before_animation, item->after_animation,
+                           ease_out_cubic(item->animation_precent));
 
-        item->position_animation_precent +=
+        item->animation_precent +=
             clampf32_low((f32)ui_context.delta_time, 0.0f) * animation_speed;
     }
     return position;
@@ -2785,7 +2785,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
 
 internal u32 display_text_and_truncate_if_necissary(const V2 position,
                                                     const f32 total_width,
-                                                    char* text)
+                                                    const f32 alpha, char* text)
 {
     const u32 text_len = (u32)strlen(text);
     const i32 i = text_check_length_within_boundary(
@@ -2797,10 +2797,10 @@ internal u32 display_text_and_truncate_if_necissary(const V2 position,
         i32 j = i - 3;
         string_swap(text + j, saved_name); // Truncate
     }
-    u32 index_count =
-        text_generation(ui_context.font.chars, text, UI_FONT_TEXTURE, position,
-                        1.0f, ui_context.font.pixel_height, NULL, NULL, NULL,
-                        &ui_context.render.vertices);
+    u32 index_count = text_generation_color(
+        ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f,
+        ui_context.font.pixel_height, v4a(v4i(1.0f), alpha), NULL, NULL, NULL,
+        &ui_context.render.vertices);
     if (too_long)
     {
         memcpy(text + (i - 3), saved_name, sizeof(saved_name));
@@ -2999,22 +2999,22 @@ internal void animate_based_on_selection(const b8 selected, const b8 hit,
 {
     if (selected || hit)
     {
-        if (!item->position_animation_on)
+        if (!item->animation_on)
         {
-            item->position_animation_on = true;
-            item->position_before_animation = before;
-            item->position_after_animation = v2i(10.0f);
-            item->position_animation_precent = 0.0f;
+            item->animation_on = true;
+            item->before_animation = before;
+            item->after_animation = v2i(10.0f);
+            item->animation_precent = 0.0f;
         }
     }
     else
     {
-        if (item->position_animation_on)
+        if (item->animation_on)
         {
-            item->position_animation_on = false;
-            item->position_before_animation = before;
-            item->position_after_animation = v2i(0.0f);
-            item->position_animation_precent = 0.0f;
+            item->animation_on = false;
+            item->before_animation = before;
+            item->after_animation = v2i(0.0f);
+            item->animation_precent = 0.0f;
         }
     }
 }
@@ -3036,7 +3036,8 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
 
     array_push(aabbs,
                quad_gradiant_l_r(&ui_context.render.vertices, starting_position,
-                                 item_dimensions, color, clear_color, 0.0f));
+                                 item_dimensions, v4a(color, window->alpha),
+                                 clear_color, 0.0f));
     window->rendering_index_count += 6;
 
     const V2 animated = directory_item_animate_position(item);
@@ -3050,7 +3051,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
     AABB icon_aabb =
         quad(&ui_context.render.vertices,
              v2f(starting_position.x + 5.0f, starting_position.y + 3.0f),
-             icon_size, v4i(1.0f), icon_index);
+             icon_size, v4a(v4i(1.0f), window->alpha), icon_index);
     window->rendering_index_count += 6;
 
     V2 text_position =
@@ -3068,15 +3069,15 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
         V2 size_text_position = text_position;
         size_text_position.x =
             starting_position.x + item_dimensions.width - x_advance - 5.0f;
-        window->rendering_index_count += text_generation(
+        window->rendering_index_count += text_generation_color(
             ui_context.font.chars, buffer, UI_FONT_TEXTURE, size_text_position,
-            1.0f, ui_context.font.pixel_height, NULL, NULL, NULL,
-            &ui_context.render.vertices);
+            1.0f, ui_context.font.pixel_height, v4a(v4i(1.0f), window->alpha),
+            NULL, NULL, NULL, &ui_context.render.vertices);
     }
     window->rendering_index_count += display_text_and_truncate_if_necissary(
         text_position,
         (item_dimensions.width - icon_aabb.size.x - 20.0f - x_advance),
-        item->name);
+        window->alpha, item->name);
 
     return hit && hover_clicked_index.double_clicked;
 }
@@ -3102,7 +3103,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
     v2_add_equal(&item_dimensions, animated);
 
     array_push(aabbs, quad(&ui_context.render.vertices, starting_position,
-                           item_dimensions, color, 0.0f));
+                           item_dimensions, v4a(color, window->alpha), 0.0f));
     window->rendering_index_count += 6;
 
     icon_index = get_file_icon_based_on_extension(icon_index, item->name);
@@ -3113,7 +3114,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
              v2f(starting_position.x +
                      middle(item_dimensions.width, icon_size.width),
                  starting_position.y + 3.0f),
-             icon_size, v4i(1.0f), icon_index);
+             icon_size, v4a(v4i(1.0f), window->alpha), icon_index);
     window->rendering_index_count += 6;
 
     const f32 total_available_width_for_text = item_dimensions.width;
@@ -3129,7 +3130,8 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
     text_position.y += icon_aabb.size.height;
 
     window->rendering_index_count += display_text_and_truncate_if_necissary(
-        text_position, total_available_width_for_text, item->name);
+        text_position, total_available_width_for_text, window->alpha,
+        item->name);
 
     return hit && hover_clicked_index.double_clicked;
 }

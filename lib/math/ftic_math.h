@@ -131,6 +131,7 @@ V3 v3_v4(V4 v4);
 V4 v4d(void);
 V4 v4i(float i);
 V4 v4ic(float i);
+V4 v4a(V4 v4, float a);
 V4 v4f(float x, float y, float z, float w);
 V4 v4_v2(V2 v2);
 V4 v4_v2f(V2 v2, float z, float w);
@@ -363,6 +364,13 @@ V4 v4ic(float i)
     res.y = i;
     res.z = i;
     res.w = 1.0f;
+    return res;
+}
+
+V4 v4a(V4 v4, float a)
+{
+    V4 res = v4;
+    res.w = a;
     return res;
 }
 

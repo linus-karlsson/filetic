@@ -111,6 +111,8 @@ typedef struct UiWindow
 
     DockNode* dock_node;
 
+    f32 alpha;
+
     b8 docked;
     b8 hide;
 

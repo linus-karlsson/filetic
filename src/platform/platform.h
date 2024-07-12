@@ -28,11 +28,11 @@ typedef struct DirectoryItem
     char* name;
     char* path;
 
-    V2 position_before_animation;
-    V2 position_after_animation;
-    f32 position_animation_precent; 
+    V2 before_animation;
+    V2 after_animation;
+    f32 animation_precent; 
 
-    b8 position_animation_on;
+    b8 animation_on;
     b8 rename;
 } DirectoryItem;
 

@@ -169,6 +169,9 @@ internal void open_window(ApplicationContext* app, u32 window_id)
     window->position = v2f(middle(app->dimensions.width, window->size.width),
                            middle(app->dimensions.height, window->size.height));
 
+    window->dock_node->aabb.min = end_position;
+    window->dock_node->aabb.size = end_size;
+
     ui_window_start_position_animation(window, window->position, end_position);
     ui_window_start_size_animation(window, window->size, end_size);
 }
