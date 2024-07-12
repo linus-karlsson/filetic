@@ -2129,6 +2129,31 @@ internal V2 directory_item_animate_position(DirectoryItem* item)
     return position;
 }
 
+internal void resize_0(const f32 mouse_position, const f32 size_offset,
+                       const f32 position_offset, f32* position, f32* size)
+{
+    *size = size_offset + position_offset;
+    if (*size > 200.0f)
+    {
+        *position = mouse_position;
+    }
+    else
+    {
+        *position = mouse_position - (200.0f - (*size));
+        *size = 200.0f;
+    }
+}
+
+internal void resize_1(const f32 size_offset, const f32 position_offset,
+                       f32* size)
+{
+    *size = size_offset - position_offset;
+    if (*size < 200.0f)
+    {
+        *size = 200.0f;
+    }
+}
+
 b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
 {
     const u32 window_index = ui_context.id_to_index.data[window_id];
@@ -2255,50 +2280,25 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
         const V2 offset = v2_sub(window->resize_pointer_offset, mouse_position);
         if (check_bit(window->resize_dragging, RESIZE_LEFT))
         {
-            window->size.width = window->resize_size_offset.width + offset.x;
-            if (window->size.width > 200.0f)
-            {
-                window->position.x = mouse_position.x;
-            }
-            else
-            {
-                window->position.x =
-                    mouse_position.x - (200.0f - (window->size.width));
-                window->size.width = 200.0f;
-            }
+            resize_0(mouse_position.x, window->resize_size_offset.width,
+                     offset.x, &window->position.x, &window->size.width);
         }
         else if (check_bit(window->resize_dragging, RESIZE_RIGHT))
         {
-            window->size.width = window->resize_size_offset.width - offset.x;
-            if (window->size.width < 200.0f)
-            {
-                window->size.width = 200.0f;
-            }
+            resize_1(window->resize_size_offset.width, offset.x,
+                     &window->size.width);
         }
 
         if (check_bit(window->resize_dragging, RESIZE_TOP))
         {
-            window->size.height = window->resize_size_offset.height + offset.y;
-            if (window->size.height > 200.0f)
-            {
-                window->position.y = mouse_position.y;
-            }
-            else
-            {
-                window->position.y =
-                    mouse_position.y - (200.0f - (window->size.height));
-                window->size.height = 200.0f;
-            }
+            resize_0(mouse_position.y, window->resize_size_offset.height,
+                     offset.y, &window->position.y, &window->size.height);
         }
         else if (check_bit(window->resize_dragging, RESIZE_BOTTOM))
         {
-            window->size.height = window->resize_size_offset.height - offset.y;
-            if (window->size.height < 200.0f)
-            {
-                window->size.height = 200.0f;
-            }
+            resize_1(window->resize_size_offset.height, offset.y,
+                     &window->size.height);
         }
-
         set_resize_cursor(window->resize_dragging);
 
         window->size_animation_on = false;
