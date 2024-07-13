@@ -1365,6 +1365,7 @@ int main(int argc, char** argv)
                             app.parent_directory_input.buffer.size;
                         app.suggestions.tab_index = -1;
                         app.suggestions.options.size = 0;
+                        app.suggestions.aabb = (AABB){0};
                     }
                 }
                 else
