@@ -1,4 +1,6 @@
 #include "hash.h"
+#include "ftic_guid.h"
+#include <string.h>
 
 u64 hash_murmur(const void* key, u32 len, u64 seed)
 {
@@ -94,4 +96,15 @@ u64 hash_u64(const void* key, u32 len, u64 seed)
     h1 ^= h1 >> 33;
 
     return h1;
+}
+
+// Should be sufficient.
+u64 hash_guid(const void* key, u32 len, u64 seed)
+{
+    FticGUID* guid = (FticGUID*)key;
+    u64 high, low;
+    memcpy(&high, guid->bytes, sizeof(u64));
+    memcpy(&low, guid->bytes + sizeof(u64), sizeof(u64));
+    // return *(u64*)guid->bytes ^ *(u64*)(guid->bytes + 8);
+    return high ^ low;
 }

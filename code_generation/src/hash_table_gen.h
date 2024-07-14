@@ -112,7 +112,7 @@ Value* hash_table_get(HashTable<Key, Value>* table, const Key key)
                 cell = table->cells + (++hashed_index & capacity_mask);
             }
         }
-        else
+        else if(cell->active)
         {
             return &cell->value;
         }
@@ -149,7 +149,7 @@ Cell<Key, Value>* hash_table_remove(HashTable<Key, Value>* table, const Key key)
                 cell = table->cells + (++hashed_index & capacity_mask);
             }
         }
-        else
+        else if(cell->active)
         {
             cell->active = false;
             cell->deleted = true;

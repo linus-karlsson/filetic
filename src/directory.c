@@ -1,10 +1,40 @@
 #include "directory.h"
 #include "hash.h"
+#include "logging.h"
+#include "hash.h"
 #include <string.h>
 
 DirectoryPage* directory_current(DirectoryHistory* history)
 {
     return history->history.data + history->current_index;
+}
+
+internal void look_for_same_items(const DirectoryItemArray* existing_items,
+                                  DirectoryItemArray* reloaded_items)
+{
+    u32 count = 0;
+    for (u32 i = 0; i < reloaded_items->size; ++i)
+    {
+        DirectoryItem* reloaded_item = reloaded_items->data + i;
+        for (u32 j = 0; j < existing_items->size; ++j)
+        {
+            DirectoryItem* existing_item = existing_items->data + j;
+            if (guid_compare(reloaded_item->id, existing_item->id) == 0)
+            {
+                reloaded_item->before_animation =
+                    existing_item->before_animation;
+                reloaded_item->after_animation = existing_item->after_animation;
+                reloaded_item->animation_precent =
+                    existing_item->animation_precent;
+                reloaded_item->animation_on = existing_item->animation_on;
+                reloaded_item->rename = existing_item->rename;
+                ++count;
+                break;
+            }
+        }
+    }
+    log_u64("size: ", reloaded_items->size);
+    log_u64("Count: ", count);
 }
 
 void directory_reload(DirectoryPage* directory_page)
@@ -16,6 +46,12 @@ void directory_reload(DirectoryPage* directory_page)
     Directory reloaded_directory = platform_get_directory(path, length);
     path[length - 2] = '\0';
     path[length - 1] = '\0';
+
+    look_for_same_items(&directory_page->directory.sub_directories,
+                        &reloaded_directory.sub_directories);
+    look_for_same_items(&directory_page->directory.files,
+                        &reloaded_directory.files);
+
     platform_reset_directory(&directory_page->directory);
     directory_page->directory = reloaded_directory;
     directory_sort(directory_page);
@@ -175,7 +211,12 @@ void directory_sort(DirectoryPage* directory_page)
             }
             break;
         }
-        default: break;
+        default:
+        {
+            // directory_sort_by_name(&directory_page->directory.sub_directories);
+            // directory_sort_by_name(&directory_page->directory.files);
+            break;
+        }
     }
 }
 
@@ -273,7 +314,7 @@ DirectoryTab directory_tab_add(const char* dir)
     SelectedItemValues selected_item_values = { 0 };
     array_create(&selected_item_values.paths, 10);
     selected_item_values.selected_items =
-        hash_table_create_char_u32(100, hash_murmur);
+        hash_table_create_guid(100, hash_guid);
 
     return (DirectoryTab){
         .directory_list = {
@@ -303,27 +344,31 @@ void directory_clear_selected_items(SelectedItemValues* selected_item_values)
     {
         free(selected_item_values->paths.data[i]);
     }
-    hash_table_clear_char_u32(&selected_item_values->selected_items);
+    hash_table_clear_guid(&selected_item_values->selected_items);
     selected_item_values->paths.size = 0;
 }
 
 void directory_remove_selected_item(SelectedItemValues* selected_item_values,
-                                    const char* path)
+                                    const FticGUID guid)
 {
-    hash_table_remove_char_u32(&selected_item_values->selected_items, path);
-    CharPtrArray* paths = &selected_item_values->paths;
-    for (u32 i = 0; i < paths->size; ++i)
+    CellGuid* cell =
+        hash_table_remove_guid(&selected_item_values->selected_items, guid);
+    if (cell)
     {
-        if (strcmp(paths->data[i], path) == 0)
+        CharPtrArray* paths = &selected_item_values->paths;
+        for (u32 i = 0; i < paths->size; ++i)
         {
-            char* temp = paths->data[i];
-            for (u32 j = i; j < paths->size - 1; ++j)
+            if (strcmp(paths->data[i], cell->value) == 0)
             {
-                paths->data[j] = paths->data[j + 1];
+                char* temp = paths->data[i];
+                for (u32 j = i; j < paths->size - 1; ++j)
+                {
+                    paths->data[j] = paths->data[j + 1];
+                }
+                paths->size--;
+                free(temp);
+                break;
             }
-            paths->size--;
-            free(temp);
-            break;
         }
     }
 }

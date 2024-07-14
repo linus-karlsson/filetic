@@ -518,7 +518,32 @@ b8 platform_directory_exists(const char* directory_path)
             (file_attributes & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-global volatile LONG64 id = 0;
+internal void insert_directory_item(const u32 directory_len, const u64 size,
+                                    char* path, DirectoryItemArray* items)
+{
+    HANDLE h = CreateFile(
+        path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (h != INVALID_HANDLE_VALUE)
+    {
+        FILE_OBJECTID_BUFFER buffer;
+        DWORD cb_out;
+
+        if (DeviceIoControl(h, FSCTL_CREATE_OR_GET_OBJECT_ID, NULL, 0, &buffer,
+                            sizeof(buffer), &cb_out, NULL))
+        {
+            DirectoryItem item = {
+                .size = size,
+                .path = path,
+                .name = path + directory_len - 1,
+            };
+
+            item.id = guid_copy_bytes(buffer.ObjectId);
+            array_push(items, item);
+        }
+        CloseHandle(h);
+    }
+}
 
 Directory platform_get_directory(const char* directory_path,
                                  const u32 directory_len)
@@ -543,24 +568,15 @@ Directory platform_get_directory(const char* directory_path,
                     free(path);
                     continue;
                 }
-                // TODO: Wasting 8 bytes
-                DirectoryItem directory_item = {
-                    //.id = (u64)InterlockedAdd64(&id, 1),
-                    .path = path,
-                    .name = path + directory_len - 1,
-                };
-                array_push(&directory.sub_directories, directory_item);
+                insert_directory_item(directory_len, 0, path,
+                                      &directory.sub_directories);
             }
             else
             {
-                DirectoryItem directory_item = {
-                    //.id = (u64)InterlockedAdd64(&id, 1),
-                    .size =
-                        (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
-                    .path = path,
-                    .name = path + directory_len - 1,
-                };
-                array_push(&directory.files, directory_item);
+                insert_directory_item(directory_len,
+                                      (ffd.nFileSizeHigh * (MAXDWORD + 1)) +
+                                          ffd.nFileSizeLow,
+                                      path, &directory.files);
             }
 
         } while (FindNextFile(file_handle, &ffd));
@@ -1252,8 +1268,8 @@ void platform_context_menu_create(ContextMenu* menu, const char* path)
 
     IShellFolder* psf_parent = NULL;
     PCUITEMID_CHILD pidl_child = NULL;
-    hr =
-        SHBindToParent(pidl, &IID_IShellFolder, (void**)&psf_parent, &pidl_child);
+    hr = SHBindToParent(pidl, &IID_IShellFolder, (void**)&psf_parent,
+                        &pidl_child);
     if (FAILED(hr))
     {
         log_last_error();
@@ -1264,7 +1280,7 @@ void platform_context_menu_create(ContextMenu* menu, const char* path)
 
     IContextMenu* pcm = NULL;
     psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child,
-                                     &IID_IContextMenu, NULL, (void**)&pcm);
+                                      &IID_IContextMenu, NULL, (void**)&pcm);
     if (FAILED(hr))
     {
         log_last_error();

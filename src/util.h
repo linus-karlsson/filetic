@@ -40,7 +40,6 @@ typedef struct IndexArray
     u32* data;
 } IndexArray, U32Array;
 
-
 typedef struct VertexArray
 {
     u32 size;
@@ -80,7 +79,7 @@ typedef struct CharArray
 typedef struct SelectedItemValues
 {
     CharPtrArray paths;
-    HashTableCharU32 selected_items;
+    HashTableGuid selected_items;
     char* last_selected;
 } SelectedItemValues;
 

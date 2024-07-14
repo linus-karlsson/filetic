@@ -1780,6 +1780,8 @@ void ui_context_end()
     UiWindow* window_to_show = NULL;
     b8 close_tab = false;
 
+    const f32 top_bar_height = 20.0f;
+
     const V2 mouse_position = event_get_mouse_position();
     b8 any_tab_hit = false;
     b8 any_hit = false;
@@ -1801,7 +1803,8 @@ void ui_context_end()
                 !ui_context.any_window_top_bar_hold &&
                 !ui_context.any_window_hold;
 
-            const V2 top_bar_dimensions = v2f(window->size.width, 20.0f);
+            const V2 top_bar_dimensions =
+                v2f(window->size.width, top_bar_height);
             const AABB aabb = quad_gradiant_t_b(
                 &ui_context.render.vertices, window->position,
                 top_bar_dimensions, v4ic(0.25f), v4ic(0.2f), 0.0f);
@@ -1974,10 +1977,15 @@ void ui_context_end()
             scissor.min.y = ui_context.dimensions.y -
                             (window->position.y + window->size.height);
             scissor.size = window->size;
+            scissor.size.height -= (window->top_bar * top_bar_height);
+            scissor.size.height = clampf32_low(scissor.size.height, 0.0f);
         }
         render_draw(window->rendering_index_offset,
                     window->rendering_index_count, &scissor);
 
+        scissor.min.y =
+            ui_context.dimensions.y - (window->position.y + top_bar_height);
+        scissor.size = v2f(window->size.width, top_bar_height);
         UU32 index_offset_and_count =
             dock_spaces_index_offsets_and_counts.data[i];
         render_draw(index_offset_and_count.first, index_offset_and_count.second,
@@ -2956,11 +2964,12 @@ internal b8 check_directory_item_collision(V2 starting_position,
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    u32* check_if_selected = NULL;
+    char** check_if_selected = NULL;
     if (list)
     {
-        check_if_selected = hash_table_get_char_u32(
-            &list->selected_item_values.selected_items, item->path);
+        check_if_selected = hash_table_get_guid(
+            &list->selected_item_values.selected_items, item->id);
+
         *selected = check_if_selected ? true : false;
     }
 
@@ -2981,7 +2990,9 @@ internal b8 check_directory_item_collision(V2 starting_position,
         if (hit)
         {
             const u32 path_length = (u32)strlen(item->path);
+            const u32 name_length = (u32)strlen(item->name);
 
+            b8 removed_item = false;
             b8 ctrl_pressed = event_get_key_event()->ctrl_pressed;
             if (!check_if_selected)
             {
@@ -2990,45 +3001,55 @@ internal b8 check_directory_item_collision(V2 starting_position,
                     directory_clear_selected_items(&list->selected_item_values);
                 }
                 char* path = string_copy(item->path, path_length, 2);
-                hash_table_insert_char_u32(
-                    &list->selected_item_values.selected_items, path, 1);
+                hash_table_insert_guid(
+                    &list->selected_item_values.selected_items, item->id, path);
                 array_push(&list->selected_item_values.paths, path);
             }
             else if (!ctrl_pressed)
             {
                 directory_clear_selected_items(&list->selected_item_values);
                 char* path = string_copy(item->path, path_length, 2);
-                hash_table_insert_char_u32(
-                    &list->selected_item_values.selected_items, path, 1);
+                hash_table_insert_guid(
+                    &list->selected_item_values.selected_items, item->id, path);
                 array_push(&list->selected_item_values.paths, path);
             }
             else
             {
                 directory_remove_selected_item(&list->selected_item_values,
-                                               item->path);
+                                               item->id);
+                removed_item = true;
             }
 
             if (list->selected_item_values.last_selected)
             {
                 if (strcmp(list->selected_item_values.last_selected,
-                           item->path) == 0)
+                           item->name) == 0)
                 {
-                    list->input_pressed = window_get_time();
-                    item->rename = true;
-                    clicked_on_same = true;
+                    if (removed_item)
+                    {
+                        free(list->selected_item_values.last_selected);
+                        list->selected_item_values.last_selected = NULL;
+                        item->rename = false;
+                    }
+                    else
+                    {
+                        list->input_pressed = window_get_time();
+                        item->rename = true;
+                        clicked_on_same = true;
+                    }
                 }
                 else
                 {
                     free(list->selected_item_values.last_selected);
                     list->selected_item_values.last_selected =
-                        string_copy(item->path, path_length, 0);
+                        string_copy(item->name, name_length, 0);
                     item->rename = false;
                 }
             }
             else
             {
                 list->selected_item_values.last_selected =
-                    string_copy(item->path, path_length, 0);
+                    string_copy(item->name, name_length, 0);
                 item->rename = false;
             }
 

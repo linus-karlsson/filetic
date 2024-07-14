@@ -206,6 +206,7 @@ typedef struct CharPtrArray
     char** data;
 } CharPtrArray;
 
+
 global const V4 clear_color = {
     .r = 0.1f,
     .g = 0.1f,

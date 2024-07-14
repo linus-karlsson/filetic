@@ -110,7 +110,7 @@ b8 set_contains(Set<Key>* set, const Key key)
                 cell = set->cells + (++hashed_index & capacity_mask);
             }
         }
-        else
+        else if(cell->active)
         {
             return true;
         }
@@ -147,7 +147,7 @@ SetCell<Key>* set_remove(Set<Key>* set, const Key key)
                 cell = set->cells + (++hashed_index & capacity_mask);
             }
         }
-        else
+        else if(cell->active)
         {
             cell->active = false;
             cell->deleted = true;
@@ -161,6 +161,5 @@ SetCell<Key>* set_remove(Set<Key>* set, const Key key)
 template <Key>
 void set_clear(Set<Key>* set)
 {
-    memset(set->cells, 0,
-           set->capacity * sizeof(set->cells[0]));
+    memset(set->cells, 0, set->capacity * sizeof(set->cells[0]));
 }

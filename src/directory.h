@@ -63,5 +63,5 @@ void directory_go_up(DirectoryHistory* directory_history);
 DirectoryTab directory_tab_add(const char* dir);
 void directory_tab_clear(DirectoryTab* tab);
 void directory_clear_selected_items(SelectedItemValues* selected_item_values);
-void directory_remove_selected_item(SelectedItemValues* selected_item_values, const char* path);
+void directory_remove_selected_item(SelectedItemValues* selected_item_values, const FticGUID guid);
 

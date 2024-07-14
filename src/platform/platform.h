@@ -1,6 +1,7 @@
 #pragma once
 #include "define.h"
 #include "util.h"
+#include "ftic_guid.h"
 
 typedef void Platform;
 typedef void (*OnKeyPressedCallback)(u16 key, b8 ctrl_pressed, b8 alt_pressed);
@@ -24,6 +25,7 @@ typedef struct ClientRect
 
 typedef struct DirectoryItem
 {
+    FticGUID id;                                   
     u64 size;
     char* name;
     char* path;

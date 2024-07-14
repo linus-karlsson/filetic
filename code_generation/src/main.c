@@ -39,15 +39,16 @@ int main(int argc, char** argv)
         char* types[] = {
             "u64,u64",
             "char*,u32",
+            "FticGUID,char*",
         };
         const uint32_t type_count = sizeof(types) / sizeof(types[0]);
-        char* postfixs[] = { "UU64", "CharU32" };
+        char* postfixs[] = { "UU64", "CharU32", "Guid" };
         const uint32_t postfix_count = sizeof(postfixs) / sizeof(postfixs[0]);
         mcgen_link_names(ctx, "Cell", "HashTable");
         mcgen_append_types_and_postfixs(ctx, "Cell", types, type_count,
                                         postfixs, postfix_count);
 
-        char* postfixs_functions[] = { "_uu64", "_char_u32" };
+        char* postfixs_functions[] = { "_uu64", "_char_u32", "_guid" };
         mcgen_append_types_and_postfixs(ctx, "hash_table_create", types, type_count,
                                         postfixs_functions, postfix_count);
         mcgen_append_types_and_postfixs(ctx, "hash_table_clear", types, type_count,
@@ -56,6 +57,7 @@ int main(int argc, char** argv)
         char* types2[] = {
             "u64,u64,sizeof,value_cmp",
             "char*,u32,strlen,strcmp",
+            "FticGUID,char*,sizeof,guid_compare",
         };
         mcgen_link_names(ctx, "hash_table_insert", "hash_table_get", "hash_table_remove");
         mcgen_append_types_and_postfixs(ctx, "hash_table_insert", types2, type_count,
@@ -67,15 +69,16 @@ int main(int argc, char** argv)
         char* types[] = {
             "u64",
             "char*",
+            "FticGUID",
         };
         const uint32_t type_count = sizeof(types) / sizeof(types[0]);
-        char* postfixs[] = { "U64", "CharPtr" };
+        char* postfixs[] = { "U64", "CharPtr", "Guid" };
         const uint32_t postfix_count = sizeof(postfixs) / sizeof(postfixs[0]);
         mcgen_link_names(ctx, "SetCell", "Set");
         mcgen_append_types_and_postfixs(ctx, "SetCell", types, type_count,
                                         postfixs, postfix_count);
 
-        char* postfixs_functions[] = { "_u64", "_char_ptr" };
+        char* postfixs_functions[] = { "_u64", "_char_ptr", "_guid" };
         mcgen_append_types_and_postfixs(ctx, "set_create", types, type_count,
                                         postfixs_functions, postfix_count);
         mcgen_append_types_and_postfixs(ctx, "set_clear", types, type_count,
@@ -84,6 +87,7 @@ int main(int argc, char** argv)
         char* types2[] = {
             "u64,sizeof,value_cmp",
             "char*,strlen,strcmp",
+            "FticGUID,sizeof,guid_compare",
         };
         mcgen_link_names(ctx, "set_insert", "set_contains", "set_remove");
         mcgen_append_types_and_postfixs(ctx, "set_insert", types2, type_count,
