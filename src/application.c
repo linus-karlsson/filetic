@@ -224,6 +224,8 @@ internal void save_application_state(ApplicationContext* app)
         u32 path_length = (u32)strlen(path);
         fwrite(&path_length, sizeof(u32), 1, file);
         fwrite(path, sizeof(char), path_length, file);
+        fwrite(&app->tabs.data[i].window_id,
+               sizeof(app->tabs.data[i].window_id), 1, file);
     }
     fclose(file);
 }
@@ -250,6 +252,9 @@ internal void load_application_state(ApplicationContext* app)
         char* path = (char*)calloc(path_length + 3, sizeof(char));
         fread(path, sizeof(char), path_length, file);
 
+        u32 window_id = 0;
+        fread(&window_id, sizeof(window_id), 1, file);
+
         if (platform_directory_exists(path))
         {
             path[path_length++] = '\\';
@@ -259,6 +264,8 @@ internal void load_application_state(ApplicationContext* app)
 
             path[path_length - 2] = '\0';
             path[path_length - 1] = '\0';
+
+            array_back(&app->tabs)->window_id = window_id;
         }
         free(path);
     }
@@ -432,11 +439,6 @@ u8* application_initialize(ApplicationContext* app)
     array_create(&app->tabs, 10);
     app->tab_index = 0;
 
-    load_application_state(app);
-    if (app->tabs.size == 0)
-    {
-        array_push(&app->tabs, directory_tab_add("C:\\*"));
-    }
     app->last_time = platform_get_time();
     app->delta_time = 0.0f;
     app->mvp = (MVP){ 0 };
@@ -467,11 +469,38 @@ u8* application_initialize(ApplicationContext* app)
         array_push(&app->tab_windows, ui_window_create());
     }
 
-    app->current_tab_window_index = 0;
-    for (u32 i = 0; i < app->tabs.size; ++i)
+    b8 saved = true;
+    load_application_state(app);
+    if (app->tabs.size == 0)
     {
-        app->tabs.data[i].window_id =
+        array_push(&app->tabs, directory_tab_add("C:\\*"));
+        array_back(&app->tabs)->window_id =
             app->tab_windows.data[app->current_tab_window_index++];
+        saved = false;
+    }
+
+    if (saved)
+    {
+        u32 count = 0;
+        for (u32 i = 0; i < app->tab_windows.size && count < app->tabs.size;
+             ++i)
+        {
+            b8 exist = false;
+            for (u32 j = 0; j < app->tabs.size; ++j)
+            {
+                if (app->tabs.data[j].window_id == app->tab_windows.data[i])
+                {
+                    ++count;
+                    exist = true;
+                    app->current_tab_window_index = i + 1;
+                    break;
+                }
+            }
+            if (!exist)
+            {
+                array_push(&app->free_window_ids, app->tab_windows.data[i]);
+            }
+        }
     }
 
     array_create(&app->pasted_paths, 10);

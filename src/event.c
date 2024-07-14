@@ -75,8 +75,9 @@ internal void on_mouse_button_event(void* window, int button, int action,
     const f64 time_since_last = time - event_context.last_click_time;
     const b8 double_clicked =
         (action == FTIC_RELEASE) && (button == event_context.last_button) &&
-        (time_since_last <= DOUBLE_CLICK_THRESHOLD) &&
-        v2_equal(event_context.last_position, event_context.position);
+        (time_since_last <= DOUBLE_CLICK_THRESHOLD); 
+    //&&
+     //   v2_equal(event_context.last_position, event_context.position);
 
     event_context.mouse_button_event.button = button;
     event_context.mouse_button_event.action = action;

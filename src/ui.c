@@ -632,7 +632,7 @@ internal u32 remove_window_from_shared_dock_space(
 {
     b8 focused_window = window_index == dock_space_to_change->window_in_focus;
 
-    for (u32 i = window_index; i < dock_space_to_change->windows.size; ++i)
+    for (u32 i = window_index; i < dock_space_to_change->windows.size - 1; ++i)
     {
         dock_space_to_change->windows.data[i] =
             dock_space_to_change->windows.data[i + 1];
@@ -1842,10 +1842,19 @@ void ui_context_end()
 
     const f32 top_bar_height = 20.0f;
     const V2 mouse_position = event_get_mouse_position();
+    const b8 should_check_collision =
+        ui_context.check_collisions && !ui_context.dock_resize_hover &&
+        !ui_context.dock_resize && !ui_context.any_window_top_bar_hold &&
+        !ui_context.any_window_hold;
+
     b8 any_tab_hit = false;
     b8 any_hit = false;
+
     UU32Array dock_spaces_index_offsets_and_counts = { 0 };
     array_create(&dock_spaces_index_offsets_and_counts, dock_spaces.size);
+
+
+
     for (i32 i = ((i32)dock_spaces.size) - 1; i >= 0; --i)
     {
         DockNode* dock_space = dock_spaces.data[i];
@@ -1856,12 +1865,6 @@ void ui_context_end()
         };
         if (window->top_bar)
         {
-            const b8 should_check_collision =
-                ui_context.check_collisions && !ui_context.dock_resize_hover &&
-                !ui_context.dock_resize &&
-                !ui_context.any_window_top_bar_hold &&
-                !ui_context.any_window_hold;
-
             const V2 top_bar_dimensions =
                 v2f(window->size.width, top_bar_height);
             const AABB aabb = quad_gradiant_t_b(
