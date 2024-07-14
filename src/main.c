@@ -335,7 +335,6 @@ void look_for_dropped_files(DirectoryPage* current, const char* directory_path)
         platform_paste_to_directory(dropped_paths,
                                     directory_path ? directory_path
                                                    : current->directory.parent);
-        directory_reload(current);
     }
 }
 
@@ -371,7 +370,6 @@ void set_sorting_buttons(const ApplicationContext* application,
                     current->sort_by = SORT_NONE;
                 }
             }
-            directory_reload(directory_current(&tab->directory_history));
         }
     }
     quad(&render->vertices, aabb->min, aabb->size, name_button_color, 0.0f);
@@ -495,7 +493,6 @@ b8 show_directory_window(const u32 window, const f32 list_item_height,
             platform_rename_file(tab->directory_list.item_to_change->path,
                                  tab->directory_list.input.buffer.data,
                                  tab->directory_list.input.buffer.size);
-            directory_reload(current);
         }
         if (!tab->directory_list.item_selected &&
             !tab->directory_list.input.active)
@@ -1607,7 +1604,6 @@ int main(int argc, char** argv)
                 platform_open_context(
                     app.window,
                     tab->directory_list.selected_item_values.paths.data[0]);
-                directory_reload(directory_current(&tab->directory_history));
 #endif
             }
             else

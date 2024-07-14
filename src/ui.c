@@ -190,7 +190,7 @@ internal f32 set_scroll_offset(const f32 total_height, const f32 area_y,
 internal f32 smooth_scroll(const f64 delta_time, const f32 offset,
                            f32 scroll_offset)
 {
-    scroll_offset += (f32)((offset - scroll_offset) * (delta_time * 15.0f));
+    scroll_offset += (f32)((offset - scroll_offset) * (delta_time * 12.0f));
     return scroll_offset;
 }
 
@@ -207,17 +207,6 @@ internal void push_window_to_front(UiContext* context, U32Array* window_array,
         window_array->data[i] = window_array->data[i - 1];
     }
     window_array->data[0] = temp;
-    /*
-    move_to_front(UiWindow, &context->windows, window_in_focus_index);
-    for (u32 i = 0; i < context->windows.size; ++i)
-    {
-        context->id_to_index.data[context->windows.data[i].id] = i;
-        context->windows.data[i].dock_node->window = context->windows.data + i;
-    }
-    move_to_front(AABBArray, &context->window_aabbs, window_in_focus_index);
-    move_to_front(HoverClickedIndex, &context->window_hover_clicked_indices,
-                  window_in_focus_index);
-                  */
 }
 
 internal void push_window_to_first_docked(UiContext* context,
@@ -242,17 +231,6 @@ internal void push_window_to_first_docked(UiContext* context,
     window_array->data[index_to_insert] = temp;
 }
 
-#define move_to_back(type, array, index)                                       \
-    do                                                                         \
-    {                                                                          \
-        type temp = (array)->data[(index)];                                    \
-        for (u32 i = (index); i < (array)->size - 1; ++i)                      \
-        {                                                                      \
-            (array)->data[i] = (array)->data[i + 1];                           \
-        }                                                                      \
-        (array)->data[(array)->size - 1] = temp;                               \
-    } while (0)
-
 internal void push_window_to_back(UiContext* context, U32Array* window_array,
                                   const u32 index)
 {
@@ -266,21 +244,10 @@ internal void push_window_to_back(UiContext* context, U32Array* window_array,
         window_array->data[i] = window_array->data[i + 1];
     }
     window_array->data[window_array->size - 1] = temp;
-    /*
-    move_to_back(UiWindow, &context->windows, window_in_focus_index);
-    for (u32 i = 0; i < context->windows.size; ++i)
-    {
-        context->id_to_index.data[context->windows.data[i].id] = i;
-        context->windows.data[i].dock_node->window = context->windows.data + i;
-    }
-    move_to_back(AABBArray, &context->window_aabbs, window_in_focus_index);
-    move_to_back(HoverClickedIndex, &context->window_hover_clicked_indices,
-                 window_in_focus_index);
-                 */
 }
 
-internal u32 get_id(const u32 size, U32Array* free_indices,
-                    U32Array* id_to_index)
+internal u32 generate_id(const u32 size, U32Array* free_indices,
+                         U32Array* id_to_index)
 {
     u32 id = 0;
     if (free_indices->size)
@@ -301,61 +268,6 @@ internal u32 get_window_index(const u32 id_index)
 {
     return ui_context.id_to_index
         .data[ui_context.last_frame_windows.data[id_index]];
-}
-
-internal u32 remove_window_from_shared_dock_space(
-    const u32 window_index, UiWindow* window_to_remove,
-    DockNode* dock_space_to_change)
-{
-    b8 focused_window = window_index == dock_space_to_change->window_in_focus;
-
-    for (u32 i = window_index; i < dock_space_to_change->windows.size; ++i)
-    {
-        dock_space_to_change->windows.data[i] =
-            dock_space_to_change->windows.data[i + 1];
-        if ((i + 1) == dock_space_to_change->window_in_focus)
-        {
-            dock_space_to_change->window_in_focus = i;
-        }
-    }
-    dock_space_to_change->windows.size--;
-
-    window_to_remove->closing = true;
-    window_to_remove->hide = false;
-    window_to_remove->docked = false;
-    window_to_remove->dock_node =
-        dock_node_create(NODE_LEAF, SPLIT_NONE, window_to_remove->id);
-
-    if (focused_window)
-    {
-        dock_space_to_change->window_in_focus = 0;
-        UiWindow* window_to_show =
-            ui_window_get(dock_space_to_change->windows
-                              .data[dock_space_to_change->window_in_focus]);
-        window_to_show->position = window_to_remove->position;
-        window_to_show->size = window_to_remove->size;
-        window_to_show->hide = false;
-    }
-    return dock_space_to_change->windows
-        .data[dock_space_to_change->window_in_focus];
-}
-
-void ui_window_start_size_animation(UiWindow* window, V2 start_size,
-                                    V2 end_size)
-{
-    window->size_animation_precent = 0.0f;
-    window->size_before_animation = start_size;
-    window->size_after_animation = end_size;
-    window->size_animation_on = true;
-}
-
-void ui_window_start_position_animation(UiWindow* window, V2 start_position,
-                                        V2 end_position)
-{
-    window->position_animation_precent = 0.0f;
-    window->position_before_animation = start_position;
-    window->position_after_animation = end_position;
-    window->position_animation_on = true;
 }
 
 internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
@@ -380,6 +292,66 @@ internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
     return result;
 }
 
+internal i32 display_docking(const AABB* dock_aabb, const V2 top_position,
+                             const V2 right_position, const V2 bottom_position,
+                             const V2 left_position,
+                             const b8 should_have_middle)
+{
+    const V2 docking_size_top_bottom = v2f(50.0f, 30.0f);
+    const V2 docking_size_left_right = v2f(30.0f, 50.0f);
+
+    const V2 expanded_size_top_bottom =
+        v2f(dock_aabb->size.width, dock_aabb->size.height * 0.5f);
+    const V2 expanded_size_left_right =
+        v2f(dock_aabb->size.width * 0.5f, dock_aabb->size.height);
+
+    i32 index = -1;
+    if (set_docking(top_position, docking_size_top_bottom, dock_aabb->min,
+                    expanded_size_top_bottom, &ui_context.extra_index_count))
+    {
+        index = 0;
+    }
+    if (set_docking(right_position, docking_size_left_right,
+                    v2f(dock_aabb->min.x + expanded_size_left_right.width,
+                        dock_aabb->min.y),
+                    expanded_size_left_right, &ui_context.extra_index_count))
+    {
+        index = 1;
+    }
+    if (set_docking(bottom_position, docking_size_top_bottom,
+                    v2f(dock_aabb->min.x,
+                        dock_aabb->min.y + expanded_size_top_bottom.height),
+                    expanded_size_top_bottom, &ui_context.extra_index_count))
+    {
+        index = 2;
+    }
+    if (set_docking(left_position, docking_size_left_right, dock_aabb->min,
+                    expanded_size_left_right, &ui_context.extra_index_count))
+    {
+        index = 3;
+    }
+    if (should_have_middle)
+    {
+        const V2 docking_size_middle = v2i(50.0f);
+        const f32 x =
+            middle((right_position.x + docking_size_left_right.width) -
+                       left_position.x,
+                   docking_size_middle.width);
+        const f32 y =
+            middle((bottom_position.y + docking_size_top_bottom.height) -
+                       top_position.y,
+                   docking_size_middle.height);
+
+        const V2 middle_position = v2f(left_position.x + x, top_position.y + y);
+        if (set_docking(middle_position, docking_size_middle, dock_aabb->min,
+                        dock_aabb->size, &ui_context.extra_index_count))
+        {
+            index = 4;
+        }
+    }
+    return index;
+}
+
 internal void update_window_dock_nodes(DockNode* dock_node)
 {
     for (u32 i = 0; i < dock_node->windows.size; ++i)
@@ -388,7 +360,7 @@ internal void update_window_dock_nodes(DockNode* dock_node)
     }
 }
 
-DockNode* dock_node_create_(NodeType type, SplitAxis split_axis)
+internal DockNode* dock_node_create_(NodeType type, SplitAxis split_axis)
 {
     DockNode* node = (DockNode*)calloc(1, sizeof(DockNode));
     node->type = type;
@@ -397,7 +369,8 @@ DockNode* dock_node_create_(NodeType type, SplitAxis split_axis)
     return node;
 }
 
-DockNode* dock_node_create(NodeType type, SplitAxis split_axis, i32 window)
+internal DockNode* dock_node_create(NodeType type, SplitAxis split_axis,
+                                    i32 window)
 {
     DockNode* node = dock_node_create_(type, split_axis);
     if (window != -1)
@@ -408,8 +381,9 @@ DockNode* dock_node_create(NodeType type, SplitAxis split_axis, i32 window)
     return node;
 }
 
-DockNode* dock_node_create_multiple_windows(NodeType type, SplitAxis split_axis,
-                                            U32Array windows)
+internal DockNode* dock_node_create_multiple_windows(NodeType type,
+                                                     SplitAxis split_axis,
+                                                     U32Array windows)
 {
     DockNode* node = dock_node_create_(type, split_axis);
     node->windows = windows;
@@ -484,7 +458,7 @@ internal void dock_node_set_split(DockNode* split_node, DockNode* parent,
     }
 }
 
-void dock_node_resize_traverse(DockNode* split_node)
+internal void dock_node_resize_traverse(DockNode* split_node)
 {
     dock_node_set_split(split_node, split_node, split_node->split_axis);
     DockNode* left = split_node->children[0];
@@ -499,8 +473,8 @@ void dock_node_resize_traverse(DockNode* split_node)
     }
 }
 
-void dock_node_dock_window(DockNode* root, DockNode* window,
-                           SplitAxis split_axis, u8 where)
+internal void dock_node_dock_window(DockNode* root, DockNode* window,
+                                    SplitAxis split_axis, u8 where)
 {
     DockNode* copy_node = root->children[0];
     DockNode* split_node = root;
@@ -561,7 +535,7 @@ void dock_node_dock_window(DockNode* root, DockNode* window,
     root->windows.data = NULL;
 }
 
-void dock_node_resize_from_root(DockNode* root, const AABB* aabb)
+internal void dock_node_resize_from_root(DockNode* root, const AABB* aabb)
 {
     root->aabb = *aabb;
     DockNode* left = root->children[0];
@@ -581,7 +555,8 @@ void dock_node_resize_from_root(DockNode* root, const AABB* aabb)
     }
 }
 
-DockNode* find_node(DockNode* root, DockNode* node_before, DockNode* node)
+internal DockNode* find_node(DockNode* root, DockNode* node_before,
+                             DockNode* node)
 {
     // TODO: i believe we can check the adress of the first data
     if ((root->type == NODE_LEAF) && (root->windows.data == node->windows.data))
@@ -605,7 +580,7 @@ DockNode* find_node(DockNode* root, DockNode* node_before, DockNode* node)
     return NULL;
 }
 
-void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
+internal void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
 {
     if (root->children[0]->type == NODE_LEAF &&
         root->children[0]->windows.data == node_to_remove->windows.data)
@@ -651,76 +626,44 @@ void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
     dock_node_resize_from_root(root, &root->aabb);
 }
 
-internal i32 display_docking(const AABB* dock_aabb, const V2 top_position,
-                             const V2 right_position, const V2 bottom_position,
-                             const V2 left_position,
-                             const b8 should_have_middle)
+internal u32 remove_window_from_shared_dock_space(
+    const u32 window_index, UiWindow* window_to_remove,
+    DockNode* dock_space_to_change)
 {
-    const V2 docking_size_top_bottom = v2f(50.0f, 30.0f);
-    const V2 docking_size_left_right = v2f(30.0f, 50.0f);
+    b8 focused_window = window_index == dock_space_to_change->window_in_focus;
 
-    const V2 expanded_size_top_bottom =
-        v2f(dock_aabb->size.width, dock_aabb->size.height * 0.5f);
-    const V2 expanded_size_left_right =
-        v2f(dock_aabb->size.width * 0.5f, dock_aabb->size.height);
-
-    i32 index = -1;
-    // Top
-    if (set_docking(top_position, docking_size_top_bottom, dock_aabb->min,
-                    expanded_size_top_bottom, &ui_context.extra_index_count))
+    for (u32 i = window_index; i < dock_space_to_change->windows.size; ++i)
     {
-        index = 0;
-    }
-
-    // Right
-    if (set_docking(right_position, docking_size_left_right,
-                    v2f(dock_aabb->min.x + expanded_size_left_right.width,
-                        dock_aabb->min.y),
-                    expanded_size_left_right, &ui_context.extra_index_count))
-    {
-        index = 1;
-    }
-
-    // Bottom
-
-    if (set_docking(bottom_position, docking_size_top_bottom,
-                    v2f(dock_aabb->min.x,
-                        dock_aabb->min.y + expanded_size_top_bottom.height),
-                    expanded_size_top_bottom, &ui_context.extra_index_count))
-    {
-        index = 2;
-    }
-
-    // Left
-    if (set_docking(left_position, docking_size_left_right, dock_aabb->min,
-                    expanded_size_left_right, &ui_context.extra_index_count))
-    {
-        index = 3;
-    }
-
-    if (should_have_middle)
-    {
-        const V2 docking_size_middle = v2i(50.0f);
-        const f32 x =
-            middle((right_position.x + docking_size_left_right.width) -
-                       left_position.x,
-                   docking_size_middle.width);
-        const f32 y =
-            middle((bottom_position.y + docking_size_top_bottom.height) -
-                       top_position.y,
-                   docking_size_middle.height);
-
-        const V2 middle_position = v2f(left_position.x + x, top_position.y + y);
-        if (set_docking(middle_position, docking_size_middle, dock_aabb->min,
-                        dock_aabb->size, &ui_context.extra_index_count))
+        dock_space_to_change->windows.data[i] =
+            dock_space_to_change->windows.data[i + 1];
+        if ((i + 1) == dock_space_to_change->window_in_focus)
         {
-            index = 4;
+            dock_space_to_change->window_in_focus = i;
         }
     }
-    return index;
+    dock_space_to_change->windows.size--;
+
+    window_to_remove->closing = true;
+    window_to_remove->hide = false;
+    window_to_remove->docked = false;
+    window_to_remove->dock_node =
+        dock_node_create(NODE_LEAF, SPLIT_NONE, window_to_remove->id);
+
+    if (focused_window)
+    {
+        dock_space_to_change->window_in_focus = 0;
+        UiWindow* window_to_show =
+            ui_window_get(dock_space_to_change->windows
+                              .data[dock_space_to_change->window_in_focus]);
+        window_to_show->position = window_to_remove->position;
+        window_to_show->size = window_to_remove->size;
+        window_to_show->hide = false;
+    }
+    return dock_space_to_change->windows
+        .data[dock_space_to_change->window_in_focus];
 }
 
-i32 root_display_docking(DockNode* dock_node)
+internal i32 root_display_docking(DockNode* dock_node)
 {
     const V2 docking_size_top_bottom = v2f(50.0f, 30.0f);
     const V2 docking_size_left_right = v2f(30.0f, 50.0f);
@@ -758,7 +701,7 @@ i32 root_display_docking(DockNode* dock_node)
     return index;
 }
 
-i32 leaf_display_docking(DockNode* dock_node)
+internal i32 leaf_display_docking(DockNode* dock_node)
 {
     const V2 docking_size_top_bottom = v2f(50.0f, 30.0f);
     const V2 docking_size_left_right = v2f(30.0f, 50.0f);
@@ -797,7 +740,7 @@ i32 leaf_display_docking(DockNode* dock_node)
     return index;
 }
 
-i32 look_for_collisions(DockNode* parent)
+internal i32 look_for_docking_collisions(DockNode* parent)
 {
     const V2 mouse_position = event_get_mouse_position();
 
@@ -821,27 +764,27 @@ i32 look_for_collisions(DockNode* parent)
 
     if (left->type == NODE_PARENT)
     {
-        i32 hit = look_for_collisions(left);
+        i32 hit = look_for_docking_collisions(left);
         if (hit != -1) return hit;
     }
     if (right->type == NODE_PARENT)
     {
-        i32 hit = look_for_collisions(right);
+        i32 hit = look_for_docking_collisions(right);
         if (hit != -1) return hit;
     }
     return -1;
 }
 
-i32 dock_node_docking_display_traverse(DockNode* root)
+internal i32 dock_node_docking_display_traverse(DockNode* root)
 {
     if (root->children[0] && root->children[0]->type == NODE_PARENT)
     {
-        return look_for_collisions(root->children[0]);
+        return look_for_docking_collisions(root->children[0]);
     }
     return -1;
 }
 
-AABB dock_node_set_resize_aabb(DockNode* node)
+internal AABB dock_node_set_resize_aabb(DockNode* node)
 {
     DockNode* right = node->children[1];
     AABB resize_aabb = { .min = right->aabb.min };
@@ -860,7 +803,7 @@ AABB dock_node_set_resize_aabb(DockNode* node)
     return resize_aabb;
 }
 
-b8 look_for_resize_collisions(DockNode* parent)
+internal b8 look_for_resize_collisions(DockNode* parent)
 {
     const V2 mouse_position = event_get_mouse_position();
 
@@ -887,13 +830,31 @@ b8 look_for_resize_collisions(DockNode* parent)
     return false;
 }
 
-b8 dock_node_resize_collision_traverse(DockNode* root)
+internal b8 dock_node_resize_collision_traverse(DockNode* root)
 {
     if (root->children[0] && root->children[0]->type == NODE_PARENT)
     {
         return look_for_resize_collisions(root->children[0]);
     }
     return false;
+}
+
+void ui_window_start_size_animation(UiWindow* window, V2 start_size,
+                                    V2 end_size)
+{
+    window->size_animation_precent = 0.0f;
+    window->size_before_animation = start_size;
+    window->size_after_animation = end_size;
+    window->size_animation_on = true;
+}
+
+void ui_window_start_position_animation(UiWindow* window, V2 start_position,
+                                        V2 end_position)
+{
+    window->position_animation_precent = 0.0f;
+    window->position_before_animation = start_position;
+    window->position_after_animation = end_position;
+    window->position_animation_on = true;
 }
 
 InputBuffer ui_input_buffer_create()
@@ -1258,6 +1219,123 @@ void ui_context_create()
         v4f(secondary_color.r, secondary_color.g, secondary_color.b, 0.4f);
 }
 
+internal u8 look_for_window_resize(UiWindow* window)
+{
+    AABB left, top, right, bottom;
+    get_window_resize_aabbs(window, &left, &top, &right, &bottom);
+
+    const V2 mouse_position = event_get_mouse_position();
+    const b8 mouse_button_pressed_once =
+        event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT);
+
+    u8 result = RESIZE_NONE;
+    if (collision_point_in_aabb(mouse_position, &left))
+    {
+        if (mouse_button_pressed_once)
+        {
+            window->resize_dragging |= RESIZE_LEFT;
+        }
+        result |= RESIZE_LEFT;
+    }
+    else if (collision_point_in_aabb(mouse_position, &right))
+    {
+        if (mouse_button_pressed_once)
+        {
+            window->resize_dragging |= RESIZE_RIGHT;
+        }
+        result |= RESIZE_RIGHT;
+    }
+
+    if (collision_point_in_aabb(mouse_position, &top))
+    {
+        if (mouse_button_pressed_once)
+        {
+            window->resize_dragging |= RESIZE_TOP;
+        }
+        result |= RESIZE_TOP;
+    }
+    else if (collision_point_in_aabb(mouse_position, &bottom))
+    {
+        if (mouse_button_pressed_once)
+        {
+            window->resize_dragging |= RESIZE_BOTTOM;
+        }
+        result |= RESIZE_BOTTOM;
+    }
+    return result;
+}
+
+internal b8 check_window_collisions(const u32 window_index, const u32 i)
+{
+    const b8 mouse_button_clicked =
+        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
+    const MouseButtonEvent* mouse_button_event = event_get_mouse_button_event();
+    const b8 mouse_button_pressed = mouse_button_event->activated &&
+                                    mouse_button_event->action == FTIC_PRESS;
+    const V2 mouse_position = event_get_mouse_position();
+
+    UiWindow* window = ui_context.windows.data + window_index;
+
+    if (window->hide) return false;
+
+    if (window->resizeable && !window->docked && !window->resize_dragging)
+    {
+        u8 any_collision = look_for_window_resize(window);
+        if (window->resize_dragging)
+        {
+            window->resize_pointer_offset = event_get_mouse_position();
+            window->resize_size_offset = window->size;
+        }
+        if (any_collision)
+        {
+            set_resize_cursor(any_collision);
+            return true;
+        }
+    }
+
+    const AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+
+    if (aabbs->size)
+    {
+        // NOTE: the first aabb is the window area
+        if (!collision_point_in_aabb(mouse_position, &aabbs->data[0]))
+        {
+            return false;
+        }
+        else
+        {
+            window->area_hit = true;
+        }
+    }
+
+    for (i32 aabb_index = ((i32)aabbs->size) - 1; aabb_index >= 0; --aabb_index)
+    {
+        const AABB* aabb = aabbs->data + aabb_index;
+        if (collision_point_in_aabb(mouse_position, aabb))
+        {
+            HoverClickedIndex* hover_clicked_index =
+                ui_context.window_hover_clicked_indices.data + window_index;
+            hover_clicked_index->index = aabb_index;
+            hover_clicked_index->hover = true;
+            hover_clicked_index->double_clicked =
+                mouse_button_event->double_clicked;
+            if (mouse_button_clicked || mouse_button_pressed)
+            {
+                hover_clicked_index->pressed = mouse_button_pressed;
+                hover_clicked_index->clicked = mouse_button_clicked;
+                if (!window->docked)
+                {
+                    push_window_to_back(&ui_context,
+                                        &ui_context.last_frame_windows, i);
+                }
+                ui_context.window_in_focus = window_index;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 void ui_context_begin(const V2 dimensions, const AABB* dock_space,
                       const f64 delta_time, const b8 check_collisions)
 {
@@ -1322,122 +1400,12 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
         !ui_context.dock_resize && !ui_context.any_window_top_bar_hold &&
         !ui_context.any_window_hold)
     {
-        const b8 mouse_button_clicked =
-            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
-
-        const MouseButtonEvent* mouse_button_event =
-            event_get_mouse_button_event();
-
-        const b8 mouse_button_pressed =
-            mouse_button_event->activated &&
-            mouse_button_event->action == FTIC_PRESS;
-
-        const V2 mouse_position = event_get_mouse_position();
         for (i32 i = ((i32)ui_context.last_frame_windows.size) - 1; i >= 0; --i)
         {
             u32 window_index = get_window_index(i);
-            UiWindow* window = ui_context.windows.data + window_index;
-
-            if (window->hide) continue;
-
-            if (window->resizeable && !window->docked &&
-                !window->resize_dragging)
+            if (check_window_collisions(window_index, i))
             {
-                AABB left, top, right, bottom;
-                get_window_resize_aabbs(window, &left, &top, &right, &bottom);
-
-                const b8 mouse_button_pressed_once =
-                    event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT);
-
-                u8 any_collision = RESIZE_NONE;
-                if (collision_point_in_aabb(mouse_position, &left))
-                {
-                    if (mouse_button_pressed_once)
-                    {
-                        window->resize_dragging |= RESIZE_LEFT;
-                    }
-                    any_collision |= RESIZE_LEFT;
-                }
-                else if (collision_point_in_aabb(mouse_position, &right))
-                {
-                    if (mouse_button_pressed_once)
-                    {
-                        window->resize_dragging |= RESIZE_RIGHT;
-                    }
-                    any_collision |= RESIZE_RIGHT;
-                }
-
-                if (collision_point_in_aabb(mouse_position, &top))
-                {
-                    if (mouse_button_pressed_once)
-                    {
-                        window->resize_dragging |= RESIZE_TOP;
-                    }
-                    any_collision |= RESIZE_TOP;
-                }
-                else if (collision_point_in_aabb(mouse_position, &bottom))
-                {
-                    if (mouse_button_pressed_once)
-                    {
-                        window->resize_dragging |= RESIZE_BOTTOM;
-                    }
-                    any_collision |= RESIZE_BOTTOM;
-                }
-
-                if (window->resize_dragging)
-                {
-                    window->resize_pointer_offset = event_get_mouse_position();
-                    window->resize_size_offset = window->size;
-                }
-                if (any_collision)
-                {
-                    set_resize_cursor(any_collision);
-                    goto collision_check_done;
-                }
-            }
-
-            const AABBArray* aabbs =
-                ui_context.window_aabbs.data + window_index;
-
-            if (aabbs->size)
-            {
-                // NOTE: the first aabb is the window area
-                if (!collision_point_in_aabb(mouse_position, &aabbs->data[0]))
-                {
-                    continue;
-                }
-                else
-                {
-                    window->area_hit = true;
-                }
-            }
-
-            for (i32 aabb_index = ((i32)aabbs->size) - 1; aabb_index >= 0;
-                 --aabb_index)
-            {
-                const AABB* aabb = aabbs->data + aabb_index;
-                if (collision_point_in_aabb(mouse_position, aabb))
-                {
-                    HoverClickedIndex* hover_clicked_index =
-                        ui_context.window_hover_clicked_indices.data +
-                        window_index;
-                    hover_clicked_index->index = aabb_index;
-                    hover_clicked_index->hover = true;
-                    hover_clicked_index->double_clicked =
-                        mouse_button_event->double_clicked;
-                    if (mouse_button_clicked || mouse_button_pressed)
-                    {
-                        hover_clicked_index->pressed = mouse_button_pressed;
-                        hover_clicked_index->clicked = mouse_button_clicked;
-                        if (!window->docked)
-                        {
-                            push_window_to_back(
-                                &ui_context, &ui_context.last_frame_windows, i);
-                        }
-                        ui_context.window_in_focus = window_index;
-                    }
-                    goto collision_check_done;
-                }
+                goto collision_check_done;
             }
         }
     }
@@ -2046,8 +2014,8 @@ void ui_context_destroy()
 
 u32 ui_window_create()
 {
-    u32 id = get_id(ui_context.windows.size, &ui_context.free_indices,
-                    &ui_context.id_to_index);
+    u32 id = generate_id(ui_context.windows.size, &ui_context.free_indices,
+                         &ui_context.id_to_index);
 
     for (u32 i = 0; i < ui_context.windows.size; ++i)
     {
@@ -2190,6 +2158,7 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
     window->title = title;
     window->rendering_index_offset = ui_context.current_index_offset;
     aabbs->size = 0;
+    window->rendering_index_count = 0;
 
     window->resizeable = resizeable;
 

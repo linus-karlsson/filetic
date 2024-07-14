@@ -200,9 +200,6 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
 void ui_context_end();
 void ui_context_destroy();
 
-void ui_dock_space_begin(V2 position, V2 dimensions, u32* windows, u32 window_count);
-void ui_dock_space_end();
-
 u32 ui_window_create();
 UiWindow* ui_window_get(u32 window_id);
 u32 ui_window_in_focus();
@@ -228,9 +225,3 @@ b8 ui_window_set_overlay();
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image);
 i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item);
 void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index);
-
-
-DockNode* dock_node_create(NodeType type, SplitAxis split_axis, i32 window);
-void dock_node_dock_window(DockNode* root, DockNode* window, SplitAxis split_axis, u8 where);
-void dock_node_resize_from_root(DockNode* root, const AABB* aabb);
-void dock_node_remove_node(DockNode* root, DockNode* node_to_remove);
