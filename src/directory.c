@@ -33,8 +33,6 @@ internal void look_for_same_items(const DirectoryItemArray* existing_items,
             }
         }
     }
-    log_u64("size: ", reloaded_items->size);
-    log_u64("Count: ", count);
 }
 
 void directory_reload(DirectoryPage* directory_page)
@@ -220,6 +218,14 @@ void directory_sort(DirectoryPage* directory_page)
     }
 }
 
+void directory_history_update_directory_change_handle(
+    DirectoryHistory* directory_history)
+{
+    directory_unlisten_to_directory_changes(directory_history->change_handle);
+    directory_history->change_handle = directory_listen_to_directory_changes(
+        directory_current(directory_history)->directory.parent);
+}
+
 b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
 {
     b8 result = false;
@@ -248,6 +254,7 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
         path[length--] = saved_chars[2];
         path[length--] = saved_chars[1];
         result = true;
+        directory_history_update_directory_change_handle(directory_history);
     }
     path[length] = saved_chars[0];
     return result;
@@ -256,11 +263,6 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
 void directory_open_folder(char* folder_path,
                            DirectoryHistory* directory_history)
 {
-    if (strcmp(folder_path,
-               directory_current(directory_history)->directory.parent) == 0)
-    {
-        return;
-    }
     u32 length = (u32)strlen(folder_path);
     directory_go_to(folder_path, length, directory_history);
 }
@@ -274,6 +276,7 @@ void directory_move_in_history(const i32 index_add,
     current->scroll_offset = 0.0f;
     directory_clear_selected_items(selected_item_values);
     directory_reload(current);
+    directory_history_update_directory_change_handle(directory_history);
 }
 
 b8 directory_can_go_up(char* parent)
@@ -310,7 +313,9 @@ DirectoryTab directory_tab_add(const char* dir)
     page.directory = platform_get_directory(dir, (u32)strlen(dir));
     array_push(&directory_history.history, page);
 
-    // TODO(Linus): Make a set for this instead
+    directory_history.change_handle =
+        directory_listen_to_directory_changes(page.directory.parent);
+
     SelectedItemValues selected_item_values = { 0 };
     array_create(&selected_item_values.paths, 10);
     selected_item_values.selected_items =
@@ -334,6 +339,8 @@ void directory_tab_clear(DirectoryTab* tab)
             &tab->directory_history.history.data[j].directory);
     }
     array_free(&tab->directory_history.history);
+    directory_unlisten_to_directory_changes(
+        tab->directory_history.change_handle);
     ui_input_buffer_delete(&tab->directory_list.input);
     directory_clear_selected_items(&tab->directory_list.selected_item_values);
 }
@@ -372,3 +379,4 @@ void directory_remove_selected_item(SelectedItemValues* selected_item_values,
         }
     }
 }
+

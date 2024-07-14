@@ -28,6 +28,7 @@ typedef struct DirectoryArray
 
 typedef struct DirectoryHistory
 {
+    void* change_handle;
     u32 current_index;
     DirectoryArray history;
 } DirectoryHistory;
@@ -65,3 +66,5 @@ void directory_tab_clear(DirectoryTab* tab);
 void directory_clear_selected_items(SelectedItemValues* selected_item_values);
 void directory_remove_selected_item(SelectedItemValues* selected_item_values, const FticGUID guid);
 
+
+void directory_history_update_directory_change_handle(DirectoryHistory* directory_history);

@@ -1068,6 +1068,10 @@ int main(int argc, char** argv)
     array_push(&menu_values, menu_options[0]);
     array_push(&menu_values, menu_options[1]);
 
+    void* changes_in_directory_handle = directory_listen_to_directory_changes(
+        directory_current(&app.tabs.data[app.tab_index].directory_history)
+            ->directory.parent);
+
     enable_gldebugging();
     glEnable(GL_BLEND);
     glEnable(GL_MULTISAMPLE);
@@ -1365,7 +1369,7 @@ int main(int argc, char** argv)
                             app.parent_directory_input.buffer.size;
                         app.suggestions.tab_index = -1;
                         app.suggestions.options.size = 0;
-                        app.suggestions.aabb = (AABB){0};
+                        app.suggestions.aabb = (AABB){ 0 };
                     }
                 }
                 else
@@ -1645,7 +1649,6 @@ int main(int argc, char** argv)
                 .projection = preview_camera.view_projection.projection,
             };
 
-
             mvp.model.data[0][0] = -preview_camera.orientation.x;
             mvp.model.data[0][1] = -preview_camera.orientation.y;
             mvp.model.data[0][2] = -preview_camera.orientation.z;
@@ -1660,13 +1663,23 @@ int main(int argc, char** argv)
                 preview_index = -1;
             }
 
-            if(event_is_key_pressed_once(FTIC_KEY_R))
+            if (event_is_key_pressed_once(FTIC_KEY_R))
             {
                 preview_camera = camera_create_default();
             }
         }
 
 #endif
+        for (u32 i = 0; i < app.tabs.size; ++i)
+        {
+            DirectoryTab* current = app.tabs.data + i;
+            if (directory_look_for_directory_change(
+                    current->directory_history.change_handle))
+            {
+                directory_reload(directory_current(&current->directory_history));
+                directory_history_update_directory_change_handle(&current->directory_history);
+            }
+        }
 
         application_end_frame(&app);
     }

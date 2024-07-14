@@ -1404,3 +1404,21 @@ void platform_open_context(void* window, const char* path)
     CoUninitialize();
 }
 
+void* directory_listen_to_directory_changes(const char* path)
+{
+    HANDLE handle =
+        FindFirstChangeNotification(path, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME);
+    return handle;
+}
+
+void directory_unlisten_to_directory_changes(void* handle)
+{
+    FindCloseChangeNotification(handle);
+}
+
+b8 directory_look_for_directory_change(void* handle)
+{
+    DWORD result = WaitForSingleObject(handle, 0);
+    return result == WAIT_OBJECT_0;
+}
+

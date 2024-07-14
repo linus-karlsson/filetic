@@ -76,6 +76,12 @@ typedef struct ContextMenu
     MenuItemArray items;
 } ContextMenu;
 
+typedef struct DirectoryChangeData
+{
+    void* handle;
+    char* path;
+    b8 changed;
+}DirectoryChangeData;
 
 void platform_init(const char* title, u16 width, u16 height, Platform** platform);
 void platform_shut_down(Platform* platform);
@@ -157,3 +163,7 @@ void platform_context_menu_create(ContextMenu* menu, const char* path);
 void platform_context_menu_destroy(ContextMenu* menu);
 
 void platform_open_context(void* window, const char* path);
+
+void* directory_listen_to_directory_changes(const char* path);
+void directory_unlisten_to_directory_changes(void* handle);
+b8 directory_look_for_directory_change(void* handle);
