@@ -1597,17 +1597,18 @@ internal void check_dock_space_resize()
 
         if (ui_context.dock_resize)
         {
-            const V2 mouse_position = event_get_mouse_position();
+            const V2 relative_mouse_position = v2_sub(
+                event_get_mouse_position(), ui_context.dock_hit_node->aabb.min);
 
             f32 new_ratio = 0.0f;
             if (ui_context.dock_hit_node->split_axis == SPLIT_HORIZONTAL)
             {
-                new_ratio = mouse_position.y /
+                new_ratio = relative_mouse_position.y /
                             ui_context.dock_hit_node->aabb.size.height;
             }
             else // SPLIT_VERTICAL
             {
-                new_ratio = mouse_position.x /
+                new_ratio = relative_mouse_position.x /
                             ui_context.dock_hit_node->aabb.size.width;
             }
             if (closed_interval(0.1f, new_ratio, 0.9f))
@@ -1727,6 +1728,186 @@ internal DockNodePtrArray get_active_dock_spaces()
     return dock_spaces;
 }
 
+typedef struct TabChange
+{
+    DockNode* dock_space;
+    UiWindow* window_to_hide;
+    UiWindow* window_to_show;
+    u32 window_focus_index;
+    b8 close_tab;
+} TabChange;
+
+internal TabChange update_tabs(const f32 top_bar_height,
+                               DockNodePtrArray* dock_spaces,
+                               UU32Array* dock_spaces_index_offsets_and_counts)
+{
+    TabChange tab_change = { 0 };
+    const V2 mouse_position = event_get_mouse_position();
+    const b8 should_check_collision =
+        ui_context.check_collisions && !ui_context.dock_resize_hover &&
+        !ui_context.dock_resize && !ui_context.any_window_top_bar_hold &&
+        !ui_context.any_window_hold;
+
+    b8 any_tab_hit = false;
+    b8 any_hit = false;
+    for (i32 i = ((i32)dock_spaces->size) - 1; i >= 0; --i)
+    {
+        DockNode* dock_space = dock_spaces->data[i];
+        UiWindow* window = ui_window_get(
+            dock_space->windows.data[dock_space->window_in_focus]);
+        UU32 index_offset_and_count = {
+            .first = ui_context.current_index_offset,
+        };
+        if (window->top_bar)
+        {
+            const V2 top_bar_dimensions =
+                v2f(window->size.width, top_bar_height);
+            const AABB aabb = quad_gradiant_t_b(
+                &ui_context.render.vertices, window->position,
+                top_bar_dimensions, v4ic(0.25f), v4ic(0.2f), 0.0f);
+            index_offset_and_count.second += 6;
+
+            V2 tab_position = window->position;
+            for (i32 j = 0; j < (i32)dock_space->windows.size; ++j)
+            {
+                UiWindow* tab_window =
+                    ui_window_get(dock_space->windows.data[j]);
+
+                const V2 button_size = v2i(top_bar_dimensions.height - 4.0f);
+
+                f32 x_advance =
+                    tab_window->title
+                        ? text_x_advance(ui_context.font.chars,
+                                         tab_window->title,
+                                         (u32)strlen(tab_window->title), 1.0f)
+                        : 0.0f;
+
+                const f32 tab_padding = 8.0f;
+                V2 tab_dimensions = v2f(x_advance + (tab_padding * 2.0f) +
+                                            button_size.width + 8.0f,
+                                        top_bar_dimensions.height);
+                AABB tab_aabb = {
+                    .min = tab_position,
+                    .size = tab_dimensions,
+                };
+
+                V4 tab_color = v4ic(0.25f);
+                if (j == (i32)dock_space->window_in_focus)
+                {
+                    tab_color = v4ic(0.35f);
+                }
+                b8 tab_collided = false;
+                if (should_check_collision && !tab_change.close_tab &&
+                    !any_tab_hit &&
+                    collision_point_in_aabb(mouse_position, &tab_aabb))
+                {
+                    if (j != (i32)dock_space->window_in_focus)
+                    {
+                        if (event_is_mouse_button_clicked(
+                                FTIC_MOUSE_BUTTON_LEFT))
+                        {
+                            tab_change.dock_space = dock_space;
+                            tab_change.window_focus_index = j;
+                            tab_change.window_to_hide = window;
+                            tab_change.window_to_show = tab_window;
+                        }
+                        tab_color = v4ic(0.3f);
+                    }
+
+                    if (event_is_mouse_button_pressed_once(
+                            FTIC_MOUSE_BUTTON_LEFT))
+                    {
+                        tab_window->release_from_dock_space = true;
+                        tab_window->top_bar_offset = event_get_mouse_position();
+                        tab_window->top_bar_pressed = true;
+                    }
+
+                    any_hit = true;
+
+                    tab_collided = true;
+                }
+
+                quad(&ui_context.render.vertices, tab_position, tab_dimensions,
+                     tab_color, 0.0f);
+                index_offset_and_count.second += 6;
+
+                V2 text_position =
+                    v2f(tab_position.x + tab_padding,
+                        tab_position.y + ui_context.font.pixel_height);
+                f32 title_advance = 0.0f;
+                if (tab_window->title)
+                {
+                    index_offset_and_count.second += text_generation(
+                        ui_context.font.chars, tab_window->title,
+                        UI_FONT_TEXTURE, text_position, 1.0f,
+                        ui_context.font.line_height, NULL, &title_advance, NULL,
+                        &ui_context.render.vertices);
+                }
+
+                V2 button_position =
+                    v2f(text_position.x + x_advance + tab_padding + 4.0f,
+                        tab_position.y + 2.0f);
+
+                AABB button_aabb = {
+                    .min = button_position,
+                    .size = button_size,
+                };
+
+                b8 collided =
+                    collision_point_in_aabb(mouse_position, &button_aabb);
+
+                if (should_check_collision && collided)
+                {
+                    if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+                    {
+                        tab_change.close_tab = true;
+                        tab_change.dock_space = dock_space;
+                        tab_change.window_focus_index = j;
+                        tab_change.window_to_hide = tab_window;
+                    }
+                }
+
+                V4 button_color = tab_color;
+                if (collided &&
+                    event_get_mouse_button_event()->action != FTIC_PRESS)
+                {
+                    button_color = v4ic(0.5f);
+                }
+                else if (tab_collided)
+                {
+                    button_color = v4ic(0.4f);
+                }
+
+                quad(&ui_context.render.vertices, button_position, button_size,
+                     button_color, 0.0f);
+                index_offset_and_count.second += 6;
+
+                tab_position.x +=
+                    x_advance + (tab_padding * 2.0f) + button_size.width + 5.0f;
+            }
+
+            quad_border(&ui_context.render.vertices,
+                        &index_offset_and_count.second, window->position,
+                        top_bar_dimensions, border_color, 1.0f, 0.0f);
+
+            if (should_check_collision && !tab_change.close_tab &&
+                !any_tab_hit && !any_hit &&
+                collision_point_in_aabb(mouse_position, &aabb) &&
+                event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
+            {
+                window->top_bar_offset = event_get_mouse_position();
+                window->top_bar_pressed = true;
+                window->any_holding = true;
+                any_hit = true;
+            }
+        }
+        dock_spaces_index_offsets_and_counts->data[i] = index_offset_and_count;
+        ui_context.current_index_offset =
+            index_offset_and_count.first + index_offset_and_count.second;
+    }
+    return tab_change;
+}
+
 internal void render_ui(const DockNodePtrArray* dock_spaces,
                         const UU32Array* dock_spaces_index_offsets_and_counts,
                         const f32 top_bar_height)
@@ -1765,42 +1946,41 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
     render_end_draw(&ui_context.render.render);
 }
 
-void handle_tab_change_or_close(const u32 window_index, const b8 close_tab,
-                                DockNode* dock_space_to_change,
-                                UiWindow* window_to_hide,
-                                UiWindow* window_to_show)
+void handle_tab_change_or_close(TabChange tab_change)
 {
     u32 focused_window_id = 0;
     b8 change_window_to_focus = false;
-    if (close_tab)
+    if (tab_change.close_tab)
     {
-        if (dock_space_to_change->windows.size == 1)
+        if (tab_change.dock_space->windows.size == 1)
         {
-            if (window_to_hide->docked)
+            if (tab_change.window_to_hide->docked)
             {
                 dock_node_remove_node(ui_context.dock_tree,
-                                      dock_space_to_change);
+                                      tab_change.dock_space);
             }
-            window_to_hide->closing = true;
-            window_to_hide->hide = false;
-            window_to_hide->docked = false;
+            tab_change.window_to_hide->closing = true;
+            tab_change.window_to_hide->hide = false;
+            tab_change.window_to_hide->docked = false;
         }
         else
         {
             focused_window_id = remove_window_from_shared_dock_space(
-                window_index, window_to_hide, dock_space_to_change);
+                tab_change.window_focus_index, tab_change.window_to_hide,
+                tab_change.dock_space);
         }
     }
     else
     {
-        dock_space_to_change->window_in_focus = window_index;
-        window_to_hide->hide = true;
-        window_to_show->position = window_to_hide->position;
-        window_to_show->size = window_to_hide->size;
-        window_to_show->hide = false;
-        focused_window_id = window_to_show->id;
+        tab_change.dock_space->window_in_focus = tab_change.window_focus_index;
+        tab_change.window_to_hide->hide = true;
+        tab_change.window_to_show->position =
+            tab_change.window_to_hide->position;
+        tab_change.window_to_show->size = tab_change.window_to_hide->size;
+        tab_change.window_to_show->hide = false;
+        focused_window_id = tab_change.window_to_show->id;
     }
-    window_to_hide->release_from_dock_space = false;
+    tab_change.window_to_hide->release_from_dock_space = false;
     ui_context.window_in_focus = ui_context.id_to_index.data[focused_window_id];
 }
 
@@ -1833,181 +2013,11 @@ void ui_context_end()
 
     DockNodePtrArray dock_spaces = get_active_dock_spaces();
 
-    // NOTE: these are here to change the tab after the render
-    DockNode* dock_space_to_change = NULL;
-    u32 new_window_focus = 0;
-    UiWindow* window_to_hide = NULL;
-    UiWindow* window_to_show = NULL;
-    b8 close_tab = false;
-
-    const f32 top_bar_height = 20.0f;
-    const V2 mouse_position = event_get_mouse_position();
-    const b8 should_check_collision =
-        ui_context.check_collisions && !ui_context.dock_resize_hover &&
-        !ui_context.dock_resize && !ui_context.any_window_top_bar_hold &&
-        !ui_context.any_window_hold;
-
-    b8 any_tab_hit = false;
-    b8 any_hit = false;
-
     UU32Array dock_spaces_index_offsets_and_counts = { 0 };
     array_create(&dock_spaces_index_offsets_and_counts, dock_spaces.size);
-
-
-
-    for (i32 i = ((i32)dock_spaces.size) - 1; i >= 0; --i)
-    {
-        DockNode* dock_space = dock_spaces.data[i];
-        UiWindow* window = ui_window_get(
-            dock_space->windows.data[dock_space->window_in_focus]);
-        UU32 index_offset_and_count = {
-            .first = ui_context.current_index_offset,
-        };
-        if (window->top_bar)
-        {
-            const V2 top_bar_dimensions =
-                v2f(window->size.width, top_bar_height);
-            const AABB aabb = quad_gradiant_t_b(
-                &ui_context.render.vertices, window->position,
-                top_bar_dimensions, v4ic(0.25f), v4ic(0.2f), 0.0f);
-            index_offset_and_count.second += 6;
-
-            V2 tab_position = window->position;
-            for (i32 j = 0; j < (i32)dock_space->windows.size; ++j)
-            {
-                UiWindow* tab_window =
-                    ui_window_get(dock_space->windows.data[j]);
-
-                const V2 button_size = v2i(top_bar_dimensions.height - 4.0f);
-
-                f32 x_advance =
-                    tab_window->title
-                        ? text_x_advance(ui_context.font.chars,
-                                         tab_window->title,
-                                         (u32)strlen(tab_window->title), 1.0f)
-                        : 0.0f;
-
-                const f32 tab_padding = 8.0f;
-                V2 tab_dimensions = v2f(x_advance + (tab_padding * 2.0f) +
-                                            button_size.width + 2.0f,
-                                        top_bar_dimensions.height);
-                AABB tab_aabb = {
-                    .min = tab_position,
-                    .size = tab_dimensions,
-                };
-
-                V4 tab_color = v4ic(0.25f);
-                if (j == (i32)dock_space->window_in_focus)
-                {
-                    tab_color = v4ic(0.35f);
-                }
-                b8 tab_collided = false;
-                if (should_check_collision && !close_tab && !any_tab_hit &&
-                    collision_point_in_aabb(mouse_position, &tab_aabb))
-                {
-                    if (j != (i32)dock_space->window_in_focus)
-                    {
-                        if (event_is_mouse_button_clicked(
-                                FTIC_MOUSE_BUTTON_LEFT))
-                        {
-                            dock_space_to_change = dock_space;
-                            new_window_focus = j;
-                            window_to_hide = window;
-                            window_to_show = tab_window;
-                        }
-                        tab_color = v4ic(0.3f);
-                    }
-
-                    if (event_is_mouse_button_pressed_once(
-                            FTIC_MOUSE_BUTTON_LEFT))
-                    {
-                        tab_window->release_from_dock_space = true;
-                        tab_window->top_bar_offset = event_get_mouse_position();
-                        tab_window->top_bar_pressed = true;
-                    }
-
-                    any_hit = true;
-
-                    tab_collided = true;
-                }
-
-                quad(&ui_context.render.vertices, tab_position, tab_dimensions,
-                     tab_color, 0.0f);
-                index_offset_and_count.second += 6;
-
-                V2 text_position =
-                    v2f(tab_position.x + tab_padding,
-                        tab_position.y + ui_context.font.pixel_height);
-                f32 title_advance = 0.0f;
-                if (tab_window->title)
-                {
-                    index_offset_and_count.second += text_generation(
-                        ui_context.font.chars, tab_window->title,
-                        UI_FONT_TEXTURE, text_position, 1.0f,
-                        ui_context.font.line_height, NULL, &title_advance, NULL,
-                        &ui_context.render.vertices);
-                }
-
-                V2 button_position =
-                    v2f(text_position.x + x_advance + tab_padding,
-                        tab_position.y + 2.0f);
-
-                AABB button_aabb = {
-                    .min = button_position,
-                    .size = button_size,
-                };
-
-                b8 collided =
-                    collision_point_in_aabb(mouse_position, &button_aabb);
-
-                if (should_check_collision && collided)
-                {
-                    if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
-                    {
-                        close_tab = true;
-                        dock_space_to_change = dock_space;
-                        window_to_hide = tab_window;
-                        new_window_focus = j;
-                    }
-                }
-
-                V4 button_color = tab_color;
-                if (collided &&
-                    event_get_mouse_button_event()->action != FTIC_PRESS)
-                {
-                    button_color = v4ic(0.5f);
-                }
-                else if (tab_collided)
-                {
-                    button_color = v4ic(0.4f);
-                }
-
-                quad(&ui_context.render.vertices, button_position, button_size,
-                     button_color, 0.0f);
-                index_offset_and_count.second += 6;
-
-                tab_position.x +=
-                    x_advance + (tab_padding * 2.0f) + button_size.width + 5.0f;
-            }
-
-            quad_border(&ui_context.render.vertices,
-                        &index_offset_and_count.second, window->position,
-                        top_bar_dimensions, border_color, 1.0f, 0.0f);
-
-            if (should_check_collision && !close_tab && !any_tab_hit &&
-                !any_hit && collision_point_in_aabb(mouse_position, &aabb) &&
-                event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
-            {
-                window->top_bar_offset = event_get_mouse_position();
-                window->top_bar_pressed = true;
-                window->any_holding = true;
-                any_hit = true;
-            }
-        }
-        dock_spaces_index_offsets_and_counts.data[i] = index_offset_and_count;
-        ui_context.current_index_offset =
-            index_offset_and_count.first + index_offset_and_count.second;
-    }
+    const f32 top_bar_height = 22.0f;
+    TabChange tab_change = update_tabs(top_bar_height, &dock_spaces,
+                                       &dock_spaces_index_offsets_and_counts);
 
     rendering_properties_check_and_grow_vertex_buffer(&ui_context.render);
     rendering_properties_check_and_grow_index_buffer(
@@ -2021,11 +2031,9 @@ void ui_context_end()
     render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts,
               top_bar_height);
 
-    if (dock_space_to_change)
+    if (tab_change.dock_space)
     {
-        handle_tab_change_or_close(new_window_focus, close_tab,
-                                   dock_space_to_change, window_to_hide,
-                                   window_to_show);
+        handle_tab_change_or_close(tab_change);
     }
     free(dock_spaces.data);
     free(dock_spaces_index_offsets_and_counts.data);
