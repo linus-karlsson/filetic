@@ -208,9 +208,9 @@ typedef struct CharPtrArray
 
 
 global const V4 clear_color = {
-    .r = 0.1f,
-    .g = 0.1f,
-    .b = 0.1f,
+    .r = 0.07f,
+    .g = 0.07f,
+    .b = 0.07f,
     .a = 1.0f,
 };
 
