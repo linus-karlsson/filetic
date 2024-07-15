@@ -32,7 +32,7 @@ IF (WIN32)
 ELSE()
 ENDIF()
 
-add_executable(${EXE} ${PLATFORM} ${SOURCES} ${STB} "../lib/glad/src/glad.c" "../lib/math/ftic_math.c" "../src/application.c" "../src/buffers.c" "../src/camera.c" "../src/collision.c" "../src/directory.c" "../src/event.c" "../src/font.c" "../src/ftic_guid.c" "../src/ftic_window.c" "../src/hash.c" "../src/hash_table.c" "../src/logging.c" "../src/object_load.c" "../src/opengl_util.c" "../src/rendering.c" "../src/set.c" "../src/shader.c" "../src/texture.c" "../src/thread_queue.c" "../src/util.c" "../src/util.c")
+add_executable(${EXE} ${PLATFORM} ${SOURCES} ${STB} "../lib/glad/src/glad.c" "../lib/math/ftic_math.c" "../src/buffers.c" "../src/camera.c" "../src/collision.c" "../src/directory.c" "../src/font.c" "../src/ftic_guid.c" "../src/ftic_window.c" "../src/hash.c" "../src/hash_table.c" "../src/logging.c" "../src/object_load.c" "../src/opengl_util.c" "../src/rendering.c" "../src/set.c" "../src/shader.c" "../src/texture.c" "../src/thread_queue.c" "../src/util.c" "../src/util.c" )
 
 target_include_directories(${EXE}
     PUBLIC ".."

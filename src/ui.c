@@ -177,11 +177,10 @@ typedef struct UU32Array
 
 global UiContext ui_context = { 0 };
 
-internal f32 set_scroll_offset(const f32 mouse_wheel_y_offset,
-                               const f32 total_height, const f32 area_y,
+internal f32 set_scroll_offset(const f32 total_height, const f32 area_y,
                                f32 offset)
 {
-    const f32 y_offset = mouse_wheel_y_offset * 100.0f;
+    const f32 y_offset = event_get_mouse_wheel_event()->y_offset * 100.0f;
     offset += y_offset;
     offset = clampf32_high(offset, 0.0f);
 
@@ -191,38 +190,36 @@ internal f32 set_scroll_offset(const f32 mouse_wheel_y_offset,
 }
 
 internal f32 smooth_scroll(const f64 delta_time, const f32 offset,
-                           f32 scroll_offset)
+                           const f32 speed, f32 scroll_offset)
 {
-    scroll_offset += (f32)((offset - scroll_offset) * (delta_time * 12.0f));
+    scroll_offset += (f32)((offset - scroll_offset) * (delta_time * speed));
     return scroll_offset;
 }
 
-internal void push_window_to_front(UiContext* context, U32Array* window_array,
-                                   const u32 index)
+internal void push_window_to_front(U32Array* window_array, const u32 index)
 {
-    if ((!window_array->size) || (index == 0))
+    if ((!window_array->size) || (index == 0) || (index >= window_array->size))
     {
         return;
     }
-    u32 temp = window_array->data[(index)];
-    for (u32 i = (index); i >= 1; --i)
+    u32 temp = window_array->data[index];
+    for (u32 i = index; i >= 1; --i)
     {
         window_array->data[i] = window_array->data[i - 1];
     }
     window_array->data[0] = temp;
 }
 
-internal void push_window_to_first_docked(UiContext* context,
-                                          U32Array* window_array,
+internal void push_window_to_first_docked(U32Array* window_array,
                                           const u32 index)
 {
-    if ((!window_array->size) || (index == 0))
+    if ((!window_array->size) || (index == 0) || (index >= window_array->size))
     {
         return;
     }
     u32 index_to_insert = 0;
-    u32 temp = window_array->data[(index)];
-    for (u32 i = (index); i >= 1; --i)
+    u32 temp = window_array->data[index];
+    for (u32 i = index; i >= 1; --i)
     {
         if (ui_window_get(window_array->data[i - 1])->docked)
         {
@@ -234,10 +231,10 @@ internal void push_window_to_first_docked(UiContext* context,
     window_array->data[index_to_insert] = temp;
 }
 
-internal void push_window_to_back(UiContext* context, U32Array* window_array,
-                                  const u32 index)
+internal void push_window_to_back(U32Array* window_array, const u32 index)
 {
-    if ((!window_array->size) || (index == (window_array->size - 1)))
+    if ((!window_array->size) || (index == (window_array->size - 1)) ||
+        (index >= window_array->size))
     {
         return;
     }
@@ -249,20 +246,20 @@ internal void push_window_to_back(UiContext* context, U32Array* window_array,
     window_array->data[window_array->size - 1] = temp;
 }
 
-internal u32 generate_id(const u32 size, U32Array* free_indices,
+internal u32 generate_id(const u32 index, U32Array* free_ids,
                          U32Array* id_to_index)
 {
     u32 id = 0;
-    if (free_indices->size)
+    if (free_ids->size)
     {
-        id = *array_back(free_indices);
-        free_indices->size--;
-        id_to_index->data[id] = size;
+        id = *array_back(free_ids);
+        free_ids->size--;
+        id_to_index->data[id] = index;
     }
     else
     {
         id = id_to_index->size;
-        array_push(id_to_index, size);
+        array_push(id_to_index, index);
     }
     return id;
 }
@@ -1328,8 +1325,7 @@ internal b8 check_window_collisions(const u32 window_index, const u32 i)
                 hover_clicked_index->clicked = mouse_button_clicked;
                 if (!window->docked)
                 {
-                    push_window_to_back(&ui_context,
-                                        &ui_context.last_frame_windows, i);
+                    push_window_to_back(&ui_context.last_frame_windows, i);
                 }
                 ui_context.window_in_focus = window_index;
             }
@@ -1396,7 +1392,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
     if (index_window_dragging != -1)
     {
         ui_context.window_in_focus = get_window_index(index_window_dragging);
-        push_window_to_back(&ui_context, &ui_context.last_frame_windows,
+        push_window_to_back(&ui_context.last_frame_windows,
                             index_window_dragging);
     }
     if (check_collisions && !ui_context.dock_resize_hover &&
@@ -1548,7 +1544,7 @@ internal void check_if_window_should_be_docked()
             window_to_undock->docked = true;
             window_to_undock->release_from_dock_space = false;
         }
-        push_window_to_first_docked(&ui_context, &ui_context.last_frame_windows,
+        push_window_to_first_docked(&ui_context.last_frame_windows,
                                     ui_context.last_frame_windows.size - 1);
     }
     ui_context.dock_side_hit = -1;
@@ -1682,8 +1678,7 @@ internal void sync_current_frame_windows()
         {
             if (ui_context.current_frame_windows.data[j] == window)
             {
-                push_window_to_back(&ui_context,
-                                    &ui_context.current_frame_windows, j--);
+                push_window_to_back(&ui_context.current_frame_windows, j--);
                 ui_context.current_frame_windows.size--;
                 exist = true;
                 break;
@@ -1692,8 +1687,7 @@ internal void sync_current_frame_windows()
 
         if (!exist)
         {
-            push_window_to_back(&ui_context, &ui_context.last_frame_windows,
-                                i--);
+            push_window_to_back(&ui_context.last_frame_windows, i--);
             ui_context.last_frame_windows.size--;
         }
     }
@@ -2196,8 +2190,8 @@ internal void handle_window_top_bar_events(UiWindow* window)
                         if (ui_context.last_frame_windows.data[j] ==
                             window_to_undock->id)
                         {
-                            push_window_to_back(
-                                &ui_context, &ui_context.last_frame_windows, j);
+                            push_window_to_back(&ui_context.last_frame_windows,
+                                                j);
                             break;
                         }
                     }
@@ -2551,15 +2545,15 @@ b8 ui_window_end()
     {
         if (event_get_mouse_wheel_event()->activated && window->area_hit)
         {
-            window->end_scroll_offset = set_scroll_offset(
-                event_get_mouse_wheel_event()->y_offset, window->total_height,
-                window->size.y, window->end_scroll_offset);
+            window->end_scroll_offset =
+                set_scroll_offset(window->total_height, window->size.y,
+                                  window->end_scroll_offset);
         }
         if (ui_context.delta_time < 0.5f)
         {
             window->current_scroll_offset =
                 smooth_scroll(ui_context.delta_time, window->end_scroll_offset,
-                              window->current_scroll_offset);
+                              12.0f, window->current_scroll_offset);
         }
     }
 
@@ -3672,7 +3666,7 @@ b8 ui_window_set_overlay()
     {
         if (ui_context.last_frame_windows.data[i] == window->id)
         {
-            push_window_to_back(&ui_context, &ui_context.last_frame_windows, i);
+            push_window_to_back(&ui_context.last_frame_windows, i);
             ui_context.window_in_focus =
                 ui_context.id_to_index.data[window->id];
         }
