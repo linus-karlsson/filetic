@@ -19,3 +19,5 @@ void ui_test_display_docking();
 void ui_test_remove_window_from_shared_dock_space();
 
 void ui_test_look_for_window_resize();
+
+void ui_test_set_resize_cursor();

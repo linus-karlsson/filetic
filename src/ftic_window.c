@@ -102,6 +102,11 @@ void window_set_cursor(FTicWindow* window, int cursor)
     }
 }
 
+int window_get_cursor()
+{
+    return last_cursor;
+}
+
 void window_set_cursor_position(FTicWindow* window, double x, double y)
 {
     glfwSetCursorPos((GLFWwindow*)window, x, y);

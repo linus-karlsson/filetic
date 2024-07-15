@@ -1046,20 +1046,22 @@ internal void get_window_resize_aabbs(UiWindow* window, AABB* left, AABB* top,
     const f32 size = 6.0f;
     const f32 half_size = size * 0.5f;
     *left = (AABB){
-        .min = v2f(window->position.x - half_size, window->position.y),
-        .size = v2f(size, window->size.height),
+        .min =
+            v2f(window->position.x - half_size, window->position.y - half_size),
+        .size = v2f(size, window->size.height + size),
     };
     *right = (AABB){
         .min = v2f(window->position.x + window->size.width - half_size,
-                   window->position.y),
+                   window->position.y - half_size),
         .size = left->size,
     };
     *top = (AABB){
-        .min = v2f(window->position.x, window->position.y - half_size),
-        .size = v2f(window->size.width, size),
+        .min =
+            v2f(window->position.x - half_size, window->position.y - half_size),
+        .size = v2f(window->size.width + size, size),
     };
     *bottom = (AABB){
-        .min = v2f(window->position.x,
+        .min = v2f(window->position.x - half_size,
                    window->position.y + window->size.height - half_size),
         .size = top->size,
     };
@@ -1754,6 +1756,14 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
         UU32 index_offset_and_count = {
             .first = ui_context.current_index_offset,
         };
+        const b8 in_focus = ui_context.id_to_index.data[window->id] ==
+                            ui_context.window_in_focus;
+        V4 window_border_color = border_color;
+        if (in_focus)
+        {
+            window_border_color = secondary_color;
+        }
+
         if (window->top_bar)
         {
             const V2 top_bar_dimensions =
@@ -1896,6 +1906,9 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                 any_hit = true;
             }
         }
+        quad_border(&ui_context.render.vertices, &index_offset_and_count.second,
+                    window->position, window->size, window_border_color, 1.0f,
+                    0.0f);
         dock_spaces_index_offsets_and_counts->data[i] = index_offset_and_count;
         ui_context.current_index_offset =
             index_offset_and_count.first + index_offset_and_count.second;
@@ -1926,9 +1939,7 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
         render_draw(window->rendering_index_offset,
                     window->rendering_index_count, &scissor);
 
-        scissor.min.y =
-            ui_context.dimensions.y - (window->position.y + top_bar_height);
-        scissor.size = v2f(window->size.width, top_bar_height);
+        scissor.size = window->size;
         UU32 index_offset_and_count =
             dock_spaces_index_offsets_and_counts->data[i];
         render_draw(index_offset_and_count.first, index_offset_and_count.second,
@@ -2027,8 +2038,8 @@ void ui_context_end()
     {
         handle_tab_change_or_close(tab_change);
     }
-    free(dock_spaces.data);
-    free(dock_spaces_index_offsets_and_counts.data);
+    array_free(&dock_spaces);
+    array_free(&dock_spaces_index_offsets_and_counts);
 }
 
 void ui_context_destroy()
@@ -2556,15 +2567,6 @@ b8 ui_window_end()
                               12.0f, window->current_scroll_offset);
         }
     }
-
-    const b8 in_focus = window_index == ui_context.window_in_focus;
-    V4 color = border_color;
-    if (in_focus)
-    {
-        color = secondary_color;
-    }
-    quad_border(&ui_context.render.vertices, &window->rendering_index_count,
-                window->position, window->size, color, 1.0f, 0.0f);
 
     // NOTE(Linus): += also works
     ui_context.current_index_offset =

@@ -526,4 +526,130 @@ void ui_test_remove_window_from_shared_dock_space()
     ui_context.id_to_index.size = 0;
 }
 
-void ui_test_look_for_window_resize();
+void ui_test_set_resize_cursor()
+{
+    u8 resize = RESIZE_NONE;
+    set_resize_cursor(resize);
+    ASSERT_EQUALS(FTIC_NORMAL_CURSOR, window_get_cursor(), EQUALS_FORMAT_I32);
+
+    resize = RESIZE_RIGHT;
+    set_resize_cursor(resize);
+    ASSERT_EQUALS(FTIC_RESIZE_H_CURSOR, window_get_cursor(), EQUALS_FORMAT_I32);
+
+    resize = RESIZE_LEFT;
+    set_resize_cursor(resize);
+    ASSERT_EQUALS(FTIC_RESIZE_H_CURSOR, window_get_cursor(), EQUALS_FORMAT_I32);
+
+    resize = RESIZE_TOP;
+    set_resize_cursor(resize);
+    ASSERT_EQUALS(FTIC_RESIZE_V_CURSOR, window_get_cursor(), EQUALS_FORMAT_I32);
+
+    resize = RESIZE_BOTTOM;
+    set_resize_cursor(resize);
+    ASSERT_EQUALS(FTIC_RESIZE_V_CURSOR, window_get_cursor(), EQUALS_FORMAT_I32);
+
+    resize = RESIZE_BOTTOM | RESIZE_LEFT;
+    set_resize_cursor(resize);
+    ASSERT_EQUALS(FTIC_RESIZE_NESW_CURSOR, window_get_cursor(),
+                  EQUALS_FORMAT_I32);
+
+    resize = RESIZE_BOTTOM | RESIZE_RIGHT;
+    set_resize_cursor(resize);
+    ASSERT_EQUALS(FTIC_RESIZE_NWSE_CURSOR, window_get_cursor(),
+                  EQUALS_FORMAT_I32);
+
+    resize = RESIZE_TOP | RESIZE_LEFT;
+    set_resize_cursor(resize);
+    ASSERT_EQUALS(FTIC_RESIZE_NWSE_CURSOR, window_get_cursor(),
+                  EQUALS_FORMAT_I32);
+
+    resize = RESIZE_TOP | RESIZE_RIGHT;
+    set_resize_cursor(resize);
+    ASSERT_EQUALS(FTIC_RESIZE_NESW_CURSOR, window_get_cursor(),
+                  EQUALS_FORMAT_I32);
+}
+
+void ui_test_look_for_window_resize()
+{
+    UiWindow window = { 0 };
+    window.position = v2i(345.0f);
+    window.size = v2f(200.0f, 448.8f);
+
+    u8 actual = RESIZE_NONE;
+
+    event_inject_mouse_position(v2i(340.0f));
+    u8 resize = look_for_window_resize(&window);
+    actual = resize;
+    ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
+
+    event_inject_mouse_position(v2f(345.0f, 365.0f));
+    resize = look_for_window_resize(&window);
+    actual = resize;
+    ASSERT_EQUALS(RESIZE_LEFT, actual & RESIZE_LEFT, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_LEFT;
+    ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
+
+    event_inject_mouse_position(
+        v2f(window.position.x + window.size.width, 365.0f));
+    resize = look_for_window_resize(&window);
+    actual = resize;
+    ASSERT_EQUALS(RESIZE_RIGHT, actual & RESIZE_RIGHT, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_RIGHT;
+    ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
+
+    event_inject_mouse_position(
+        v2f(window.position.x + (window.size.width * 0.5f), 345.0f));
+    resize = look_for_window_resize(&window);
+    actual = resize;
+    ASSERT_EQUALS(RESIZE_TOP, actual & RESIZE_TOP, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_TOP;
+    ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
+
+    event_inject_mouse_position(
+        v2f(window.position.x + (window.size.width * 0.5f),
+            window.position.y + window.size.height));
+    resize = look_for_window_resize(&window);
+    actual = resize;
+    ASSERT_EQUALS(RESIZE_BOTTOM, actual & RESIZE_BOTTOM, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_BOTTOM;
+    ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
+
+    event_inject_mouse_position(window.position);
+    resize = look_for_window_resize(&window);
+    actual = resize;
+    ASSERT_EQUALS(RESIZE_LEFT, actual & RESIZE_LEFT, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_LEFT;
+    ASSERT_EQUALS(RESIZE_TOP, actual & RESIZE_TOP, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_TOP;
+    ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
+
+    event_inject_mouse_position(v2_add(window.position, window.size));
+    resize = look_for_window_resize(&window);
+    actual = resize;
+    ASSERT_EQUALS(RESIZE_RIGHT, actual & RESIZE_RIGHT, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_RIGHT;
+    ASSERT_EQUALS(RESIZE_BOTTOM, actual & RESIZE_BOTTOM, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_BOTTOM;
+    ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
+
+    event_inject_mouse_position(
+        v2f(window.position.x, window.position.y + window.size.height));
+    resize = look_for_window_resize(&window);
+    actual = resize;
+    ASSERT_EQUALS(RESIZE_LEFT, actual & RESIZE_LEFT, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_LEFT;
+    ASSERT_EQUALS(RESIZE_BOTTOM, actual & RESIZE_BOTTOM, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_BOTTOM;
+    ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
+
+    event_inject_mouse_position(
+        v2f(window.position.x + window.size.width, window.position.y));
+    resize = look_for_window_resize(&window);
+    actual = resize;
+    ASSERT_EQUALS(RESIZE_RIGHT, actual & RESIZE_RIGHT, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_RIGHT;
+    ASSERT_EQUALS(RESIZE_TOP, actual & RESIZE_TOP, EQUALS_FORMAT_U32);
+    actual ^= RESIZE_TOP;
+    ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
+}
+
