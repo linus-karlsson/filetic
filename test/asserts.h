@@ -3,6 +3,7 @@
 
 #define EQUALS_FORMAT_FLOAT "Expected: %f, Actual: %f\n"
 #define EQUALS_FORMAT_U32 "Expected: %u, Actual: %u\n"
+#define EQUALS_FORMAT_I32 "Expected: %d, Actual: %d\n"
 
 #define ASSERT_EQUALS_WITHIN(expected, actually, margin, format)               \
     do                                                                         \

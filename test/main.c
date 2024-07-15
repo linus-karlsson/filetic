@@ -13,6 +13,8 @@ int main(int argc, char** argv)
         ui_test_generate_id();
         ui_test_get_window_index();
         ui_test_set_docking();
+        ui_test_display_docking();
+        ui_test_remove_window_from_shared_dock_space();
     }
     ui_test_end();
 }
