@@ -17,6 +17,7 @@ int main(int argc, char** argv)
         ui_test_remove_window_from_shared_dock_space();
         ui_test_set_resize_cursor();
         ui_test_look_for_window_resize();
+        ui_test_check_window_collisions();
     }
     ui_test_end();
 }

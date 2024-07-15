@@ -7,15 +7,6 @@ global MouseWheelEvent g_mouse_wheel_event = { 0 };
 global V2 g_mouse_position = { 0 };
 global CharArray g_key_buffer = { 0 };
 global CharPtrArray g_drop_buffer = { 0 };
-global b8 g_mouse_button_clicked = false;
-global b8 g_mouse_button_pressed = false;
-global b8 g_mouse_button_pressed_once = false;
-global b8 g_ctrl_and_key_pressed = false;
-global b8 g_ctrl_and_key_range_pressed = false;
-global b8 g_key_clicked = false;
-global b8 g_key_pressed = false;
-global b8 g_key_pressed_once = false;
-global b8 g_key_pressed_repeat = false;
 
 void event_inject_key_event(KeyEvent key_event)
 {
@@ -64,51 +55,6 @@ void event_inject_drop_buffer(CharPtrArray drop_buffer)
     g_drop_buffer = drop_buffer;
 }
 
-void event_inject_mouse_button_clicked(b8 mouse_button_clicked)
-{
-    g_mouse_button_clicked = mouse_button_clicked;
-}
-
-void event_inject_mouse_button_pressed(b8 mouse_button_pressed)
-{
-    g_mouse_button_pressed = mouse_button_pressed;
-}
-
-void event_inject_mouse_button_pressed_once(b8 mouse_button_pressed_once)
-{
-    g_mouse_button_pressed_once = mouse_button_pressed_once;
-}
-
-void event_inject_ctrl_and_key_pressed(b8 ctrl_and_key_pressed)
-{
-    g_ctrl_and_key_pressed = ctrl_and_key_pressed;
-}
-
-void event_inject_ctrl_and_key_range_pressed(b8 ctrl_and_key_range_pressed)
-{
-    g_ctrl_and_key_range_pressed = ctrl_and_key_range_pressed;
-}
-
-void event_inject_key_clicked(b8 key_clicked)
-{
-    g_key_clicked = key_clicked;
-}
-
-void event_inject_key_pressed(b8 key_pressed)
-{
-    g_key_pressed = key_pressed;
-}
-
-void event_inject_key_pressed_once(b8 key_pressed_once)
-{
-    g_key_pressed_once = key_pressed_once;
-}
-
-void event_inject_key_pressed_repeat(b8 key_pressed_repeat)
-{
-    g_key_pressed_repeat = key_pressed_repeat;
-}
-
 const KeyEvent* event_get_key_event()
 {
     return &g_key_event;
@@ -146,46 +92,61 @@ const CharPtrArray* event_get_drop_buffer()
 
 b8 event_is_mouse_button_clicked(i32 button)
 {
-    return g_mouse_button_clicked;
-}
-
-b8 event_is_mouse_button_pressed(i32 button)
-{
-    return g_mouse_button_pressed;
+    const MouseButtonEvent* event = event_get_mouse_button_event();
+    return event->activated && event->action == FTIC_RELEASE &&
+           event->button == button;
 }
 
 b8 event_is_mouse_button_pressed_once(i32 button)
 {
-    return g_mouse_button_pressed_once;
+    const MouseButtonEvent* event = event_get_mouse_button_event();
+    return event->activated && event->action == FTIC_PRESS &&
+           event->button == button;
+}
+
+b8 event_is_mouse_button_pressed(i32 button)
+{
+    const MouseButtonEvent* event = event_get_mouse_button_event();
+    return event->action == FTIC_PRESS && event->button == button;
 }
 
 b8 event_is_ctrl_and_key_pressed(i32 key)
 {
-    return g_ctrl_and_key_pressed;
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == 1 && event->ctrl_pressed &&
+           event->key == key;
 }
 
 b8 event_is_ctrl_and_key_range_pressed(i32 key_low, i32 key_high)
 {
-    return g_ctrl_and_key_range_pressed;
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == 1 && event->ctrl_pressed &&
+           (closed_interval(key_low, event->key, key_high));
 }
 
 b8 event_is_key_clicked(i32 key)
 {
-    return g_key_clicked;
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == FTIC_RELEASE &&
+           event->key == key;
 }
 
 b8 event_is_key_pressed(i32 key)
 {
-    return g_key_pressed;
+    return true; 
 }
 
 b8 event_is_key_pressed_once(i32 key)
 {
-    return g_key_pressed_once;
+    const KeyEvent* event = event_get_key_event();
+    return event->activated && event->action == FTIC_PRESS && event->key == key;
 }
 
 b8 event_is_key_pressed_repeat(i32 key)
 {
-    return g_key_pressed_repeat;
+    const KeyEvent* event = event_get_key_event();
+    return event->activated &&
+           (event->action == FTIC_PRESS || event->action == FTIC_REPEAT) &&
+           event->key == key;
 }
 

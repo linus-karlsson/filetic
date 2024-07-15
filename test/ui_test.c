@@ -653,3 +653,93 @@ void ui_test_look_for_window_resize()
     ASSERT_EQUALS(RESIZE_NONE, actual, EQUALS_FORMAT_U32);
 }
 
+void ui_test_check_window_collisions()
+{
+    UiWindow window = { .hide = true };
+    array_create(&ui_context.windows, 10);
+    array_create(&ui_context.window_aabbs, 10);
+    array_create(&ui_context.window_hover_clicked_indices, 10);
+
+    array_push(&ui_context.windows, window);
+    b8 result = check_window_collisions(0, 0);
+    ASSERT_EQUALS(false, result, EQUALS_FORMAT_U32);
+
+    window.hide = false;
+    window.position = v2i(271.0f);
+    window.size = v2f(271.0f, 498.0f);
+    event_inject_mouse_position(
+        v2f(window.position.x, window.position.y + 30.0f));
+    window.resizeable = true;
+
+    ui_context.windows.size = 0;
+    array_push(&ui_context.windows, window);
+
+    UiWindow* window_to_check = array_back(&ui_context.windows);
+    result = check_window_collisions(0, 0);
+    ASSERT_EQUALS(true, result, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(FTIC_RESIZE_H_CURSOR, window_get_cursor(), EQUALS_FORMAT_I32);
+    ASSERT_EQUALS(RESIZE_NONE, window_to_check->resize_dragging,
+                  EQUALS_FORMAT_U32);
+
+    MouseButtonEvent mouse_button_event = {
+        .button = FTIC_MOUSE_BUTTON_LEFT,
+        .action = FTIC_PRESS,
+        .activated = true,
+    };
+    event_inject_mouse_button_event(mouse_button_event);
+
+    result = check_window_collisions(0, 0);
+    ASSERT_EQUALS(true, result, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(FTIC_RESIZE_H_CURSOR, window_get_cursor(), EQUALS_FORMAT_I32);
+    ASSERT_EQUALS(RESIZE_LEFT, window_to_check->resize_dragging & RESIZE_LEFT,
+                  EQUALS_FORMAT_U32);
+    window_to_check->resize_dragging ^= RESIZE_LEFT;
+    ASSERT_EQUALS(RESIZE_NONE, window_to_check->resize_dragging,
+                  EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(event_get_mouse_position().x,
+                  window_to_check->resize_pointer_offset.x,
+                  EQUALS_FORMAT_FLOAT);
+    ASSERT_EQUALS(event_get_mouse_position().y,
+                  window_to_check->resize_pointer_offset.y,
+                  EQUALS_FORMAT_FLOAT);
+    ASSERT_EQUALS(window_to_check->resize_size_offset.width,
+                  window_to_check->size.width, EQUALS_FORMAT_FLOAT);
+    ASSERT_EQUALS(window_to_check->resize_size_offset.height,
+                  window_to_check->size.height, EQUALS_FORMAT_FLOAT);
+
+    AABBArray temp_aabbs = { 0 };
+    array_create(&temp_aabbs, 10);
+
+    array_push(&ui_context.window_aabbs, temp_aabbs);
+
+    AABBArray* aabbs = array_back(&ui_context.window_aabbs);
+    AABB aabb = {
+        .min = window.position,
+        .size = window.size,
+    };
+    array_push(aabbs, aabb);
+
+    // Area is not hit
+    mouse_button_event.activated = false;
+    event_inject_mouse_button_event(mouse_button_event);
+    event_inject_mouse_position(v2i(200.0f));
+    result = check_window_collisions(0, 0);
+    ASSERT_EQUALS(false, result, EQUALS_FORMAT_U32);
+
+    array_push(aabbs, aabb);
+
+    V2 half_size = v2_s_multi(window.size, 0.5f);
+    event_inject_mouse_position(v2_add(window.position, half_size));
+    result = check_window_collisions(0, 0);
+    ASSERT_EQUALS(true, result, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(true, window_to_check->area_hit, EQUALS_FORMAT_U32);
+    HoverClickedIndex* hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data;
+    ASSERT_EQUALS(1, hover_clicked_index->index, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(true, hover_clicked_index->hover, EQUALS_FORMAT_U32);
+
+    array_free(aabbs);
+    array_free(&ui_context.windows);
+    array_free(&ui_context.window_aabbs);
+    array_free(&ui_context.window_hover_clicked_indices);
+}
