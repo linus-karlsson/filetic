@@ -126,6 +126,9 @@ typedef struct ApplicationContext
     u32 quick_access_window;
     u32 search_result_window;
     u32 preview_window;
+    u32 menu_window;
+
+    b8 open_menu_window;
 
     DropDownMenu2 context_menu;
     b8 context_menu_open;
@@ -137,9 +140,8 @@ typedef struct ApplicationContext
     DropDownMenu2 suggestions;
     SuggestionSelectionData suggestion_data;
 
-    DropDownMenu2 top_bar_menu;
-    b8 top_bar_menu_open;
-
+    DropDownMenu2 top_bar_window_menu;
+    b8 top_bar_window_menu_open;
 } ApplicationContext;
 
 u8* application_initialize(ApplicationContext* application);

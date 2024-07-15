@@ -176,7 +176,7 @@ internal void open_window(ApplicationContext* app, u32 window_id)
     ui_window_start_size_animation(window, window->size, end_size);
 }
 
-internal b8 top_bar_menu_selection(u32 index, b8 hit, b8 should_close,
+internal b8 top_bar_window_menu_selection(u32 index, b8 hit, b8 should_close,
                                    b8 item_clicked, V4* text_color, void* data)
 {
     ApplicationContext* app = (ApplicationContext*)data;
@@ -200,6 +200,27 @@ internal b8 top_bar_menu_selection(u32 index, b8 hit, b8 should_close,
                     app->show_search_page = true;
                     open_window(app, app->quick_access_window);
                 }
+                return true;
+            }
+        }
+    }
+    return should_close;
+}
+
+internal b8 top_bar_menu_selection(u32 index, b8 hit, b8 should_close,
+                                   b8 item_clicked, V4* text_color, void* data)
+{
+    ApplicationContext* app = (ApplicationContext*)data;
+    if (item_clicked)
+    {
+        switch (index)
+        {
+            case 0:
+            {
+                return true;
+            }
+            case 1:
+            {
                 return true;
             }
         }
@@ -461,6 +482,8 @@ u8* application_initialize(ApplicationContext* app)
     app->quick_access_window = app->windows.data[2];
     app->search_result_window = app->windows.data[3];
     app->preview_window = app->windows.data[4];
+    app->menu_window = app->windows.data[5];
+
 
     array_create(&app->free_window_ids, 10);
     array_create(&app->tab_windows, 20);
@@ -552,20 +575,20 @@ u8* application_initialize(ApplicationContext* app)
     };
     array_create(&app->suggestion_data.items, 6);
 
-    app->top_bar_menu = (DropDownMenu2){
+    app->top_bar_window_menu = (DropDownMenu2){
         .index_count = &app->main_index_count,
         .tab_index = -1,
-        .menu_options_selection = top_bar_menu_selection,
+        .menu_options_selection = top_bar_window_menu_selection,
         .render = &app->main_render,
     };
-    array_create(&app->top_bar_menu.options, static_array_size(options));
     char* top_bar_menu_options[] = {
         "Quick access",
         "Search result",
     };
-    array_push(&app->top_bar_menu.options,
+    array_create(&app->top_bar_window_menu.options, static_array_size(top_bar_menu_options));
+    array_push(&app->top_bar_window_menu.options,
                string_copy_d(top_bar_menu_options[0]));
-    array_push(&app->top_bar_menu.options,
+    array_push(&app->top_bar_window_menu.options,
                string_copy_d(top_bar_menu_options[1]));
 
     return font_bitmap;
@@ -587,9 +610,9 @@ void application_uninitialize(ApplicationContext* app)
     {
         free(app->context_menu.options.data[i]);
     }
-    for (u32 i = 0; i < app->top_bar_menu.options.size; ++i)
+    for (u32 i = 0; i < app->top_bar_window_menu.options.size; ++i)
     {
-        free(app->top_bar_menu.options.data[i]);
+        free(app->top_bar_window_menu.options.data[i]);
     }
     free(app->windows.data);
     free(app->tab_windows.data);

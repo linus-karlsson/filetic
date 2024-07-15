@@ -577,13 +577,13 @@ b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
         drop_down_menu->position.x -= diff;
     }
 
-    drop_down_menu->aabb = quad_gradiant_t_b(
-        &drop_down_menu->render->vertices,
-        v2f(drop_down_menu->position.x - drop_down_border_width,
-            drop_down_menu->position.y - drop_down_border_width),
-        v2f(drop_down_width + border_extra_padding,
-            current_y + border_extra_padding),
-        v4ic(0.15f), clear_color, 0.0f);
+    drop_down_menu->aabb =
+        quad(&drop_down_menu->render->vertices,
+             v2f(drop_down_menu->position.x - drop_down_border_width,
+                 drop_down_menu->position.y - drop_down_border_width),
+             v2f(drop_down_width + border_extra_padding,
+                 current_y + border_extra_padding),
+             v4a(v4ic(0.15f), 0.92f), 0.0f);
     *drop_down_menu->index_count += 6;
 
     quad_border_gradiant(&drop_down_menu->render->vertices,
@@ -1116,7 +1116,7 @@ int main(int argc, char** argv)
              collision_point_in_aabb(app.mouse_position,
                                      &app.suggestions.aabb) ||
              collision_point_in_aabb(app.mouse_position,
-                                     &app.top_bar_menu.aabb)))
+                                     &app.top_bar_window_menu.aabb)))
         {
             check_collision = false;
         }
@@ -1213,15 +1213,15 @@ int main(int argc, char** argv)
             app.context_menu.aabb = (AABB){ 0 };
         }
 
-        b8 top_bar_open = app.top_bar_menu_open;
-        if (app.top_bar_menu_open)
+        b8 top_bar_window_menu_open = app.top_bar_window_menu_open;
+        if (app.top_bar_window_menu_open)
         {
-            app.top_bar_menu_open =
-                !drop_down_menu_add(&app.top_bar_menu, &app, &app);
+            app.top_bar_window_menu_open =
+                !drop_down_menu_add(&app.top_bar_window_menu, &app, &app);
         }
         else
         {
-            app.top_bar_menu.aabb = (AABB){ 0 };
+            app.top_bar_window_menu.aabb = (AABB){ 0 };
         }
 
         const char* directory_to_drop_in = NULL;
@@ -1257,6 +1257,21 @@ int main(int argc, char** argv)
         ui_context_begin(app.dimensions, &dock_space, app.delta_time,
                          check_collision);
         {
+            UiWindow* top_bar_menu = ui_window_get(app.menu_window);
+            if (app.open_menu_window || top_bar_menu->size_animation_on)
+            {
+                if (ui_window_begin(app.menu_window, NULL, false, false))
+                {
+                    if (ui_window_set_overlay() && app.open_menu_window)
+                    {
+                        ui_window_start_size_animation(
+                            top_bar_menu, top_bar_menu->size,
+                            v2f(top_bar_menu->size.width, 0.0f));
+                        app.open_menu_window = false;
+                    }
+                    ui_window_end();
+                }
+            }
 
             UiWindow* top_bar = ui_window_get(app.top_bar_window);
             top_bar->position = v2d();
@@ -1270,11 +1285,26 @@ int main(int argc, char** argv)
                 V2 drop_down_position = v2d();
                 i32 index_clicked =
                     ui_window_add_menu_bar(&menu_values, &drop_down_position);
-                if (index_clicked != -1)
+                if (index_clicked == 0)
                 {
-                    app.top_bar_menu_open = top_bar_open ^ true;
-                    app.top_bar_menu.position = drop_down_position;
-                    app.top_bar_menu.x = 0.0f;
+                    top_bar_menu->position = drop_down_position;
+                    ui_window_start_size_animation(
+                        top_bar_menu, v2f(200.0f, 0.0f), v2i(200.0f));
+                    top_bar_menu->top_color.a = 0.95f;
+                    top_bar_menu->bottom_color.a = 0.95f;
+
+                    app.open_menu_window ^= true;
+
+                    app.top_bar_window_menu_open = false;
+                    app.top_bar_window_menu.x = 0.0f;
+                }
+                else if (index_clicked == 1)
+                {
+                    app.open_menu_window = false;
+
+                    app.top_bar_window_menu_open ^= true;
+                    app.top_bar_window_menu.position = drop_down_position;
+                    app.top_bar_window_menu.x = 0.0f;
                 }
 
                 AABB button_aabb = { 0 };
@@ -1672,8 +1702,10 @@ int main(int argc, char** argv)
             if (directory_look_for_directory_change(
                     current->directory_history.change_handle))
             {
-                directory_reload(directory_current(&current->directory_history));
-                directory_history_update_directory_change_handle(&current->directory_history);
+                directory_reload(
+                    directory_current(&current->directory_history));
+                directory_history_update_directory_change_handle(
+                    &current->directory_history);
             }
         }
 
