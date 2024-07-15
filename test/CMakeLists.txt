@@ -23,7 +23,7 @@ ELSE()
 ENDIF()
 
 file(GLOB STB "../lib/stb/*.c")
-file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/*.c")
+file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.c")
 
 add_subdirectory("../lib/glfw" "${CMAKE_BINARY_DIR}/glfw-build")
 
