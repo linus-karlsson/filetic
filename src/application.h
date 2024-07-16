@@ -144,6 +144,8 @@ typedef struct ApplicationContext
     b8 top_bar_window_menu_open;
 } ApplicationContext;
 
+void application_run();
+
 u8* application_initialize(ApplicationContext* application);
 void application_uninitialize(ApplicationContext* application);
 void application_begin_frame(ApplicationContext* application);
