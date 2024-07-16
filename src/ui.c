@@ -51,8 +51,6 @@ global const V4 arrow_right_icon_co = icon_3_co(384.0f, 128.0f);
     };
 global const V4 png_icon_co = icon_4_co(512.0f, 128.0f);
 
-global const f32 top_bar_height = 22.0f;
-
 typedef struct UiWindowArray
 {
     u32 size;
@@ -152,8 +150,9 @@ typedef struct UiContext
     f64 delta_time;
 
     // TODO: nested ones
-    f32 padding;
+    f32 row_padding;
     f32 row_current;
+    f32 column_padding;
     f32 column_current;
     b8 row;
     b8 column;
@@ -165,6 +164,8 @@ typedef struct UiContext
     b8 dock_resize;
     b8 dock_resize_hover;
     b8 check_collisions;
+
+    b8 animation_off;
 
 } UiContext;
 
@@ -1361,7 +1362,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
 
     ui_context.row = false;
     ui_context.row_current = 0;
-    ui_context.padding = 0.0f;
+    ui_context.row_padding = 0.0f;
 
     for (u32 i = 0; i < ui_context.window_hover_clicked_indices.size; ++i)
     {
@@ -1746,6 +1747,8 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
         !ui_context.dock_resize && !ui_context.any_window_top_bar_hold &&
         !ui_context.any_window_hold;
 
+    const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
+
     b8 any_tab_hit = false;
     b8 any_hit = false;
     for (i32 i = ((i32)dock_spaces->size) - 1; i >= 0; --i)
@@ -1919,6 +1922,8 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
 internal void render_ui(const DockNodePtrArray* dock_spaces,
                         const UU32Array* dock_spaces_index_offsets_and_counts)
 {
+    const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
+
     render_begin_draw(&ui_context.render.render, &ui_context.mvp);
     for (u32 i = 0; i < dock_spaces->size; ++i)
     {
@@ -1951,29 +1956,13 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
     render_end_draw(&ui_context.render.render);
 }
 
-void handle_tab_change_or_close(TabChange tab_change)
+internal void handle_tab_change_or_close(TabChange tab_change)
 {
     u32 focused_window_id = 0;
     b8 change_window_to_focus = false;
     if (tab_change.close_tab)
     {
-        if (tab_change.dock_space->windows.size == 1)
-        {
-            if (tab_change.window_to_hide->docked)
-            {
-                dock_node_remove_node(ui_context.dock_tree,
-                                      tab_change.dock_space);
-            }
-            tab_change.window_to_hide->closing = true;
-            tab_change.window_to_hide->hide = false;
-            tab_change.window_to_hide->docked = false;
-        }
-        else
-        {
-            focused_window_id = remove_window_from_shared_dock_space(
-                tab_change.window_focus_index, tab_change.window_to_hide,
-                tab_change.dock_space);
-        }
+        ui_window_close(tab_change.window_to_hide->id);
     }
     else
     {
@@ -2047,6 +2036,11 @@ void ui_context_destroy()
     save_layout();
 }
 
+void ui_context_set_animation(b8 on)
+{
+    ui_context.animation_off = !on;
+}
+
 u32 ui_window_create()
 {
     u32 id = generate_id(ui_context.windows.size, &ui_context.free_indices,
@@ -2081,6 +2075,7 @@ internal void window_animate(UiWindow* window)
     const f32 animation_speed = 4.0f;
     if (window->size_animation_on)
     {
+        window->size_animation_precent += 1.0f * ui_context.animation_off;
         if (window->size_animation_precent >= 1.0f)
         {
             window->size = window->size_after_animation;
@@ -2104,6 +2099,7 @@ internal void window_animate(UiWindow* window)
     }
     if (window->position_animation_on)
     {
+        window->position_animation_precent += 1.0f * ui_context.animation_off;
         if (window->position_animation_precent >= 1.0f)
         {
             window->position = window->position_after_animation;
@@ -2125,6 +2121,7 @@ internal V2 directory_item_animate_position(DirectoryItem* item)
 {
     const f32 animation_speed = 5.0f;
     V2 position = v2d();
+    item->animation_precent += 1.0f * ui_context.animation_off;
     if (item->animation_precent >= 1.0f)
     {
         position = item->after_animation;
@@ -2142,6 +2139,7 @@ internal V2 directory_item_animate_position(DirectoryItem* item)
 
 internal void handle_window_top_bar_events(UiWindow* window)
 {
+    const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
     if (window->top_bar_hold)
     {
         window->position =
@@ -2329,6 +2327,7 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
     }
     window_animate(window);
 
+    const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
     window->first_item_position = window->position;
     window->first_item_position.y += top_bar_height * top_bar;
 
@@ -2585,7 +2584,7 @@ void ui_window_row_begin(const f32 padding)
 {
     ui_context.row = true;
     ui_context.row_current = 0;
-    ui_context.padding = padding;
+    ui_context.row_padding = padding;
 }
 
 f32 ui_window_row_end()
@@ -2593,7 +2592,23 @@ f32 ui_window_row_end()
     const f32 result = ui_context.row_current;
     ui_context.row = false;
     ui_context.row_current = 0;
-    ui_context.padding = 0.0f;
+    ui_context.row_padding = 0.0f;
+    return result;
+}
+
+void ui_window_column_begin(const f32 padding)
+{
+    ui_context.column = true;
+    ui_context.column_current = 0;
+    ui_context.column_padding = padding;
+}
+
+f32 ui_window_column_end()
+{
+    const f32 result = ui_context.column_current;
+    ui_context.column = false;
+    ui_context.column_current = 0;
+    ui_context.column_padding = 0.0f;
     return result;
 }
 
@@ -2610,10 +2625,19 @@ b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color,
 
     v2_add_equal(&position, window->first_item_position);
 
-    if (ui_context.row)
+    if (ui_context.column || ui_context.row)
     {
-        position.x += ui_context.row_current;
-        ui_context.row_current += size.width + ui_context.padding;
+        if (ui_context.row)
+        {
+            position.x += ui_context.row_current;
+            ui_context.row_current += size.width + ui_context.row_padding;
+        }
+        else
+        {
+            position.y += ui_context.column_current;
+            ui_context.column_current +=
+                size.height + ui_context.column_padding;
+        }
     }
 
     V4 button_color = v4ic(1.0f);
@@ -2854,10 +2878,19 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
 
     v2_add_equal(&position, window->first_item_position);
 
-    if (ui_context.row)
+    if (ui_context.column || ui_context.row)
     {
-        position.x += ui_context.row_current;
-        ui_context.row_current += size.width + ui_context.padding;
+        if (ui_context.row)
+        {
+            position.x += ui_context.row_current;
+            ui_context.row_current += size.width + ui_context.row_padding;
+        }
+        else
+        {
+            position.y += ui_context.column_current;
+            ui_context.column_current +=
+                size.height + ui_context.column_padding;
+        }
     }
 
     if (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
@@ -3585,9 +3618,16 @@ void ui_window_add_text(V2 position, const char* text, b8 scrolling)
     V2 relative_position = position;
     v2_add_equal(&position, window->first_item_position);
 
-    if (ui_context.row)
+    if (ui_context.column || ui_context.row)
     {
-        position.x += ui_context.row_current;
+        if (ui_context.row)
+        {
+            position.x += ui_context.row_current;
+        }
+        else
+        {
+            position.y += ui_context.column_current;
+        }
     }
 
     position.y += window->current_scroll_offset + ui_context.font.pixel_height;
@@ -3600,9 +3640,18 @@ void ui_window_add_text(V2 position, const char* text, b8 scrolling)
                         1.0f, ui_context.font.line_height, &new_lines,
                         &x_advance, NULL, &ui_context.render.vertices);
 
-    if (ui_context.row)
+    if (ui_context.column || ui_context.row)
     {
-        ui_context.row_current += x_advance + ui_context.padding;
+        if (ui_context.row)
+        {
+            ui_context.row_current += x_advance + ui_context.row_padding;
+        }
+        else
+        {
+            ui_context.column_current +=
+                ((new_lines + 1) * ui_context.font.line_height) +
+                ui_context.column_padding;
+        }
     }
 
     if (scrolling)
@@ -3643,7 +3692,7 @@ void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text,
 
     if (ui_context.row)
     {
-        ui_context.row_current += x_advance + ui_context.padding;
+        ui_context.row_current += x_advance + ui_context.row_padding;
     }
 
     if (scrolling)
@@ -3732,10 +3781,21 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color,
                             max(dimensions->height, pixel_height));
 
     *dimensions = end_dimensions;
-    if (ui_context.row)
+
+    if (ui_context.column || ui_context.row)
     {
-        position.x += ui_context.row_current;
-        ui_context.row_current += end_dimensions.width + ui_context.padding;
+        if (ui_context.row)
+        {
+            position.x += ui_context.row_current;
+            ui_context.row_current +=
+                end_dimensions.width + ui_context.row_padding;
+        }
+        else
+        {
+            position.y += ui_context.column_current;
+            ui_context.column_current +=
+                end_dimensions.height + ui_context.column_padding;
+        }
     }
 
     b8 collided = hover_clicked_index.index == (i32)aabbs->size;
@@ -3819,12 +3879,128 @@ void ui_window_add_icon(V2 position, const V2 size,
 
     v2_add_equal(&position, window->first_item_position);
 
-    if (ui_context.row)
+    if (ui_context.column || ui_context.row)
     {
-        position.x += ui_context.row_current;
-        ui_context.row_current += size.width + ui_context.padding;
+        if (ui_context.row)
+        {
+            position.x += ui_context.row_current;
+            ui_context.row_current += size.width + ui_context.row_padding;
+        }
+        else
+        {
+            position.y += ui_context.column_current;
+            ui_context.column_current +=
+                size.height + ui_context.column_padding;
+        }
     }
+
     quad_co(&ui_context.render.vertices, position, size, v4ic(1.0f),
             texture_coordinates, texture_index);
     window->rendering_index_count += 6;
+}
+
+void ui_window_add_switch(V2 position, b8* selected, f32* x)
+{
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+    HoverClickedIndex hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data[window_index];
+
+    v2_add_equal(&position, window->first_item_position);
+
+    V2 size = v2f(40.0f, 20.0f);
+    if (ui_context.row)
+    {
+        position.x += ui_context.row_current;
+        ui_context.row_current += size.width + ui_context.row_padding;
+    }
+
+    b8 hover = hover_clicked_index.index == (i32)aabbs->size;
+
+    if (hover && hover_clicked_index.clicked)
+    {
+        *selected ^= true;
+        *x = 0.0f;
+    }
+
+    AABB aabb = quad(&ui_context.render.vertices, position, size,
+                     high_light_color, 0.0f);
+    array_push(aabbs, aabb);
+    window->rendering_index_count += 6;
+
+    V4 color = *selected ? secondary_color : border_color;
+    V2 t_position = aabb.min;
+
+    if (*selected)
+    {
+        t_position = v2_lerp(
+            aabb.min, v2f(aabb.min.x + (aabb.size.width * 0.5f), aabb.min.y),
+            ease_out_cubic(*x));
+        *x = clampf32_high(*x + (f32)ui_context.delta_time * 5.0f, 1.0f);
+    }
+    else
+    {
+        t_position =
+            v2_lerp(v2f(aabb.min.x + (aabb.size.width * 0.5f), aabb.min.y),
+                    aabb.min, ease_out_cubic(*x));
+        *x = clampf32_high(*x + (f32)ui_context.delta_time * 5.0f, 1.0f);
+    }
+    quad(&ui_context.render.vertices, t_position,
+         v2f(aabb.size.width * 0.5f, aabb.size.height), color, 0.0f);
+    window->rendering_index_count += 6;
+}
+
+b8 ui_window_add_drop_down(V2 position, b8* open)
+{
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+    HoverClickedIndex hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data[window_index];
+
+    v2_add_equal(&position, window->first_item_position);
+    return *open;
+}
+
+void ui_window_close(u32 window_id)
+{
+    const u32 window_index = ui_context.id_to_index.data[window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    DockNode* dock_space = window->dock_node;
+    if (dock_space->windows.size == 1)
+    {
+        if (window->docked)
+        {
+            dock_node_remove_node(ui_context.dock_tree, dock_space);
+        }
+        window->closing = true;
+        window->hide = false;
+        window->docked = false;
+        V2 end_position =
+            v2_add(window->position, v2_s_multi(window->size, 0.5f));
+        ui_window_start_position_animation(window, window->position,
+                                           end_position);
+        ui_window_start_size_animation(window, window->size, v2d());
+    }
+    else
+    {
+        u32 i = 0;
+        for (; i < dock_space->windows.size; ++i)
+        {
+            if (dock_space->windows.data[i] == window_id)
+            {
+                break;
+            }
+        }
+        ftic_assert(i != dock_space->windows.size);
+        u32 focused_window_id =
+            remove_window_from_shared_dock_space(i, window, dock_space);
+        ui_context.window_in_focus =
+            ui_context.id_to_index.data[focused_window_id];
+
+        window->release_from_dock_space = false;
+    }
 }

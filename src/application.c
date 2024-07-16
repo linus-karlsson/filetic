@@ -421,7 +421,8 @@ internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
     const u32 drop_down_item_count = drop_down_menu->options.size;
     if (drop_down_item_count == 0) return true;
 
-    drop_down_menu->x += (f32)(application->delta_time * 2.0);
+    drop_down_menu->x += (f32)(application->delta_time * 5.0);
+    drop_down_menu->x = clampf32_high(drop_down_menu->x, 1.0f);
 
     const f32 drop_down_item_height = 40.0f;
     const f32 end_height = drop_down_item_count * drop_down_item_height;
@@ -598,7 +599,8 @@ internal void get_suggestions(const FontTTF* font, const V2 position,
         v2f(position.x + x_advance, position.y + font->pixel_height + 20.0f);
 }
 
-internal void set_input_buffer_to_current_directory(const char* path, InputBuffer* input)
+internal void set_input_buffer_to_current_directory(const char* path,
+                                                    InputBuffer* input)
 {
     input->buffer.size = 0;
     const u32 parent_length = (u32)strlen(path);
@@ -636,6 +638,19 @@ internal b8 get_word(const FileAttrib* file, u32* index, CharArray* buffer,
     return true;
 }
 
+typedef struct UserKeyWords
+{
+    V4 color;
+    CharPtrArray words;
+} UserKeyWords;
+
+typedef struct UserKeyWordsArray
+{
+    u32 size;
+    u32 capacity;
+    UserKeyWords* data;
+} UserKeyWordsArray;
+
 global const char* primitive_key_words[] = {
     "const", "continue", "break", "for",  "if",     "static",
     "else",  "struct",   "enum",  "case", "switch", "while",
@@ -651,7 +666,7 @@ global const char* define_key_words[] = {
 };
 
 internal b8 search_keywords(const char** keywords, const u32 keyword_count,
-                   const CharArray* word, UU32* start_end)
+                            const CharArray* word, UU32* start_end)
 {
     for (u32 i = 0; i < keyword_count; ++i)
     {
@@ -725,40 +740,6 @@ internal void word_to_color(const CharArray* word, ColoredCharacterArray* array)
     V4 color2 = color;
     V4 function_color = v4f(0.686f, 0.686f, 0.0f, 1.0f);
     b8 found = false;
-#if 0
-    for (u32 i = 0; i < static_array_size(primitive_key_words); ++i)
-    {
-        if (strcmp(word->data, primitive_key_words[i]) == 0)
-        {
-            color = v4f(1.0f, 0.34117f, 0.2f, 1.0f);
-            found = true;
-            break;
-        }
-    }
-    if (!found)
-    {
-        for (u32 i = 0; i < static_array_size(user_key_words); ++i)
-        {
-            if (strcmp(word->data, user_key_words[i]) == 0)
-            {
-                color = v4f(1.0f, 0.527f, 0.0f, 1.0f);
-                found = true;
-                break;
-            }
-        }
-    }
-    if (found)
-    {
-        for (u32 i = 0; i < word->size; ++i)
-        {
-            ColoredCharacter value = {
-                .color = color,
-                .character = word->data[i],
-            };
-            array_push(array, value);
-        }
-    }
-#else
     UU32 start_end = { 0 };
     found = contains_key_word(word, &color, &start_end);
     if (found)
@@ -805,7 +786,6 @@ internal void word_to_color(const CharArray* word, ColoredCharacterArray* array)
             array_push(array, value);
         }
     }
-#endif
     else
     {
         u32 index = 0;
@@ -1380,6 +1360,7 @@ u8* application_initialize(ApplicationContext* app)
     app->search_result_window = app->windows.data[3];
     app->preview_window = app->windows.data[4];
     app->menu_window = app->windows.data[5];
+    app->windows_window = app->windows.data[6];
 
     array_create(&app->free_window_ids, 10);
     array_create(&app->tab_windows, 20);
@@ -1471,23 +1452,6 @@ u8* application_initialize(ApplicationContext* app)
     };
     array_create(&app->suggestion_data.items, 6);
 
-    app->top_bar_window_menu = (DropDownMenu2){
-        .index_count = &app->main_index_count,
-        .tab_index = -1,
-        .menu_options_selection = top_bar_window_menu_selection,
-        .render = &app->main_render,
-    };
-    char* top_bar_menu_options[] = {
-        "Quick access",
-        "Search result",
-    };
-    array_create(&app->top_bar_window_menu.options,
-                 static_array_size(top_bar_menu_options));
-    array_push(&app->top_bar_window_menu.options,
-               string_copy_d(top_bar_menu_options[0]));
-    array_push(&app->top_bar_window_menu.options,
-               string_copy_d(top_bar_menu_options[1]));
-
     return font_bitmap;
 }
 
@@ -1506,10 +1470,6 @@ void application_uninitialize(ApplicationContext* app)
     for (u32 i = 0; i < app->context_menu.options.size; ++i)
     {
         free(app->context_menu.options.data[i]);
-    }
-    for (u32 i = 0; i < app->top_bar_window_menu.options.size; ++i)
-    {
-        free(app->top_bar_window_menu.options.data[i]);
     }
     free(app->windows.data);
     free(app->tab_windows.data);
@@ -1826,9 +1786,7 @@ void application_run()
             (collision_point_in_aabb(app.mouse_position,
                                      &app.context_menu.aabb) ||
              collision_point_in_aabb(app.mouse_position,
-                                     &app.suggestions.aabb) ||
-             collision_point_in_aabb(app.mouse_position,
-                                     &app.top_bar_window_menu.aabb)))
+                                     &app.suggestions.aabb)))
         {
             check_collision = false;
         }
@@ -1925,17 +1883,6 @@ void application_run()
             app.context_menu.aabb = (AABB){ 0 };
         }
 
-        b8 top_bar_window_menu_open = app.top_bar_window_menu_open;
-        if (app.top_bar_window_menu_open)
-        {
-            app.top_bar_window_menu_open =
-                !drop_down_menu_add(&app.top_bar_window_menu, &app, &app);
-        }
-        else
-        {
-            app.top_bar_window_menu.aabb = (AABB){ 0 };
-        }
-
         const char* directory_to_drop_in = NULL;
 #if 0
         if (main_list_return_value.hit_index >= 0 &&
@@ -1986,8 +1933,64 @@ void application_run()
                         .min = v2i(10.0f),
                         .size = v2f(200.0f, 40.0f),
                     };
-                    ui_window_add_text(row.min, "Hello", false);
 
+                    ui_window_row_begin(20.0f);
+                    {
+                        ui_window_add_text(row.min, "Animation on: ", false);
+                        static b8 selected = true;
+                        static f32 x = 0.0f;
+                        ui_window_add_switch(row.min, &selected, &x);
+                        ui_context_set_animation(selected);
+                    }
+                    ui_window_row_end();
+                    ui_window_end();
+                }
+            }
+
+            UiWindow* top_bar_windows = ui_window_get(app.windows_window);
+            if (app.open_windows_window || top_bar_windows->size_animation_on)
+            {
+                if (ui_window_begin(app.windows_window, NULL, false, false))
+                {
+                    if (ui_window_set_overlay() && app.windows_window)
+                    {
+                        ui_window_start_size_animation(
+                            top_bar_windows, top_bar_windows->size,
+                            v2f(top_bar_windows->size.width, 0.0f));
+                        app.open_windows_window = false;
+                    }
+
+                    AABB row = {
+                        .min = v2i(10.0f),
+                        .size = v2f(200.0f, 40.0f),
+                    };
+
+                    ui_window_row_begin(20.0f);
+                    {
+                        ui_window_add_text(row.min, "Quick access: ", false);
+                        static b8 selected = true;
+                        static f32 x = 0.0f;
+                        b8 selected_before = selected;
+                        ui_window_add_switch(row.min, &selected, &x);
+
+                        if(selected)
+                        {
+                            if(!app.show_quick_access)
+                            {
+                                open_window(&app, app.quick_access_window);
+                                app.show_quick_access = true;
+                            }
+                        }
+                        else if(selected_before != selected)
+                        {
+                            if(app.show_quick_access)
+                            {
+                                ui_window_close(app.quick_access_window);
+                            }
+                        }
+
+                    }
+                    ui_window_row_end();
                     ui_window_end();
                 }
             }
@@ -2012,18 +2015,19 @@ void application_run()
                     top_bar_menu->top_color.a = 0.95f;
                     top_bar_menu->bottom_color.a = 0.95f;
 
+                    app.open_windows_window = false;
                     app.open_menu_window ^= true;
-
-                    app.top_bar_window_menu_open = false;
-                    app.top_bar_window_menu.x = 0.0f;
                 }
                 else if (index_clicked == 1)
                 {
-                    app.open_menu_window = false;
+                    top_bar_windows->position = drop_down_position;
+                    ui_window_start_size_animation(
+                        top_bar_windows, v2f(200.0f, 0.0f), v2i(200.0f));
+                    top_bar_windows->top_color.a = 0.95f;
+                    top_bar_windows->bottom_color.a = 0.95f;
 
-                    app.top_bar_window_menu_open ^= true;
-                    app.top_bar_window_menu.position = drop_down_position;
-                    app.top_bar_window_menu.x = 0.0f;
+                    app.open_menu_window = false;
+                    app.open_windows_window ^= true;
                 }
 
                 AABB button_aabb = { 0 };

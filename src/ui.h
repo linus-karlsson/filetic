@@ -200,14 +200,20 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
 void ui_context_end();
 void ui_context_destroy();
 
+void ui_context_set_animation(b8 on);
+
 u32 ui_window_create();
 UiWindow* ui_window_get(u32 window_id);
 u32 ui_window_in_focus();
 b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable);
 b8 ui_window_end();
 
+void ui_window_close(u32 window_id);
+
 void ui_window_row_begin(const f32 padding);
 f32 ui_window_row_end();
+void ui_window_column_begin(const f32 padding);
+f32 ui_window_column_end();
 
 void ui_window_start_size_animation(UiWindow* window, V2 start_size, V2 end_size);
 void ui_window_start_position_animation(UiWindow* window, V2 start_position, V2 end_position);
@@ -225,3 +231,5 @@ b8 ui_window_set_overlay();
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image);
 i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item);
 void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index);
+void ui_window_add_switch(V2 position, b8* selected, f32* x);
+b8 ui_window_add_drop_down(V2 position, b8* open);
