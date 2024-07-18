@@ -1096,6 +1096,36 @@ internal void set_resize_cursor(u8 resize)
     }
 }
 
+internal u32 load_font_texture(const f32 pixel_height)
+{
+    ui_context.font = (FontTTF){ 0 };
+    const i32 width_atlas = 256;
+    const i32 height_atlas = 256;
+    const u32 bitmap_size = width_atlas * height_atlas;
+    u8* font_bitmap_temp = (u8*)calloc(bitmap_size, sizeof(u8));
+    init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
+                   "C:/Windows/Fonts/arial.ttf", font_bitmap_temp,
+                   &ui_context.font);
+
+    u8* font_bitmap = (u8*)malloc(bitmap_size * 4 * sizeof(u8));
+    memset(font_bitmap, UINT8_MAX, bitmap_size * 4 * sizeof(u8));
+    for (u32 i = 0, j = 3; i < bitmap_size; ++i, j += 4)
+    {
+        font_bitmap[j] = font_bitmap_temp[i];
+    }
+    free(font_bitmap_temp);
+
+    TextureProperties texture_properties = {
+        .width = width_atlas,
+        .height = height_atlas,
+        .bytes = font_bitmap,
+    };
+    u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    free(texture_properties.bytes);
+
+    return font_texture;
+}
+
 void ui_context_create()
 {
     array_create(&ui_context.id_to_index, 100);
@@ -1127,30 +1157,7 @@ void ui_context_create()
     u32 shader = shader_create("./res/shaders/vertex.glsl",
                                "./res/shaders/fragment.glsl");
 
-    ui_context.font = (FontTTF){ 0 };
-    const i32 width_atlas = 512;
-    const i32 height_atlas = 512;
-    const f32 pixel_height = 16;
-    const u32 bitmap_size = width_atlas * height_atlas;
-    u8* font_bitmap_temp = (u8*)calloc(bitmap_size, sizeof(u8));
-    init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
-                   "C:/Windows/Fonts/arial.ttf", font_bitmap_temp, &ui_context.font);
-
-    u8* font_bitmap = (u8*)malloc(bitmap_size * 4 * sizeof(u8));
-    memset(font_bitmap, UINT8_MAX, bitmap_size * 4 * sizeof(u8));
-    for (u32 i = 0, j = 3; i < bitmap_size; ++i, j += 4)
-    {
-        font_bitmap[j] = font_bitmap_temp[i];
-    }
-    free(font_bitmap_temp);
-
-    TextureProperties texture_properties = {
-        .width = width_atlas,
-        .height = height_atlas,
-        .bytes = font_bitmap,
-    };
-    u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
-    free(texture_properties.bytes);
+    u32 font_texture = load_font_texture(16);
 
     // TODO: make all of these icons into a sprite sheet.
     u32 default_texture = create_default_texture();
@@ -1345,9 +1352,32 @@ internal b8 check_window_collisions(const u32 window_index, const u32 i)
     return false;
 }
 
+f32 ui_context_get_font_pixel_height()
+{
+    return ui_context.font.pixel_height;
+}
+
+const FontTTF* ui_context_get_font()
+{
+    return &ui_context.font;
+}
+
 void ui_context_begin(const V2 dimensions, const AABB* dock_space,
                       const f64 delta_time, const b8 check_collisions)
 {
+    if (event_is_key_pressed_once(FTIC_KEY_F))
+    {
+        texture_delete(ui_context.render.render.textures.data[1]);
+        ui_context.render.render.textures.data[1] =
+            load_font_texture(ui_context.font.pixel_height + 1);
+    }
+    if (event_is_key_pressed_once(FTIC_KEY_G))
+    {
+        texture_delete(ui_context.render.render.textures.data[1]);
+        ui_context.render.render.textures.data[1] =
+            load_font_texture(ui_context.font.pixel_height - 1);
+    }
+
     if (!aabb_equal(&ui_context.dock_space, dock_space))
     {
         dock_node_resize_from_root(ui_context.dock_tree, dock_space);
@@ -2689,7 +2719,7 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
             quad(
                 &ui_context.render.vertices,
                 v2f(text_position.x + x_advance + 1.0f, text_position.y + 2.0f),
-                v2f(1.0f, 16.0f), v4i(1.0f), 0.0f);
+                v2f(1.0f, ui_context.font.pixel_height), v4i(1.0f), 0.0f);
             index_count += 6;
 
             input->time = input->time >= 0.8f ? 0 : input->time;
@@ -3187,7 +3217,9 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
     const V2 icon_size = v2i(24.0f);
     AABB icon_aabb =
         quad(&ui_context.render.vertices,
-             v2f(starting_position.x + 5.0f, starting_position.y + 3.0f),
+             v2f(starting_position.x + 5.0f,
+                 starting_position.y +
+                     middle(item_dimensions.height, icon_size.height)),
              icon_size, v4a(v4i(1.0f), window->alpha), icon_index);
     window->rendering_index_count += 6;
 

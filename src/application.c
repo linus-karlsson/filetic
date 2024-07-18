@@ -410,6 +410,22 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                                  tab->directory_list.input.buffer.data,
                                  tab->directory_list.input.buffer.size);
         }
+        if (!tab->directory_list.item_selected &&
+            !tab->directory_list.input.active)
+        {
+            if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+            {
+                if (tab->directory_list.selected_item_values.last_selected)
+                {
+                    free(
+                        tab->directory_list.selected_item_values.last_selected);
+                    tab->directory_list.selected_item_values.last_selected =
+                        NULL;
+                }
+                directory_clear_selected_items(
+                    &tab->directory_list.selected_item_values);
+            }
+        }
         return ui_window_end();
     }
     return false;
@@ -543,8 +559,7 @@ internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
            event_is_key_clicked(FTIC_KEY_ESCAPE);
 }
 
-internal void get_suggestions(const FontTTF* font, const V2 position,
-                              DirectoryPage* current,
+internal void get_suggestions(const V2 position, DirectoryPage* current,
                               InputBuffer* parent_directory_input,
                               DropDownMenu2* suggestions,
                               SuggestionSelectionData* suggestion_data)
@@ -592,12 +607,13 @@ internal void get_suggestions(const FontTTF* font, const V2 position,
         array_push(&suggestion_data->items, directory.sub_directories.data[i]);
     }
 
+    const FontTTF* ui_font = ui_context_get_font();
     const f32 x_advance =
-        text_x_advance(font->chars, parent_directory_input->buffer.data,
+        text_x_advance(ui_font->chars, parent_directory_input->buffer.data,
                        parent_directory_input->buffer.size, 1.0f);
 
     suggestions->position =
-        v2f(position.x + x_advance, position.y + font->pixel_height + 20.0f);
+        v2f(position.x + x_advance, position.y + ui_font->pixel_height + 20.0f);
 }
 
 internal void set_input_buffer_to_current_directory(const char* path,
@@ -1908,8 +1924,10 @@ void application_run()
         look_for_dropped_files(directory_current(&tab->directory_history),
                                directory_to_drop_in);
 
-        const f32 top_bar_height = 44.0f;
-        const f32 top_bar_menu_height = 10.0f + app.font.pixel_height;
+        const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
+
+        const f32 top_bar_height = 28.0f + ui_font_pixel_height;
+        const f32 top_bar_menu_height = 10.0f + ui_font_pixel_height;
         const f32 bottom_bar_height = 25.0f;
 
         AABB dock_space = { .min = v2f(0.0f,
@@ -2102,7 +2120,7 @@ void application_run()
                 {
                     DirectoryPage* current =
                         directory_current(&tab->directory_history);
-                    get_suggestions(&app.font, button_aabb.min, current,
+                    get_suggestions(button_aabb.min, current,
                                     &app.parent_directory_input,
                                     &app.suggestions, &app.suggestion_data);
                 }
@@ -2229,7 +2247,7 @@ void application_run()
                 ui_window_end();
             }
 
-            const f32 list_item_height = 30.0f;
+            const f32 list_item_height = 16.0f + ui_font_pixel_height;
 
             if (app.show_quick_access)
             {

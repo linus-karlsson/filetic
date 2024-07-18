@@ -200,6 +200,9 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
 void ui_context_end();
 void ui_context_destroy();
 
+const FontTTF* ui_context_get_font();
+f32 ui_context_get_font_pixel_height();
+
 void ui_context_set_animation(b8 on);
 
 u32 ui_window_create();
