@@ -197,6 +197,7 @@ internal f32 smooth_scroll(const f64 delta_time, const f32 offset,
                            const f32 speed, f32 scroll_offset)
 {
     scroll_offset += (f32)((offset - scroll_offset) * (delta_time * speed));
+    scroll_offset += (offset - scroll_offset) * ui_context.animation_off;
     return scroll_offset;
 }
 
@@ -3241,7 +3242,6 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
 
     if (hit || selected)
     {
-        log_message("h", 1);
         const V4 color = selected ? v4ic(0.45f) : v4ic(0.3f);
         quad(&ui_context.render.vertices, back_drop_aabb.min,
              back_drop_aabb.size, v4a(color, window->alpha), 0.0f);
