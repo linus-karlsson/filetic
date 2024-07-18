@@ -584,7 +584,6 @@ internal DockNode* find_node(DockNode* root, DockNode* node_before,
     return NULL;
 }
 
-
 internal void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
 {
     if (root->children[0]->type == NODE_LEAF &&

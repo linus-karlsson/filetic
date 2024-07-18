@@ -28,3 +28,5 @@ void ui_test_check_if_window_should_be_docked();
 void ui_test_check_dock_space_resize();
 void ui_test_sync_current_frame_windows();
 void ui_test_get_active_dock_spaces();
+void ui_test_handle_tab_change_or_close();
+void ui_test_ui_window_close();

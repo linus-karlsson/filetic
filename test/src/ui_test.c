@@ -1040,8 +1040,13 @@ void ui_test_dock_node_remove_node()
     c = c->children[0];
     DockNode c1 = *c->children[0];
 
-    dock_node_remove_node(ui_context.dock_tree, ui_window_get(3)->dock_node);
     DockNode* node =
+        find_node(ui_context.dock_tree->children[0], ui_context.dock_tree,
+                  ui_window_get(3)->dock_node);
+    ASSERT_NOT_EQUALS(NULL, node, EQUALS_FORMAT_PTR);
+
+    dock_node_remove_node(ui_context.dock_tree, ui_window_get(3)->dock_node);
+    node =
         find_node(ui_context.dock_tree->children[0], ui_context.dock_tree,
                   ui_window_get(3)->dock_node);
     ASSERT_EQUALS(NULL, node, EQUALS_FORMAT_PTR);
@@ -1057,6 +1062,9 @@ void ui_test_dock_node_remove_node()
     ASSERT_EQUALS(c1.children[0], c0->children[0], EQUALS_FORMAT_PTR);
     ASSERT_EQUALS(c1.children[1], c0->children[1], EQUALS_FORMAT_PTR);
 
+    node = find_node(ui_context.dock_tree->children[0], ui_context.dock_tree,
+                     ui_window_get(1)->dock_node);
+    ASSERT_NOT_EQUALS(NULL, node, EQUALS_FORMAT_PTR);
     dock_node_remove_node(ui_context.dock_tree, ui_window_get(1)->dock_node);
     node = find_node(ui_context.dock_tree->children[0], ui_context.dock_tree,
                      ui_window_get(1)->dock_node);
@@ -2005,3 +2013,122 @@ void ui_test_get_active_dock_spaces()
     array_free(&ui_context.window_aabbs);
     array_free(&ui_context.window_hover_clicked_indices);
 }
+
+void ui_test_handle_tab_change_or_close()
+{
+    
+}
+
+void ui_test_ui_window_close()
+{
+    ui_context.check_collisions = true;
+    ui_context.dock_tree = dock_node_create(NODE_ROOT, SPLIT_NONE, -1);
+    ui_context.dock_tree->aabb.size = v2f(1000.0f, 800.0f);
+    ui_context.animation_off = true;
+
+    array_create(&ui_context.id_to_index, 10);
+
+    array_create(&ui_context.windows, 10);
+    array_create(&ui_context.window_aabbs, 10);
+    array_create(&ui_context.window_hover_clicked_indices, 10);
+
+    for (u32 i = 0; i < 10; ++i)
+    {
+        DockNode* node = dock_node_create(NODE_LEAF, SPLIT_NONE, i);
+        insert_window(node, i, false);
+        array_push(&ui_context.id_to_index, i);
+    }
+
+    ui_window_close(0);
+    UiWindow* window = ui_window_get(0);
+    ASSERT_EQUALS(true, window->closing, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, window->hide, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, window->docked, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(true, window->position_animation_on, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(true, window->size_animation_on, EQUALS_FORMAT_U32);
+
+
+    dock_node_dock_window(ui_context.dock_tree, ui_window_get(0)->dock_node,
+                          SPLIT_HORIZONTAL, DOCK_SIDE_TOP);
+    ui_window_get(0)->docked = true;
+
+    dock_node_dock_window(ui_context.dock_tree, ui_window_get(1)->dock_node,
+                          SPLIT_HORIZONTAL, DOCK_SIDE_TOP);
+    ui_window_get(1)->docked = true;
+
+    dock_node_dock_window(ui_context.dock_tree, ui_window_get(2)->dock_node,
+                          SPLIT_HORIZONTAL, DOCK_SIDE_TOP);
+    ui_window_get(2)->docked = true;
+
+    dock_node_dock_window(ui_context.dock_tree, ui_window_get(3)->dock_node,
+                          SPLIT_VERTICAL, DOCK_SIDE_RIGHT);
+    ui_window_get(3)->docked = true;
+
+    dock_node_dock_window(ui_window_get(1)->dock_node,
+                          ui_window_get(4)->dock_node, SPLIT_VERTICAL,
+                          DOCK_SIDE_RIGHT);
+    ui_window_get(4)->docked = true;
+
+    dock_node_dock_window(ui_context.dock_tree, ui_window_get(5)->dock_node,
+                          SPLIT_VERTICAL, DOCK_SIDE_RIGHT);
+    ui_window_get(5)->docked = true;
+
+    window_animate(ui_window_get(0));
+    window_animate(ui_window_get(1));
+    window_animate(ui_window_get(2));
+    window_animate(ui_window_get(3));
+    window_animate(ui_window_get(4));
+    window_animate(ui_window_get(5));
+
+    DockNode* node_before =
+        find_node(ui_context.dock_tree->children[0], ui_context.dock_tree,
+                  window->dock_node);
+    ASSERT_NOT_EQUALS(NULL, node_before, EQUALS_FORMAT_PTR);
+
+    window = ui_window_get(2);
+    ASSERT_EQUALS(false, window->closing, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(true, window->docked, EQUALS_FORMAT_U32);
+    ui_window_close(2);
+    window = ui_window_get(2);
+    ASSERT_EQUALS(true, window->closing, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, window->hide, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, window->docked, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(true, window->position_animation_on, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(true, window->size_animation_on, EQUALS_FORMAT_U32);
+
+    node_before =
+        find_node(ui_context.dock_tree->children[0], ui_context.dock_tree,
+                  window->dock_node);
+    ASSERT_EQUALS(NULL, node_before, EQUALS_FORMAT_PTR);
+
+    window = ui_window_get(3);
+    array_push(&window->dock_node->windows, 6);
+    ui_window_get(6)->dock_node = window->dock_node;
+    ui_window_get(6)->docked = true;
+
+    ui_window_close(3);
+    window = ui_window_get(3);
+    
+    ASSERT_EQUALS(true, window->closing, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, window->hide, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, window->docked, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, window->position_animation_on, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, window->size_animation_on, EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, window->release_from_dock_space, EQUALS_FORMAT_U32);
+    ASSERT_NOT_EQUALS(window->dock_node, ui_window_get(6)->dock_node, EQUALS_FORMAT_PTR);
+
+    for (u32 i = 0; i < 10; ++i)
+    {
+        array_free(&ui_context.window_aabbs.data[i]);
+        if (!ui_context.windows.data[i].docked)
+        {
+            array_free(&ui_context.windows.data[i].dock_node->windows);
+            free(ui_context.windows.data[i].dock_node);
+        }
+    }
+    free_nodes(ui_context.dock_tree);
+    array_free(&ui_context.windows);
+    array_free(&ui_context.window_aabbs);
+    array_free(&ui_context.window_hover_clicked_indices);
+}    
+

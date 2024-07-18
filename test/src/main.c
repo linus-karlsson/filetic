@@ -31,6 +31,7 @@ int main(int argc, char** argv)
         ui_test_check_dock_space_resize();
         ui_test_sync_current_frame_windows();
         ui_test_get_active_dock_spaces();
+        ui_test_ui_window_close();
     }
     ui_test_end();
 }
