@@ -1134,7 +1134,7 @@ void ui_context_create()
     const u32 bitmap_size = width_atlas * height_atlas;
     u8* font_bitmap_temp = (u8*)calloc(bitmap_size, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
-                   "res/fonts/arial.ttf", font_bitmap_temp, &ui_context.font);
+                   "C:/Windows/Fonts/arial.ttf", font_bitmap_temp, &ui_context.font);
 
     u8* font_bitmap = (u8*)malloc(bitmap_size * 4 * sizeof(u8));
     memset(font_bitmap, UINT8_MAX, bitmap_size * 4 * sizeof(u8));
@@ -1549,27 +1549,6 @@ internal void check_dock_space_resize()
 
         if (ui_context.dock_resize)
         {
-            const V2 relative_mouse_position = v2_sub(
-                event_get_mouse_position(), ui_context.dock_hit_node->aabb.min);
-
-            f32 new_ratio = 0.0f;
-            if (ui_context.dock_hit_node->split_axis == SPLIT_HORIZONTAL)
-            {
-                new_ratio = relative_mouse_position.y /
-                            ui_context.dock_hit_node->aabb.size.height;
-            }
-            else // SPLIT_VERTICAL
-            {
-                new_ratio = relative_mouse_position.x /
-                            ui_context.dock_hit_node->aabb.size.width;
-            }
-            if (closed_interval(0.1f, new_ratio, 0.9f))
-            {
-                ui_context.dock_hit_node->size_ratio = new_ratio;
-                dock_node_resize_traverse(ui_context.dock_hit_node);
-            }
-            ui_context.dock_resize_aabb =
-                dock_node_set_resize_aabb(ui_context.dock_hit_node);
             quad(&ui_context.render.vertices, ui_context.dock_resize_aabb.min,
                  ui_context.dock_resize_aabb.size, secondary_color, 0.0f);
             ui_context.extra_index_count += 6;
@@ -1972,6 +1951,31 @@ void ui_context_end()
                         ui_context.render.vertices.data);
 
     render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts);
+
+    if (!ui_context.any_window_hold && ui_context.dock_resize)
+    {
+        const V2 relative_mouse_position = v2_sub(
+            event_get_mouse_position(), ui_context.dock_hit_node->aabb.min);
+
+        f32 new_ratio = 0.0f;
+        if (ui_context.dock_hit_node->split_axis == SPLIT_HORIZONTAL)
+        {
+            new_ratio = relative_mouse_position.y /
+                        ui_context.dock_hit_node->aabb.size.height;
+        }
+        else // SPLIT_VERTICAL
+        {
+            new_ratio = relative_mouse_position.x /
+                        ui_context.dock_hit_node->aabb.size.width;
+        }
+        if (closed_interval(0.1f, new_ratio, 0.9f))
+        {
+            ui_context.dock_hit_node->size_ratio = new_ratio;
+            dock_node_resize_traverse(ui_context.dock_hit_node);
+        }
+        ui_context.dock_resize_aabb =
+            dock_node_set_resize_aabb(ui_context.dock_hit_node);
+    }
 
     if (tab_change.dock_space)
     {

@@ -1314,7 +1314,7 @@ u8* application_initialize(ApplicationContext* app)
     const u32 bitmap_size = width_atlas * height_atlas;
     u8* font_bitmap_temp = (u8*)calloc(bitmap_size, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
-                   "res/fonts/arial.ttf", font_bitmap_temp, &app->font);
+                   "C:/Windows/Fonts/arial.ttf", font_bitmap_temp, &app->font);
 
     // Puts the red channel in the alpha.
     u8* font_bitmap = (u8*)malloc(bitmap_size * 4 * sizeof(u8));
