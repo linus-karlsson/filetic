@@ -121,6 +121,9 @@ typedef struct UiContext
     U32Array last_frame_windows;
     U32Array current_frame_windows;
 
+    U32Array last_frame_top_bar_windows;
+    U32Array current_frame_top_bar_windows;
+
     UiWindowArray windows;
     AABBArrayArray window_aabbs;
     HoverClickedIndexArray window_hover_clicked_indices;
@@ -580,6 +583,7 @@ internal DockNode* find_node(DockNode* root, DockNode* node_before,
     }
     return NULL;
 }
+
 
 internal void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
 {
@@ -1100,6 +1104,9 @@ void ui_context_create()
     array_create(&ui_context.last_frame_windows, 10);
     array_create(&ui_context.current_frame_windows, 10);
 
+    array_create(&ui_context.last_frame_top_bar_windows, 10);
+    array_create(&ui_context.current_frame_top_bar_windows, 10);
+
     array_create(&ui_context.windows, 10);
     array_create(&ui_context.window_aabbs, 10);
     array_create(&ui_context.window_hover_clicked_indices, 10);
@@ -1350,7 +1357,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
     ui_context.dimensions = dimensions;
     ui_context.render.render.textures.size = ui_context.default_textures_offset;
 
-    ui_context.delta_time = delta_time;
+    ui_context.delta_time = clampf64_low(clampf64_high(delta_time, 0.5), 0.0);
 
     ui_context.mvp.projection =
         ortho(0.0f, dimensions.width, dimensions.height, 0.0f, -1.0f, 1.0f);
@@ -1366,13 +1373,8 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
 
     for (u32 i = 0; i < ui_context.window_hover_clicked_indices.size; ++i)
     {
-        HoverClickedIndex* hover_clicked_index =
-            ui_context.window_hover_clicked_indices.data + i;
-        hover_clicked_index->index = -1;
-        hover_clicked_index->clicked = false;
-        hover_clicked_index->pressed = false;
-        hover_clicked_index->hover = false;
-        hover_clicked_index->double_clicked = false;
+        ui_context.window_hover_clicked_indices.data[i] =
+            (HoverClickedIndex){ .index = -1 };
     }
     ui_context.any_window_top_bar_hold = false;
     ui_context.any_window_hold = false;
@@ -1413,60 +1415,6 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
     }
 collision_check_done:;
 }
-
-#if 0
-internal b8 look_for_stale_windows(DockNode* root)
-{
-    if (root == NULL) return false;
-
-    if (root->type == NODE_LEAF)
-    {
-        i32 window_id_to_remove = -1;
-        for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
-        {
-            for (u32 j = 0; j < root->windows.size; ++j)
-            {
-                if (root->windows.data[j] ==
-                    ui_context.last_frame_windows.data[i])
-                {
-                    window_id_to_remove = j;
-                    break;
-                }
-            }
-        }
-        if (window_id_to_remove == -1)
-        {
-            UiWindow* window_to_remove = ui_window_get(root->windows.data[0]);
-            if (root->windows.size == 1)
-            {
-                dock_node_remove_node(ui_context.dock_tree, root);
-                window_to_remove->docked = false;
-            }
-            else
-            {
-                u32 focused_window_id = remove_window_from_shared_dock_space(
-                    window_id_to_remove, window_to_remove, root);
-            }
-            return true;
-        }
-    }
-    else
-    {
-        b8 removed = look_for_stale_windows(root->children[0]);
-        if (removed) return removed;
-        removed = look_for_stale_windows(root->children[1]);
-        if (removed) return removed;
-    }
-    return false;
-}
-
-internal void clean_dock_tree_of_stale_windows()
-{
-    while (look_for_stale_windows(ui_context.dock_tree))
-        ;
-}
-
-#endif
 
 internal void check_if_window_should_be_docked()
 {
@@ -2029,6 +1977,8 @@ void ui_context_end()
     }
     array_free(&dock_spaces);
     array_free(&dock_spaces_index_offsets_and_counts);
+
+    ui_context.current_frame_top_bar_windows.size = 0;
 }
 
 void ui_context_destroy()
@@ -2309,6 +2259,10 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
         window->position_animation_on)
     {
         array_push(&ui_context.current_frame_windows, window->id);
+        if (top_bar)
+        {
+            array_push(&ui_context.current_frame_top_bar_windows, window->id);
+        }
     }
 
     window->title = title;

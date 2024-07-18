@@ -107,6 +107,9 @@ void string_swap(char* first, char* second);
 f32 clampf32_low(f32 value, f32 low);
 f32 clampf32_high(f32 value, f32 high);
 
+f64 clampf64_low(f64 value, f64 low);
+f64 clampf64_high(f64 value, f64 high);
+
 f32 middle(const f32 area_size, const f32 object_size);
 
 void log_f32(const char* message, const f32 value);

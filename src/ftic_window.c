@@ -102,6 +102,11 @@ void window_set_cursor(FTicWindow* window, int cursor)
     }
 }
 
+void window_set_last_cursor(int cursor)
+{
+    last_cursor = cursor;
+}
+
 int window_get_cursor()
 {
     return last_cursor;

@@ -38,6 +38,7 @@ void window_set_on_drop_event(FTicWindow* window, OnDropCallback callback);
 void window_get_mouse_position(FTicWindow* window, double* x, double* y);
 
 void window_set_cursor(FTicWindow* window, int cursor);
+void window_set_last_cursor(int cursor);
 int window_get_cursor();
 void window_set_cursor_position(FTicWindow* window, double x, double y);
 void window_set_input_mode(FTicWindow* window, int mode, int value);
