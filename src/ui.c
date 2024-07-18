@@ -1418,6 +1418,8 @@ collision_check_done:;
 internal void check_if_window_should_be_docked()
 {
     b8 any_hit = false;
+    // TODO: This could cause issues if we have an overlay window, it makes it
+    // the window_in_focus. Solution, save the window that is dragging.
     UiWindow* focused_window =
         ui_context.windows.data + ui_context.window_in_focus;
     if (ui_context.dock_side_hit == 0)
@@ -1753,8 +1755,8 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                     tab_color = v4ic(0.35f);
                 }
                 b8 tab_collided = false;
-                if (should_check_collision && !tab_change.close_tab &&
-                    !any_tab_hit &&
+                if (should_check_collision && tab_window->area_hit &&
+                    !tab_change.close_tab && !any_tab_hit &&
                     collision_point_in_aabb(mouse_position, &tab_aabb))
                 {
                     if (j != (i32)dock_space->window_in_focus)
@@ -1845,8 +1847,8 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                         &index_offset_and_count.second, window->position,
                         top_bar_dimensions, border_color, 1.0f, 0.0f);
 
-            if (should_check_collision && !tab_change.close_tab &&
-                !any_tab_hit && !any_hit &&
+            if (should_check_collision && window->area_hit &&
+                !tab_change.close_tab && !any_tab_hit && !any_hit &&
                 collision_point_in_aabb(mouse_position, &aabb) &&
                 event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
             {
@@ -3677,8 +3679,8 @@ b8 ui_window_set_overlay()
     }
 
     return !window->area_hit &&
-           (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) ||
-            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT));
+           (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
+            event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
 }
 
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)

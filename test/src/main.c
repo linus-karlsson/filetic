@@ -1,4 +1,5 @@
 #include "ui_test.h"
+#include "collision_test.h"
 #include <stdio.h>
 
 int main(int argc, char** argv)
@@ -34,4 +35,14 @@ int main(int argc, char** argv)
         ui_test_ui_window_close();
     }
     ui_test_end();
+
+    collision_test_begin();
+    {
+        collision_test_collision_aabb_in_aabb();
+        collision_test_collision_point_in_aabb_what_side();
+        collision_test_collision_point_in_aabb();
+        collision_test_collision_point_in_point();
+        collision_test_aabb_equal();
+    }
+    collision_test_end();
 }

@@ -303,9 +303,9 @@ add_move_in_history_button(const AABB* aabb, const V4 icon_co, const b8 disable,
     }
 }
 
-internal void show_search_result_window(SearchPage* page, const u32 window,
-                                        const f32 list_item_height,
-                                        DirectoryHistory* directory_history)
+internal b8 show_search_result_window(SearchPage* page, const u32 window,
+                                      const f32 list_item_height,
+                                      DirectoryHistory* directory_history)
 {
     if (ui_window_begin(window, "Search result", true, true))
     {
@@ -335,8 +335,9 @@ internal void show_search_result_window(SearchPage* page, const u32 window,
         platform_mutex_unlock(&page->search_result_file_array.mutex);
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
 
-        ui_window_end();
+        return ui_window_end();
     }
+    return false;
 }
 
 internal char* get_parent_directory_name(DirectoryPage* current)
@@ -1075,7 +1076,7 @@ internal b8 top_bar_window_menu_selection(u32 index, b8 hit, b8 should_close,
                 if (!app->show_search_page)
                 {
                     app->show_search_page = true;
-                    open_window(app, app->quick_access_window);
+                    open_window(app, app->search_result_window);
                 }
                 return true;
             }
@@ -1434,6 +1435,8 @@ u8* application_initialize(ApplicationContext* app)
     array_create(&app->quick_access_folders, 10);
     quick_access_load(&app->quick_access_folders);
     app->show_quick_access = true;
+
+    app->show_search_page = true;
 
     app->parent_directory_input = ui_input_buffer_create();
 
@@ -1973,24 +1976,51 @@ void application_run()
                         b8 selected_before = selected;
                         ui_window_add_switch(row.min, &selected, &x);
 
-                        if(selected)
+                        if (selected)
                         {
-                            if(!app.show_quick_access)
+                            if (!app.show_quick_access)
                             {
                                 open_window(&app, app.quick_access_window);
                                 app.show_quick_access = true;
                             }
                         }
-                        else if(selected_before != selected)
+                        else if (selected_before != selected)
                         {
-                            if(app.show_quick_access)
+                            if (app.show_quick_access)
                             {
                                 ui_window_close(app.quick_access_window);
                             }
                         }
-
                     }
                     ui_window_row_end();
+
+                    row.min.y += app.font.pixel_height + 10.0f;
+                    ui_window_row_begin(20.0f);
+                    {
+                        ui_window_add_text(row.min, "Search result: ", false);
+                        static b8 selected = true;
+                        static f32 x = 0.0f;
+                        b8 selected_before = selected;
+                        ui_window_add_switch(row.min, &selected, &x);
+
+                        if (selected)
+                        {
+                            if (!app.show_search_page)
+                            {
+                                open_window(&app, app.search_result_window);
+                                app.show_search_page = true;
+                            }
+                        }
+                        else if (selected_before != selected)
+                        {
+                            if (app.show_search_page)
+                            {
+                                ui_window_close(app.search_result_window);
+                            }
+                        }
+                    }
+                    ui_window_row_end();
+
                     ui_window_end();
                 }
             }
@@ -2148,6 +2178,11 @@ void application_run()
                     search_page_search(&app.search_page,
                                        &tab->directory_history,
                                        &app.thread_queue.task_queue);
+                    if (!app.show_search_page)
+                    {
+                        open_window(&app, app.search_result_window);
+                        app.show_search_page = true;
+                    }
                 }
 
                 ui_window_end();
@@ -2215,9 +2250,12 @@ void application_run()
                 }
             }
 
-            show_search_result_window(
-                &app.search_page, app.search_result_window, list_item_height,
-                &tab->directory_history);
+            if (app.show_search_page)
+            {
+                app.show_search_page = !show_search_result_window(
+                    &app.search_page, app.search_result_window,
+                    list_item_height, &tab->directory_history);
+            }
 
             if (preview_index != -1)
             {
@@ -2333,13 +2371,6 @@ void application_run()
                     }
                     --i;
                 }
-            }
-
-            b8 search_result_open = search_page_has_result(&app.search_page) &&
-                                    app.search_page.input.buffer.size;
-            if (!search_result_open)
-            {
-                search_page_clear_result(&app.search_page);
             }
         }
         ui_context_end();
