@@ -6,6 +6,7 @@
 #include "logging.h"
 #include "set.h"
 #include "hash.h"
+#include "globals.h"
 #include <string.h>
 #include <stdio.h>
 #include <glad/glad.h>
@@ -50,6 +51,8 @@ global const V4 arrow_right_icon_co = icon_3_co(384.0f, 128.0f);
         .w = 128.0f / height,                                                  \
     };
 global const V4 png_icon_co = icon_4_co(512.0f, 128.0f);
+
+#define MAX_PATH 260
 
 typedef struct UiWindowArray
 {
@@ -149,6 +152,8 @@ typedef struct UiContext
 
     V4 docking_color;
 
+    char font_path[MAX_PATH];
+
     V2 dimensions;
     f64 delta_time;
 
@@ -169,6 +174,7 @@ typedef struct UiContext
     b8 check_collisions;
 
     b8 animation_off;
+    b8 highlight_fucused_window_off;
 
 } UiContext;
 
@@ -293,7 +299,8 @@ internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
         result = true;
     }
     quad_border_rounded(&ui_context.render.vertices, index_count, aabb.min,
-                        aabb.size, secondary_color, 2.0f, 0.4f, 3, 0.0f);
+                        aabb.size, global_get_secondary_color(), 2.0f, 0.4f, 3,
+                        0.0f);
     return result;
 }
 
@@ -926,8 +933,8 @@ internal void insert_window(DockNode* node, const u32 id, const b8 docked)
         .position = v2f(200.0f, 200.0f),
         .id = id,
         .size = v2f(200.0f, 200.0f),
-        .top_color = clear_color,
-        .bottom_color = clear_color,
+        .top_color = global_get_clear_color(),
+        .bottom_color = global_get_clear_color(),
         .dock_node = node,
         .docked = docked,
         .alpha = 1.0f,
@@ -1104,8 +1111,7 @@ internal u32 load_font_texture(const f32 pixel_height)
     const u32 bitmap_size = width_atlas * height_atlas;
     u8* font_bitmap_temp = (u8*)calloc(bitmap_size, sizeof(u8));
     init_ttf_atlas(width_atlas, height_atlas, pixel_height, 96, 32,
-                   "C:/Windows/Fonts/arial.ttf", font_bitmap_temp,
-                   &ui_context.font);
+                   ui_context.font_path, font_bitmap_temp, &ui_context.font);
 
     u8* font_bitmap = (u8*)malloc(bitmap_size * 4 * sizeof(u8));
     memset(font_bitmap, UINT8_MAX, bitmap_size * 4 * sizeof(u8));
@@ -1124,6 +1130,27 @@ internal u32 load_font_texture(const f32 pixel_height)
     free(texture_properties.bytes);
 
     return font_texture;
+}
+
+void ui_context_set_font_path(const char* new_path)
+{
+    memset(ui_context.font_path, 0, sizeof(ui_context.font_path));
+    memcpy(ui_context.font_path, new_path, strlen(new_path));
+}
+
+void ui_context_change_font_pixel_height(const f32 pixel_height)
+{
+    if (closed_interval(12.0f, pixel_height, 26.0f))
+    {
+        texture_delete(ui_context.render.render.textures.data[1]);
+        ui_context.render.render.textures.data[(u32)UI_FONT_TEXTURE] =
+            load_font_texture(pixel_height);
+    }
+}
+
+const char* ui_context_get_font_path()
+{
+    return ui_context.font_path;
 }
 
 void ui_context_create()
@@ -1156,6 +1183,10 @@ void ui_context_create()
 
     u32 shader = shader_create("./res/shaders/vertex.glsl",
                                "./res/shaders/fragment.glsl");
+
+    char* font_path = "C:/Windows/Fonts/arial.ttf";
+    memset(ui_context.font_path, 0, sizeof(ui_context.font_path));
+    memcpy(ui_context.font_path, font_path, strlen(font_path));
 
     u32 font_texture = load_font_texture(16);
 
@@ -1233,7 +1264,8 @@ void ui_context_create()
     ui_context.default_textures_offset = textures.size;
 
     ui_context.docking_color =
-        v4f(secondary_color.r, secondary_color.g, secondary_color.b, 0.4f);
+        v4f(global_get_secondary_color().r, global_get_secondary_color().g,
+            global_get_secondary_color().b, 0.4f);
 }
 
 internal u8 look_for_window_resize(UiWindow* window)
@@ -1365,18 +1397,6 @@ const FontTTF* ui_context_get_font()
 void ui_context_begin(const V2 dimensions, const AABB* dock_space,
                       const f64 delta_time, const b8 check_collisions)
 {
-    if (event_is_key_pressed_once(FTIC_KEY_F))
-    {
-        texture_delete(ui_context.render.render.textures.data[1]);
-        ui_context.render.render.textures.data[1] =
-            load_font_texture(ui_context.font.pixel_height + 1);
-    }
-    if (event_is_key_pressed_once(FTIC_KEY_G))
-    {
-        texture_delete(ui_context.render.render.textures.data[1]);
-        ui_context.render.render.textures.data[1] =
-            load_font_texture(ui_context.font.pixel_height - 1);
-    }
 
     if (!aabb_equal(&ui_context.dock_space, dock_space))
     {
@@ -1568,7 +1588,7 @@ internal void check_dock_space_resize()
                 quad(&ui_context.render.vertices,
                      ui_context.dock_resize_aabb.min,
                      ui_context.dock_resize_aabb.size,
-                     v4_s_multi(secondary_color, 0.8f), 0.0f);
+                     v4_s_multi(global_get_secondary_color(), 0.8f), 0.0f);
                 ui_context.extra_index_count += 6;
             }
             else
@@ -1580,7 +1600,8 @@ internal void check_dock_space_resize()
         if (ui_context.dock_resize)
         {
             quad(&ui_context.render.vertices, ui_context.dock_resize_aabb.min,
-                 ui_context.dock_resize_aabb.size, secondary_color, 0.0f);
+                 ui_context.dock_resize_aabb.size, global_get_secondary_color(),
+                 0.0f);
             ui_context.extra_index_count += 6;
         }
     }
@@ -1719,20 +1740,22 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
             .first = ui_context.current_index_offset,
         };
         const b8 in_focus = ui_context.id_to_index.data[window->id] ==
-                            ui_context.window_in_focus;
-        V4 window_border_color = border_color;
+                                ui_context.window_in_focus &&
+                            !ui_context.highlight_fucused_window_off;
+        V4 window_border_color = global_get_border_color();
         if (in_focus)
         {
-            window_border_color = secondary_color;
+            window_border_color = global_get_secondary_color();
         }
 
         if (window->top_bar)
         {
             const V2 top_bar_dimensions =
                 v2f(window->size.width, top_bar_height);
+            const V4 top_bar_color = v4a(v4_s_multi(global_get_clear_color(), 1.2f), 1.0f);
             const AABB aabb = quad_gradiant_t_b(
                 &ui_context.render.vertices, window->position,
-                top_bar_dimensions, v4ic(0.20f), v4ic(0.15f), 0.0f);
+                top_bar_dimensions, top_bar_color, global_get_clear_color(), 0.0f);
             index_offset_and_count.second += 6;
 
             V2 tab_position = window->position;
@@ -1824,7 +1847,7 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                 b8 collided =
                     collision_point_in_aabb(mouse_position, &button_aabb);
 
-                if (should_check_collision && collided)
+                if (should_check_collision && collided && tab_window->area_hit)
                 {
                     if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
                     {
@@ -1855,7 +1878,8 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
 
             quad_border(&ui_context.render.vertices,
                         &index_offset_and_count.second, window->position,
-                        top_bar_dimensions, border_color, 1.0f, 0.0f);
+                        top_bar_dimensions, global_get_border_color(), 1.0f,
+                        0.0f);
 
             if (should_check_collision && window->area_hit &&
                 !tab_change.close_tab && !any_tab_hit && !any_hit &&
@@ -2025,6 +2049,11 @@ void ui_context_destroy()
 void ui_context_set_animation(b8 on)
 {
     ui_context.animation_off = !on;
+}
+
+void ui_context_set_highlight_focused_window(b8 on)
+{
+    ui_context.highlight_fucused_window_off = !on;
 }
 
 u32 ui_window_create()
@@ -2323,6 +2352,8 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
 
     window->total_height = 0.0f;
     window->total_width = 0.0f;
+    window->top_color = global_get_clear_color();
+    window->bottom_color = global_get_clear_color();
 
     if (window->hide) return false;
 
@@ -2348,7 +2379,8 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
     if (area_height < total_height)
     {
         quad(&ui_context.render.vertices, position,
-             v2f(scroll_bar_width, area_height), high_light_color, 0.0f);
+             v2f(scroll_bar_width, area_height), global_get_highlight_color(),
+             0.0f);
         window->rendering_index_count += 6;
 
         const f32 initial_y = position.y;
@@ -2374,14 +2406,14 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
         if (collided || window->scroll_bar.dragging)
         {
             quad(&ui_context.render.vertices, position, scroll_bar_dimensions,
-                 bright_color, 0.0f);
+                 global_get_bright_color(), 0.0f);
             window->rendering_index_count += 6;
         }
         else
         {
             quad_gradiant_t_b(&ui_context.render.vertices, position,
-                              scroll_bar_dimensions, lighter_color, v4ic(0.45f),
-                              0.0f);
+                              scroll_bar_dimensions, global_get_lighter_color(),
+                              v4ic(0.45f), 0.0f);
             window->rendering_index_count += 6;
         }
 
@@ -2444,7 +2476,8 @@ internal void add_scroll_bar_width(UiWindow* window, AABBArray* aabbs,
     if (area_width < total_width)
     {
         quad(&ui_context.render.vertices, position,
-             v2f(area_width, scroll_bar_height), high_light_color, 0.0f);
+             v2f(area_width, scroll_bar_height), global_get_highlight_color(),
+             0.0f);
         window->rendering_index_count += 6;
 
         const f32 initial_x = position.x;
@@ -2471,14 +2504,14 @@ internal void add_scroll_bar_width(UiWindow* window, AABBArray* aabbs,
         if (collided || window->scroll_bar_width.dragging)
         {
             quad(&ui_context.render.vertices, position, scroll_bar_dimensions,
-                 bright_color, 0.0f);
+                 global_get_bright_color(), 0.0f);
             window->rendering_index_count += 6;
         }
         else
         {
             quad_gradiant_t_b(&ui_context.render.vertices, position,
-                              scroll_bar_dimensions, lighter_color, v4ic(0.45f),
-                              0.0f);
+                              scroll_bar_dimensions, global_get_lighter_color(),
+                              v4ic(0.45f), 0.0f);
             window->rendering_index_count += 6;
         }
 
@@ -2635,7 +2668,7 @@ b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color,
     b8 clicked = false;
     if (disable)
     {
-        button_color = border_color;
+        button_color = global_get_border_color();
     }
     else
     {
@@ -2889,7 +2922,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
         input->active = hover_clicked_index.index == (i32)aabbs->size;
     }
     array_push(aabbs, quad(&ui_context.render.vertices, position, size,
-                           v4ic(0.15f), 0.0f));
+                           global_get_clear_color(), 0.0f));
     window->rendering_index_count += 6;
 
     b8 typed = false;
@@ -2937,7 +2970,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
 
     quad_border_rounded(&ui_context.render.vertices,
                         &window->rendering_index_count, position, size,
-                        border_color, 1.0f, 0.4f, 3, 0.0f);
+                        global_get_border_color(), 1.0f, 0.4f, 3, 0.0f);
 
     return typed;
 }
@@ -2958,8 +2991,8 @@ internal u32 display_text_and_truncate_if_necissary(const V2 position,
     }
     u32 index_count = text_generation_color(
         ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f,
-        ui_context.font.pixel_height, v4a(v4i(1.0f), alpha), NULL, NULL, NULL,
-        &ui_context.render.vertices);
+        ui_context.font.pixel_height, v4a(global_get_text_color(), alpha), NULL,
+        NULL, NULL, &ui_context.render.vertices);
     if (too_long)
     {
         memcpy(text + (i - 3), saved_name, sizeof(saved_name));
@@ -3203,7 +3236,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
         const V4 color = selected ? v4ic(0.45f) : v4ic(0.3f);
         quad_gradiant_l_r(&ui_context.render.vertices, back_drop_aabb.min,
                           back_drop_aabb.size, v4a(color, window->alpha),
-                          clear_color, 0.0f);
+                          global_get_clear_color(), 0.0f);
         window->rendering_index_count += 6;
     }
 
@@ -3240,7 +3273,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
             starting_position.x + item_dimensions.width - x_advance - 5.0f;
         window->rendering_index_count += text_generation_color(
             ui_context.font.chars, buffer, UI_FONT_TEXTURE, size_text_position,
-            1.0f, ui_context.font.pixel_height, v4a(v4i(1.0f), window->alpha),
+            1.0f, ui_context.font.pixel_height, v4a(global_get_text_color(), window->alpha),
             NULL, NULL, NULL, &ui_context.render.vertices);
     }
     window->rendering_index_count += display_text_and_truncate_if_necissary(
@@ -3522,13 +3555,14 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
     const f32 border_extra_padding = drop_down_border_width * 2.0f;
     const f32 drop_down_outer_padding = 10.0f + border_extra_padding;
 
-    quad_border_gradiant(
-        &ui_context.render.vertices, &window->rendering_index_count,
-        v2f(position.x - drop_down_border_width,
-            position.y - drop_down_border_width),
-        v2f(drop_down_width + border_extra_padding,
-            current_y + border_extra_padding),
-        lighter_color, lighter_color, drop_down_border_width, 0.0f);
+    quad_border_gradiant(&ui_context.render.vertices,
+                         &window->rendering_index_count,
+                         v2f(position.x - drop_down_border_width,
+                             position.y - drop_down_border_width),
+                         v2f(drop_down_width + border_extra_padding,
+                             current_y + border_extra_padding),
+                         global_get_lighter_color(), global_get_lighter_color(),
+                         drop_down_border_width, 0.0f);
 
     b8 in_focus = window_index == ui_context.window_in_focus;
     if (in_focus && event_is_key_pressed_repeat(FTIC_KEY_TAB))
@@ -3570,8 +3604,9 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
             item_clicked = mouse_button_clicked;
         }
 
-        const V4 drop_down_color =
-            drop_down_item_hit ? border_color : high_light_color;
+        const V4 drop_down_color = drop_down_item_hit
+                                       ? global_get_border_color()
+                                       : global_get_highlight_color();
         V2 size = v2f(drop_down_width, drop_down_item_height * precent);
         array_push(aabbs, quad(&ui_context.render.vertices, promt_item_position,
                                size, drop_down_color, 0.0f));
@@ -3582,7 +3617,7 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
             ui_context.font.pixel_height + promt_item_text_padding + 3.0f;
         promt_item_text_position.x += promt_item_text_padding;
 
-        V4 text_color = v4i(1.0f);
+        V4 text_color = global_get_text_color();
         should_close = drop_down_menu->menu_options_selection(
             i, drop_down_item_hit, should_close, item_clicked, &text_color,
             option_data);
@@ -3748,7 +3783,6 @@ void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)
 b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color,
                         const char* text)
 {
-
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
@@ -3790,7 +3824,8 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color,
     }
 
     b8 collided = hover_clicked_index.index == (i32)aabbs->size;
-    V4 button_color = color ? *color : v4ic(0.3f);
+    const V4 col = v4a(v4_s_multi(global_get_clear_color(), 1.2f), 1.0f);
+    V4 button_color = color ? *color : col;
     if (collided && event_get_mouse_button_event()->action != FTIC_PRESS)
     {
         button_color = v4_s_multi(button_color, 1.2f);
@@ -3836,7 +3871,8 @@ i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item)
 
     f32 pixel_height = 10.0f + ui_context.font.pixel_height;
     quad(&ui_context.render.vertices, window->position,
-         v2f(ui_context.dimensions.width, pixel_height), clear_color, 0.0f);
+         v2f(ui_context.dimensions.width, pixel_height),
+         global_get_clear_color(), 0.0f);
     window->rendering_index_count += 6;
 
     ui_window_row_begin(0.0f);
@@ -3901,7 +3937,7 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x)
 
     v2_add_equal(&position, window->first_item_position);
 
-    V2 size = v2f(40.0f, 20.0f);
+    V2 size = v2_s_add(v2f(24.0f, 4.0f), ui_context.font.pixel_height);
     if (ui_context.row)
     {
         position.x += ui_context.row_current;
@@ -3917,11 +3953,12 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x)
     }
 
     AABB aabb = quad(&ui_context.render.vertices, position, size,
-                     high_light_color, 0.0f);
+                     global_get_highlight_color(), 0.0f);
     array_push(aabbs, aabb);
     window->rendering_index_count += 6;
 
-    V4 color = *selected ? secondary_color : border_color;
+    V4 color =
+        *selected ? global_get_secondary_color() : global_get_border_color();
     V2 t_position = aabb.min;
 
     if (*selected)

@@ -7,6 +7,9 @@ internal AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size,
                                V4 color, f32 texture_index,
                                TextureCoordinates texture_coordinates)
 {
+    position = v2f(round_f32(position.x), round_f32(position.y));
+    size = v2f(round_f32(size.x), round_f32(size.y));
+
     Vertex vertex = {
         .position = position,
         .texture_coordinates = texture_coordinates.coordinates[0],
@@ -29,6 +32,7 @@ internal AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size,
     out.size = size;
     return out;
 }
+
 
 AABB quad_co(VertexArray* vertex_array, V2 position, V2 size, V4 color,
              V4 texture_coordinates, f32 texture_index)
@@ -84,6 +88,9 @@ internal AABB quad_gradiant_internal(VertexArray* vertex_array, V2 position,
     TextureCoordinates texture_coordinates = { v2d(), v2f(0.0f, 1.0f),
                                                v2f(1.0f, 1.0f),
                                                v2f(1.0f, 0.0f) };
+
+    position = v2f(round_f32(position.x), round_f32(position.y));
+    size = v2f(round_f32(size.x), round_f32(size.y));
     Vertex vertex = {
         .position = position,
         .texture_coordinates = texture_coordinates.coordinates[0],

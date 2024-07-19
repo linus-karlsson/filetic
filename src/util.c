@@ -342,3 +342,8 @@ f32 abs_f32(f32 in)
 {
     return in < 0.0f ? in * -1.0f : in;
 }
+
+f32 round_f32(f32 value)
+{
+    return (f32)((int)(value + (0.5f - (f32)(value < 0.0f))));
+}

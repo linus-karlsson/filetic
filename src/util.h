@@ -123,3 +123,4 @@ u32 get_path_length(const char* path, u32 path_length);
 
 f32 radians(f32 deg);
 f32 abs_f32(f32 in);
+f32 round_f32(f32 value);

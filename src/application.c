@@ -5,9 +5,12 @@
 #include "opengl_util.h"
 #include "camera.h"
 #include "object_load.h"
+#include "random.h"
+#include "globals.h"
 #include <stdio.h>
 #include <string.h>
 #include <glad/glad.h>
+#include <math.h>
 
 global const V4 full_icon_co = {
     .x = 0.0f,
@@ -249,10 +252,10 @@ internal void set_sorting_buttons(const ApplicationContext* application,
                                   u32* index_count, DirectoryTab* tab,
                                   RenderingProperties* render)
 {
-    V4 name_button_color = clear_color;
+    V4 name_button_color = global_get_clear_color();
     if (hover)
     {
-        name_button_color = high_light_color;
+        name_button_color = global_get_highlight_color();
         if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
         {
             DirectoryPage* current = directory_current(&tab->directory_history);
@@ -275,7 +278,7 @@ internal void set_sorting_buttons(const ApplicationContext* application,
     quad(&render->vertices, aabb->min, aabb->size, name_button_color, 0.0f);
     *index_count += 6;
     quad_border(&render->vertices, index_count, aabb->min, aabb->size,
-                border_color, border_width, 0.0f);
+                global_get_border_color(), global_get_border_width(), 0.0f);
     const V2 name_text_position =
         v2f(aabb->min.x + 10.0f,
             aabb->min.y + application->font.pixel_height + 9.0f);
@@ -290,8 +293,9 @@ add_move_in_history_button(const AABB* aabb, const V4 icon_co, const b8 disable,
                            SelectedItemValues* selected_item_values,
                            DirectoryHistory* directory_history)
 {
-    if (ui_window_add_icon_button(aabb->min, aabb->size, high_light_color,
-                                  icon_co, UI_ARROW_ICON_TEXTURE, disable))
+    if (ui_window_add_icon_button(aabb->min, aabb->size,
+                                  global_get_highlight_color(), icon_co,
+                                  UI_ARROW_ICON_TEXTURE, disable))
     {
         directory_move_in_history(history_add, selected_item_values,
                                   directory_history);
@@ -475,8 +479,9 @@ internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
 
     quad_border_gradiant(&drop_down_menu->render->vertices,
                          drop_down_menu->index_count, drop_down_menu->aabb.min,
-                         drop_down_menu->aabb.size, lighter_color,
-                         lighter_color, drop_down_border_width, 0.0f);
+                         drop_down_menu->aabb.size, global_get_lighter_color(),
+                         global_get_lighter_color(), drop_down_border_width,
+                         0.0f);
 
     b8 item_clicked = false;
 
@@ -532,7 +537,7 @@ internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu,
         if (drop_down_item_hit)
         {
             quad(&drop_down_menu->render->vertices, promt_item_position,
-                 drop_down_item_aabb.size, border_color, 0.0f);
+                 drop_down_item_aabb.size, global_get_border_color(), 0.0f);
             *drop_down_menu->index_count += 6;
         }
 
@@ -911,7 +916,7 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
         {
             if (arguments->selected_paths->size == 0)
             {
-                *text_color = lighter_color;
+                *text_color = global_get_lighter_color();
             }
             else
             {
@@ -927,7 +932,7 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
         {
             if (platform_clipboard_is_empty())
             {
-                *text_color = lighter_color;
+                *text_color = global_get_lighter_color();
             }
             else
             {
@@ -943,7 +948,7 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
         {
             if (arguments->selected_paths->size == 0)
             {
-                *text_color = lighter_color;
+                *text_color = global_get_lighter_color();
             }
             else
             {
@@ -960,7 +965,7 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
         {
             if (arguments->selected_paths->size == 0)
             {
-                *text_color = lighter_color;
+                *text_color = global_get_lighter_color();
             }
             else
             {
@@ -1005,7 +1010,7 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
         {
             if (arguments->selected_paths->size == 0)
             {
-                *text_color = lighter_color;
+                *text_color = global_get_lighter_color();
             }
             else
             {
@@ -1378,6 +1383,7 @@ u8* application_initialize(ApplicationContext* app)
     app->preview_window = app->windows.data[4];
     app->menu_window = app->windows.data[5];
     app->windows_window = app->windows.data[6];
+    app->font_change_window = app->windows.data[7];
 
     array_create(&app->free_window_ids, 10);
     array_create(&app->tab_windows, 20);
@@ -1471,6 +1477,8 @@ u8* application_initialize(ApplicationContext* app)
     };
     array_create(&app->suggestion_data.items, 6);
 
+    app->show_hidden_files = true;
+
     return font_bitmap;
 }
 
@@ -1520,7 +1528,8 @@ void application_begin_frame(ApplicationContext* app)
     }
 
     glViewport(0, 0, width, height);
-    glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+    glClearColor(global_get_clear_color().r, global_get_clear_color().g,
+                 global_get_clear_color().b, global_get_clear_color().a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     app->mvp.projection = ortho(0.0f, app->dimensions.width,
@@ -1928,7 +1937,8 @@ void application_run()
 
         const f32 top_bar_height = 28.0f + ui_font_pixel_height;
         const f32 top_bar_menu_height = 10.0f + ui_font_pixel_height;
-        const f32 bottom_bar_height = 25.0f;
+        const f32 bottom_bar_height = 10.0f + ui_font_pixel_height;
+        const f32 list_item_height = 16.0f + ui_font_pixel_height;
 
         AABB dock_space = { .min = v2f(0.0f,
                                        top_bar_height + top_bar_menu_height) };
@@ -1937,18 +1947,19 @@ void application_run()
         ui_context_begin(app.dimensions, &dock_space, app.delta_time,
                          check_collision);
         {
+            const V4 button_color =
+                v4a(v4_s_multi(global_get_clear_color(), 3.0f), 1.0f);
             UiWindow* top_bar_menu = ui_window_get(app.menu_window);
-            if (app.open_menu_window || top_bar_menu->size_animation_on)
+            if (app.open_menu_window)
             {
                 if (ui_window_begin(app.menu_window, NULL, false, false))
                 {
                     if (ui_window_set_overlay() && app.open_menu_window)
                     {
-                        ui_window_start_size_animation(
-                            top_bar_menu, top_bar_menu->size,
-                            v2f(top_bar_menu->size.width, 0.0f));
                         app.open_menu_window = false;
                     }
+
+                    f32 end_width = 0.0f;
 
                     AABB row = {
                         .min = v2i(10.0f),
@@ -1957,29 +1968,178 @@ void application_run()
 
                     ui_window_row_begin(20.0f);
                     {
-                        ui_window_add_text(row.min, "Animation on: ", false);
+                        ui_window_add_text(row.min, "Animation on:", false);
                         static b8 selected = true;
                         static f32 x = 0.0f;
                         ui_window_add_switch(row.min, &selected, &x);
                         ui_context_set_animation(selected);
                     }
-                    ui_window_row_end();
+                    f32 end_row_position = ui_window_row_end();
+                    end_width = max(end_width, end_row_position);
+
+                    row.min.y += ui_font_pixel_height + 20.0f;
+                    ui_window_row_begin(20.0f);
+                    {
+                        V2 text_position = v2f(row.min.x, row.min.y + 2.0f);
+                        ui_window_add_text(text_position, "Font:", false);
+                        V2 dim = v2d();
+                        V4 color = button_color;
+
+                        const char* font_path = ui_context_get_font_path();
+                        const u32 path_length =
+                            get_path_length(font_path, (u32)strlen(font_path));
+                        if (ui_window_add_button(row.min, &dim, &color,
+                                                 font_path + path_length))
+                        {
+                            if (app.font_change_directory.parent)
+                            {
+                                platform_reset_directory(
+                                    &app.font_change_directory);
+                            }
+                            const char* font_directory_path =
+                                "C:\\Windows\\Fonts\\*";
+                            app.font_change_directory = platform_get_directory(
+                                font_directory_path,
+                                (u32)strlen(font_directory_path));
+                            DirectoryItemArray* files =
+                                &app.font_change_directory.files;
+                            for (i32 i = 0; i < (i32)files->size; ++i)
+                            {
+                                const char* extension = file_get_extension(
+                                    files->data[i].name,
+                                    (u32)strlen(files->data[i].name));
+                                if (!extension || strcmp(extension, ".ttf"))
+                                {
+                                    char* path_to_remove = files->data[i].path;
+                                    for (u32 j = i; j < files->size - 1; ++j)
+                                    {
+                                        files->data[j] = files->data[j + 1];
+                                    }
+                                    free(path_to_remove);
+                                    files->size--;
+                                    --i;
+                                }
+                            }
+                            app.open_font_change_window = true;
+                        }
+                    }
+                    end_row_position = ui_window_row_end();
+                    end_width = max(end_width, end_row_position);
+
+                    row.min.y += ui_font_pixel_height + 20.0f;
+                    ui_window_row_begin(20.0f);
+                    {
+                        V2 text_position = v2f(row.min.x, row.min.y + 2.0f);
+                        ui_window_add_text(text_position, "Font size: ", false);
+
+                        char buffer[20] = { 0 };
+                        value_to_string(buffer, "%u",
+                                        (u32)ui_font_pixel_height);
+                        V2 dim = v2d();
+                        V4 color = button_color;
+                        if (ui_window_add_button(row.min, &dim, &color, "-"))
+                        {
+                            ui_context_change_font_pixel_height(
+                                ui_font_pixel_height - 1);
+                        }
+                        ui_window_add_text(text_position, buffer, false);
+                        if (ui_window_add_button(row.min, &dim, &color, "+"))
+                        {
+                            ui_context_change_font_pixel_height(
+                                ui_font_pixel_height + 1);
+                        }
+                    }
+                    end_row_position = ui_window_row_end();
+                    end_width = max(end_width, end_row_position);
+
+                    row.min.y += ui_font_pixel_height + 20.0f;
+                    {
+                        V2 dim = v2d();
+                        V4 color = button_color;
+                        if (ui_window_add_button(row.min, &dim, &color,
+                                                 "Reset to default"))
+                        {
+                            ui_context_set_font_path(
+                                "C:/Windows/Fonts/arial.ttf");
+                            ui_context_change_font_pixel_height(16);
+                        }
+                    }
+
+                    row.min.y += ui_font_pixel_height + 20.0f;
+                    ui_window_row_begin(20.0f);
+                    {
+                        ui_window_add_text(row.min,
+                                           "Highlight focused window:", false);
+                        static b8 selected = true;
+                        static f32 x = 0.0f;
+                        ui_window_add_switch(row.min, &selected, &x);
+                        ui_context_set_highlight_focused_window(selected);
+                    }
+                    end_row_position = ui_window_row_end();
+                    end_width = max(end_width, end_row_position);
+
+                    row.min.y += ui_font_pixel_height + 20.0f;
+                    ui_window_row_begin(20.0f);
+                    {
+                        ui_window_add_text(row.min,
+                                           "Show hidden files:", false);
+                        static f32 x = 0.0f;
+                        b8 before = app.show_hidden_files;
+                        ui_window_add_switch(row.min, &app.show_hidden_files,
+                                             &x);
+                        platform_show_hidden_files(app.show_hidden_files);
+                        if (before != app.show_hidden_files)
+                        {
+                            for (u32 i = 0; i < app.tabs.size; ++i)
+                            {
+                                directory_reload(directory_current(
+                                    &app.tabs.data[i].directory_history));
+                            }
+                        }
+                    }
+                    end_row_position = ui_window_row_end();
+                    end_width = max(end_width, end_row_position);
+
+                    row.min.y += ui_font_pixel_height + 20.0f;
+                    ui_window_row_begin(20.0f);
+                    {
+                        ui_window_add_text(row.min, "Dark mode:", false);
+                        static b8 selected = true;
+                        static f32 x = 0.0f;
+                        ui_window_add_switch(row.min, &selected, &x);
+                        if (selected)
+                        {
+                            global_set_clear_color(v4ic(0.09f));
+                            global_set_text_color(v4ic(1.0f));
+                        }
+                        else
+                        {
+                            global_set_clear_color(v4ic(0.8f));
+                            global_set_text_color(v4ic(0.0f));
+                        }
+                    }
+                    end_row_position = ui_window_row_end();
+                    end_width = max(end_width, end_row_position);
+
                     ui_window_end();
+
+                    row.min.y += ui_font_pixel_height + 20.0f;
+                    top_bar_menu->size.width = end_width + 10.0f;
+                    top_bar_menu->size.height = row.min.y;
                 }
             }
 
             UiWindow* top_bar_windows = ui_window_get(app.windows_window);
-            if (app.open_windows_window || top_bar_windows->size_animation_on)
+            if (app.open_windows_window)
             {
                 if (ui_window_begin(app.windows_window, NULL, false, false))
                 {
                     if (ui_window_set_overlay() && app.windows_window)
                     {
-                        ui_window_start_size_animation(
-                            top_bar_windows, top_bar_windows->size,
-                            v2f(top_bar_windows->size.width, 0.0f));
                         app.open_windows_window = false;
                     }
+
+                    f32 end_width = 0.0f;
 
                     AABB row = {
                         .min = v2i(10.0f),
@@ -2010,9 +2170,10 @@ void application_run()
                             }
                         }
                     }
-                    ui_window_row_end();
+                    f32 end_row_position = ui_window_row_end();
+                    end_width = max(end_width, end_row_position);
 
-                    row.min.y += app.font.pixel_height + 10.0f;
+                    row.min.y += ui_font_pixel_height + 20.0f;
                     ui_window_row_begin(20.0f);
                     {
                         ui_window_add_text(row.min, "Search result: ", false);
@@ -2037,8 +2198,51 @@ void application_run()
                             }
                         }
                     }
-                    ui_window_row_end();
+                    end_row_position = ui_window_row_end();
+                    end_width = max(end_width, end_row_position);
+                    ui_window_end();
 
+                    row.min.y += ui_font_pixel_height + 20.0f;
+                    top_bar_windows->size.width = end_width + 10.0f;
+                    top_bar_windows->size.height = row.min.y;
+                }
+            }
+
+            if (app.open_font_change_window)
+            {
+                UiWindow* font_change_window =
+                    ui_window_get(app.font_change_window);
+                font_change_window->size = v2f(app.dimensions.width * 0.5f,
+                                               app.dimensions.height * 0.9f);
+                font_change_window->position =
+                    v2f(middle(app.dimensions.width,
+                               font_change_window->size.width),
+                        middle(app.dimensions.height,
+                               font_change_window->size.height));
+                if (ui_window_begin(app.font_change_window, NULL, false, false))
+                {
+                    if (ui_window_set_overlay())
+                    {
+                        app.open_font_change_window = false;
+                    }
+                    else
+                    {
+                        V2 list_position = v2f(10.0f, 10.0f);
+                        i32 selected_item = -1;
+                        if (ui_window_add_file_list(
+                                list_position, list_item_height,
+                                &app.font_change_directory.files, NULL,
+                                &selected_item))
+                        {
+                            const char* path = app.font_change_directory.files
+                                                   .data[selected_item]
+                                                   .path;
+                            ui_context_set_font_path(path);
+                            ui_context_change_font_pixel_height(
+                                ui_font_pixel_height);
+                            app.open_font_change_window = false;
+                        }
+                    }
                     ui_window_end();
                 }
             }
@@ -2047,8 +2251,6 @@ void application_run()
             top_bar->position = v2d();
             top_bar->size =
                 v2f(app.dimensions.width, top_bar_height + top_bar_menu_height);
-            top_bar->top_color = v4ic(0.2f);
-            top_bar->bottom_color = v4ic(0.15f);
 
             if (ui_window_begin(app.top_bar_window, NULL, false, false))
             {
@@ -2058,8 +2260,6 @@ void application_run()
                 if (index_clicked == 0)
                 {
                     top_bar_menu->position = drop_down_position;
-                    ui_window_start_size_animation(
-                        top_bar_menu, v2f(200.0f, 0.0f), v2i(200.0f));
                     top_bar_menu->top_color.a = 0.95f;
                     top_bar_menu->bottom_color.a = 0.95f;
 
@@ -2069,8 +2269,6 @@ void application_run()
                 else if (index_clicked == 1)
                 {
                     top_bar_windows->position = drop_down_position;
-                    ui_window_start_size_animation(
-                        top_bar_windows, v2f(200.0f, 0.0f), v2i(200.0f));
                     top_bar_windows->top_color.a = 0.95f;
                     top_bar_windows->bottom_color.a = 0.95f;
 
@@ -2102,9 +2300,10 @@ void application_run()
                 disable = !directory_can_go_up(
                     directory_current(&tab->directory_history)
                         ->directory.parent);
-                if (ui_window_add_icon_button(
-                        button_aabb.min, button_aabb.size, high_light_color,
-                        arrow_up_icon_co, UI_ARROW_ICON_TEXTURE, disable))
+                if (ui_window_add_icon_button(button_aabb.min, button_aabb.size,
+                                              global_get_highlight_color(),
+                                              arrow_up_icon_co,
+                                              UI_ARROW_ICON_TEXTURE, disable))
                 {
                     directory_go_up(&tab->directory_history);
                 }
@@ -2210,8 +2409,6 @@ void application_run()
             bottom_bar->position =
                 v2f(0.0f, app.dimensions.height - bottom_bar_height);
             bottom_bar->size = v2f(app.dimensions.width, bottom_bar_height);
-            bottom_bar->top_color = v4ic(0.2f);
-            bottom_bar->bottom_color = v4ic(0.15f);
             if (ui_window_begin(app.bottom_bar_window, NULL, false, false))
             {
                 Directory current =
@@ -2219,7 +2416,7 @@ void application_run()
                 char buffer[64] = { 0 };
                 sprintf_s(buffer, sizeof(buffer), "Folders: %u  |  Files: %u",
                           current.sub_directories.size, current.files.size);
-                ui_window_add_text(v2f(10.0f, 0.0f), buffer, false);
+                ui_window_add_text(v2f(10.0f, 1.0f), buffer, false);
 
                 ui_window_row_begin(0.0f);
 
@@ -2227,17 +2424,17 @@ void application_run()
                     bottom_bar->size.width - (2.0f * bottom_bar_height + 5.0f),
                     0);
 
-                if (ui_window_add_icon_button(list_grid_icon_position,
-                                              v2i(bottom_bar_height),
-                                              border_color, full_icon_co,
-                                              UI_LIST_ICON_TEXTURE, false))
+                if (ui_window_add_icon_button(
+                        list_grid_icon_position, v2i(bottom_bar_height),
+                        global_get_border_color(), full_icon_co,
+                        UI_LIST_ICON_TEXTURE, false))
                 {
                     tab->list_view = true;
                 }
-                if (ui_window_add_icon_button(list_grid_icon_position,
-                                              v2i(bottom_bar_height),
-                                              border_color, full_icon_co,
-                                              UI_GRID_ICON_TEXTURE, false))
+                if (ui_window_add_icon_button(
+                        list_grid_icon_position, v2i(bottom_bar_height),
+                        global_get_border_color(), full_icon_co,
+                        UI_GRID_ICON_TEXTURE, false))
                 {
                     tab->list_view = false;
                 }
@@ -2246,8 +2443,6 @@ void application_run()
 
                 ui_window_end();
             }
-
-            const f32 list_item_height = 16.0f + ui_font_pixel_height;
 
             if (app.show_quick_access)
             {
@@ -2291,8 +2486,8 @@ void application_run()
                     preview->position = v2f(
                         middle(app.dimensions.width, preview->size.width),
                         middle(app.dimensions.height, preview->size.height));
-                    preview->top_color = clear_color;
-                    preview->bottom_color = clear_color;
+                    preview->top_color = global_get_clear_color();
+                    preview->bottom_color = global_get_clear_color();
 
                     if (ui_window_begin(app.preview_window, NULL, false, false))
                     {

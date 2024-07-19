@@ -2,6 +2,7 @@
 #include "opengl_util.h"
 #include <stb/stb_truetype.h>
 #include <string.h>
+#include <math.h>
 
 void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
                     u32 glyph_count, u32 glyph_offset,
@@ -24,7 +25,7 @@ void init_ttf_atlas(i32 width_atlas, i32 height_atlas, f32 pixel_height,
         stbtt_bakedchar bc = data[i];
         c_ttf->dimensions = v2f((f32)(bc.x1 - bc.x0), (f32)(bc.y1 - bc.y0));
         c_ttf->offset = v2f(bc.xoff, bc.yoff);
-        c_ttf->x_advance = bc.xadvance;
+        c_ttf->x_advance = roundf(bc.xadvance);
         c_ttf->text_coords =
             v4f((f32)bc.x0 / width_atlas, (f32)bc.y0 / height_atlas,
                 (f32)bc.x1 / width_atlas, (f32)bc.y1 / height_atlas);

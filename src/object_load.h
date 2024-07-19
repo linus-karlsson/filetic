@@ -1,5 +1,6 @@
 #pragma once
 #include "define.h"
+#include "math/ftic_math.h"
 
 typedef struct Indices
 {

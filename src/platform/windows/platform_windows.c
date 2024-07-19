@@ -27,6 +27,8 @@
 
 #define TOTAL_CURSORS 7
 
+global b8 show_hidden_files = true;
+
 typedef struct Callbacks
 {
     OnKeyPressedCallback on_key_pressed;
@@ -545,6 +547,11 @@ internal void insert_directory_item(const u32 directory_len, const u64 size,
     }
 }
 
+void platform_show_hidden_files(b8 show)
+{
+    show_hidden_files = show;
+}
+
 Directory platform_get_directory(const char* directory_path,
                                  const u32 directory_len)
 {
@@ -558,16 +565,26 @@ Directory platform_get_directory(const char* directory_path,
     {
         do
         {
+            if (ffd.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM ||
+                (!show_hidden_files &&
+                 ((ffd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) ||
+                  ffd.cFileName[0] == '.')))
+            {
+                continue;
+            }
+            if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            {
+                if (!strcmp(ffd.cFileName, ".") || !strcmp(ffd.cFileName, ".."))
+                {
+                    continue;
+                }
+            }
+
             char* path =
                 concatinate(directory_path, directory_len - 1, ffd.cFileName,
                             (u32)strlen(ffd.cFileName), 0, 2, NULL);
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
-                if (!strcmp(ffd.cFileName, ".") || !strcmp(ffd.cFileName, ".."))
-                {
-                    free(path);
-                    continue;
-                }
                 insert_directory_item(directory_len, 0, path,
                                       &directory.sub_directories);
             }

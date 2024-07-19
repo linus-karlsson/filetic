@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "math/ftic_math.h"
 
 #define PI 3.141592653589f
 #define KILOBYTE(n) ((n) * 1024ULL)
@@ -206,46 +205,4 @@ typedef struct CharPtrArray
     char** data;
 } CharPtrArray;
 
-
-global const V4 clear_color = {
-    .r = 0.07f,
-    .g = 0.07f,
-    .b = 0.07f,
-    .a = 1.0f,
-};
-
-global const V4 high_light_color = {
-    .r = 0.2f,
-    .g = 0.2f,
-    .b = 0.2f,
-    .a = 1.0f,
-};
-
-global const V4 border_color = {
-    .r = 0.35f,
-    .g = 0.35f,
-    .b = 0.35f,
-    .a = 1.0f,
-};
-
-global const V4 lighter_color = {
-    .r = 0.55f,
-    .g = 0.55f,
-    .b = 0.55f,
-    .a = 1.0f,
-};
-global const V4 bright_color = {
-    .r = 0.7f,
-    .g = 0.7f,
-    .b = 0.7f,
-    .a = 1.0f,
-};
-global const V4 secondary_color = {
-    .r = 0.0f,
-    .g = 0.59f,
-    .b = 1.0f,
-    .a = 1.0f,
-};
-
-global const f32 border_width = 1.0f;
 

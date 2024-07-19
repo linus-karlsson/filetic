@@ -202,8 +202,12 @@ void ui_context_destroy();
 
 const FontTTF* ui_context_get_font();
 f32 ui_context_get_font_pixel_height();
+void ui_context_change_font_pixel_height(const f32 pixel_height);
+const char* ui_context_get_font_path();
+void ui_context_set_font_path(const char* new_path);
 
 void ui_context_set_animation(b8 on);
+void ui_context_set_highlight_focused_window(b8 on);
 
 u32 ui_window_create();
 UiWindow* ui_window_get(u32 window_id);

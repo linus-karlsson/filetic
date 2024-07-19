@@ -64,6 +64,7 @@ typedef struct MainDropDownSelectionData
     DirectoryPage* directory;
     DirectoryItemArray* quick_access;
     const CharPtrArray* selected_paths;
+    b8 show_hidden_files;
 } MainDropDownSelectionData;
 
 typedef struct SuggestionSelectionData
@@ -128,7 +129,11 @@ typedef struct ApplicationContext
     u32 preview_window;
     u32 menu_window;
     u32 windows_window;
+    u32 font_change_window;
 
+    Directory font_change_directory;
+
+    b8 open_font_change_window;
     b8 open_menu_window;
     b8 open_windows_window;
 
@@ -141,6 +146,8 @@ typedef struct ApplicationContext
     InputBuffer parent_directory_input;
     DropDownMenu2 suggestions;
     SuggestionSelectionData suggestion_data;
+
+    b8 show_hidden_files;
 } ApplicationContext;
 
 void application_run();

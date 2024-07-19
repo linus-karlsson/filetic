@@ -167,3 +167,4 @@ void platform_open_context(void* window, const char* path);
 void* directory_listen_to_directory_changes(const char* path);
 void directory_unlisten_to_directory_changes(void* handle);
 b8 directory_look_for_directory_change(void* handle);
+void platform_show_hidden_files(b8 show);
