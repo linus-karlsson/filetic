@@ -16,24 +16,25 @@
 #define syscanf(...) sscanf_s(__VA_ARGS__)
 #define sy_gcvt(...) _gcvt_s(__VA_ARGS__);
 
-#define value_to_string(buffer, ...) sysprintf(buffer, sizeof((buffer)), __VA_ARGS__)
+#define value_to_string(buffer, ...)                                           \
+    sysprintf(buffer, sizeof((buffer)), __VA_ARGS__)
 
-#define value_to_string_offset(buffer, offset, ...)                                 \
+#define value_to_string_offset(buffer, offset, ...)                            \
     sysprintf((buffer) + (offset), sizeof((buffer)) - (offset), __VA_ARGS__)
 
 #define string_to_value(buffer, ...) syscanf((buffer), __VA_ARGS__)
 
-#define f32_to_string(buffer, num_digits, val)                                    \
+#define f32_to_string(buffer, num_digits, val)                                 \
     sy_gcvt(buffer, sizeof((buffer)), val, num_digits)
 
-#define f32_to_string_offset(buffer, offset, num_digits, val)                     \
+#define f32_to_string_offset(buffer, offset, num_digits, val)                  \
     sy_gcvt((buffer) + (offset), sizeof((buffer)) - (offset), val, num_digits)
 
 #define array_create(array, array_capacity)                                    \
     do                                                                         \
     {                                                                          \
         (array)->size = 0;                                                     \
-        (array)->capacity = max((array_capacity), 2);    \
+        (array)->capacity = max((array_capacity), 2);                          \
         (array)->data = calloc(array_capacity, sizeof((*(array)->data)));      \
     } while (0)
 
@@ -68,7 +69,14 @@
         (arr)->mutex = platform_mutex_create();                                \
     } while (0)
 
-#define array_move_to_front(type, array, index)                                      \
+#define safe_array_free(arr)                                                   \
+    do                                                                         \
+    {                                                                          \
+        array_free(&(arr)->array);                                                       \
+        platform_mutex_destroy(&(arr)->mutex);                                 \
+    } while (0)
+
+#define array_move_to_front(type, array, index)                                \
     do                                                                         \
     {                                                                          \
         type temp = (array)->data[(index)];                                    \
@@ -204,5 +212,4 @@ typedef struct CharPtrArray
     u32 capacity;
     char** data;
 } CharPtrArray;
-
 

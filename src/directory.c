@@ -9,6 +9,44 @@ DirectoryPage* directory_current(DirectoryHistory* history)
     return history->history.data + history->current_index;
 }
 
+typedef struct LoadThumpnailData
+{
+    FticGUID file_id;
+    char* file_path;
+    SafeIdTexturePropertiesArray* array;
+} LoadThumpnailData;
+
+internal void load_thumpnails(void* data)
+{
+    LoadThumpnailData* arguments = (LoadThumpnailData*)data;
+
+    IdTextureProperties value = { .id = guid_copy(&arguments->file_id) };
+    texture_load(arguments->file_path, &value.texture_properties);
+    if (!value.texture_properties.bytes)
+    {
+        free(data);
+        return;
+    }
+
+    if (value.texture_properties.width > 128 ||
+        value.texture_properties.height > 128)
+    {
+        texture_resize(&value.texture_properties, 128, 128);
+    }
+
+    platform_mutex_lock(&arguments->array->mutex);
+    if (arguments->array->array.data == NULL)
+    {
+        free(value.texture_properties.bytes);
+        free(data);
+        return;
+    }
+    array_push(&arguments->array->array, value);
+
+    platform_mutex_unlock(&arguments->array->mutex);
+    free(data);
+}
+
 internal void look_for_same_items(const DirectoryItemArray* existing_items,
                                   DirectoryItemArray* reloaded_items)
 {
@@ -28,6 +66,7 @@ internal void look_for_same_items(const DirectoryItemArray* existing_items,
                     existing_item->animation_precent;
                 reloaded_item->animation_on = existing_item->animation_on;
                 reloaded_item->rename = existing_item->rename;
+                reloaded_item->texture_id = existing_item->texture_id;
                 ++count;
                 break;
             }
@@ -50,7 +89,7 @@ void directory_reload(DirectoryPage* directory_page)
     look_for_same_items(&directory_page->directory.files,
                         &reloaded_directory.files);
 
-    platform_reset_directory(&directory_page->directory);
+    platform_reset_directory(&directory_page->directory, false);
     directory_page->directory = reloaded_directory;
     directory_sort(directory_page);
 }
@@ -226,7 +265,37 @@ void directory_history_update_directory_change_handle(
         directory_current(directory_history)->directory.parent);
 }
 
-b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
+internal void
+look_for_and_get_thumbnails(DirectoryItemArray* files,
+                            ThreadTaskQueue* task_queue,
+                            SafeIdTexturePropertiesArray* textures)
+{
+    for (u32 i = 0; i < files->size; ++i)
+    {
+        DirectoryItem* item = files->data + i;
+        const char* extension =
+            file_get_extension(item->path, (u32)strlen(item->path));
+
+        if (extension &&
+            (!strcmp(extension, ".jpg") || !strcmp(extension, ".png")))
+        {
+            LoadThumpnailData* thump_nail_data =
+                (LoadThumpnailData*)calloc(1, sizeof(LoadThumpnailData));
+            thump_nail_data->file_id = guid_copy(&item->id);
+            thump_nail_data->array = textures;
+            thump_nail_data->file_path = item->path;
+            ThreadTask task = {
+                .data = thump_nail_data,
+                .task_callback = load_thumpnails,
+            };
+            thread_tasks_push(task_queue, &task, 1, NULL);
+        }
+    }
+}
+
+b8 directory_go_to(char* path, u32 length, ThreadTaskQueue* task_queue,
+                   SafeIdTexturePropertiesArray* texures,
+                   DirectoryHistory* directory_history)
 {
     b8 result = false;
     char saved_chars[3];
@@ -247,10 +316,15 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
              i >= (i32)directory_history->current_index + 1; --i)
         {
             platform_reset_directory(
-                &directory_history->history.data[i].directory);
+                &directory_history->history.data[i].directory, true);
         }
         directory_history->history.size = ++directory_history->current_index;
         array_push(&directory_history->history, new_page); // size + 1
+                                                           //
+        DirectoryPage* page = array_back(&directory_history->history);
+        look_for_and_get_thumbnails(&page->directory.files, task_queue,
+                                    texures);
+
         path[length--] = saved_chars[2];
         path[length--] = saved_chars[1];
         result = true;
@@ -260,11 +334,13 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
     return result;
 }
 
-void directory_open_folder(char* folder_path,
+void directory_open_folder(char* folder_path, ThreadTaskQueue* task_queue,
+                           SafeIdTexturePropertiesArray* texures,
                            DirectoryHistory* directory_history)
 {
     u32 length = (u32)strlen(folder_path);
-    directory_go_to(folder_path, length, directory_history);
+    directory_go_to(folder_path, length, task_queue, texures,
+                    directory_history);
 }
 
 void directory_move_in_history(const i32 index_add,
@@ -292,7 +368,9 @@ b8 directory_can_go_up(char* parent)
     return false;
 }
 
-void directory_go_up(DirectoryHistory* directory_history)
+void directory_go_up(ThreadTaskQueue* task_queue,
+                     SafeIdTexturePropertiesArray* textures,
+                     DirectoryHistory* directory_history)
 {
     DirectoryPage* current = directory_current(directory_history);
     char* parent = current->directory.parent;
@@ -300,45 +378,52 @@ void directory_go_up(DirectoryHistory* directory_history)
 
     char* new_parent = (char*)calloc(parent_length + 1, sizeof(char));
     memcpy(new_parent, parent, parent_length);
-    directory_go_to(new_parent, parent_length, directory_history);
+    directory_go_to(new_parent, parent_length, task_queue, textures,
+                    directory_history);
     free(new_parent);
 }
 
-DirectoryTab directory_tab_add(const char* dir)
+void directory_tab_add(const char* dir, ThreadTaskQueue* task_queue,
+                       DirectoryTab* tab)
 {
-    DirectoryHistory directory_history = { 0 };
-    array_create(&directory_history.history, 10);
+    array_create(&tab->directory_history.history, 10);
 
     DirectoryPage page = { 0 };
     page.directory = platform_get_directory(dir, (u32)strlen(dir));
-    array_push(&directory_history.history, page);
+    array_push(&tab->directory_history.history, page);
 
-    directory_history.change_handle =
+    tab->directory_history.change_handle =
         directory_listen_to_directory_changes(page.directory.parent);
 
-    SelectedItemValues selected_item_values = { 0 };
-    array_create(&selected_item_values.paths, 10);
-    selected_item_values.selected_items =
+    safe_array_create(&tab->textures, 10);
+
+    array_create(&tab->directory_list.selected_item_values.paths, 10);
+    tab->directory_list.selected_item_values.selected_items =
         hash_table_create_guid(100, hash_guid);
 
-    return (DirectoryTab){
-        .directory_list = {
-            .input = ui_input_buffer_create(),
-            .selected_item_values = selected_item_values,
-        },
-        .directory_history = directory_history,
-        .list_view = true,
-    };
+    tab->directory_list.input = ui_input_buffer_create();
+    tab->list_view = true;
+
+    DirectoryPage* last_page = array_back(&tab->directory_history.history);
+    look_for_and_get_thumbnails(&last_page->directory.files, task_queue,
+                                &tab->textures);
 }
 
 void directory_tab_clear(DirectoryTab* tab)
 {
-    for (u32 j = 0; j < tab->directory_history.history.size; j++)
+    for (u32 i = 0; i < tab->directory_history.history.size; i++)
     {
         platform_reset_directory(
-            &tab->directory_history.history.data[j].directory);
+            &tab->directory_history.history.data[i].directory, true);
     }
     array_free(&tab->directory_history.history);
+
+    platform_mutex_lock(&tab->textures.mutex);
+    free(tab->textures.array.data);
+    tab->textures.array.data = NULL;
+    platform_mutex_unlock(&tab->textures.mutex);
+    platform_mutex_destroy(&tab->textures.mutex);
+
     directory_unlisten_to_directory_changes(
         tab->directory_history.change_handle);
     ui_input_buffer_delete(&tab->directory_list.input);

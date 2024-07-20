@@ -1752,10 +1752,12 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
         {
             const V2 top_bar_dimensions =
                 v2f(window->size.width, top_bar_height);
-            const V4 top_bar_color = v4a(v4_s_multi(global_get_clear_color(), 1.2f), 1.0f);
-            const AABB aabb = quad_gradiant_t_b(
-                &ui_context.render.vertices, window->position,
-                top_bar_dimensions, top_bar_color, global_get_clear_color(), 0.0f);
+            const V4 top_bar_color =
+                v4a(v4_s_multi(global_get_clear_color(), 1.2f), 1.0f);
+            const AABB aabb =
+                quad_gradiant_t_b(&ui_context.render.vertices, window->position,
+                                  top_bar_dimensions, top_bar_color,
+                                  global_get_clear_color(), 0.0f);
             index_offset_and_count.second += 6;
 
             V2 tab_position = window->position;
@@ -3273,8 +3275,9 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
             starting_position.x + item_dimensions.width - x_advance - 5.0f;
         window->rendering_index_count += text_generation_color(
             ui_context.font.chars, buffer, UI_FONT_TEXTURE, size_text_position,
-            1.0f, ui_context.font.pixel_height, v4a(global_get_text_color(), window->alpha),
-            NULL, NULL, NULL, &ui_context.render.vertices);
+            1.0f, ui_context.font.pixel_height,
+            v4a(global_get_text_color(), window->alpha), NULL, NULL, NULL,
+            &ui_context.render.vertices);
     }
     window->rendering_index_count += display_text_and_truncate_if_necissary(
         text_position,
@@ -3317,14 +3320,22 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
         window->rendering_index_count += 6;
     }
 
-    icon_index = get_file_icon_based_on_extension(icon_index, item->name);
-
-    const V2 icon_size = v2i(128.0f);
+    V2 icon_size = v2i(128.0f);
+    if (item->texture_id)
+    {
+        icon_index = (f32)ui_context.render.render.textures.size;
+        array_push(&ui_context.render.render.textures, item->texture_id);
+        icon_size = v2f((f32)item->texture_width, (f32)item->texture_height);
+    }
+    else
+    {
+        icon_index = get_file_icon_based_on_extension(icon_index, item->name);
+    }
     AABB icon_aabb =
         quad(&ui_context.render.vertices,
              v2f(starting_position.x +
                      middle(item_dimensions.width, icon_size.width),
-                 starting_position.y + 3.0f),
+                 starting_position.y + 3.0f + (128.0f - icon_size.height)),
              icon_size, v4a(v4i(1.0f), window->alpha), icon_index);
     window->rendering_index_count += 6;
 
@@ -3337,8 +3348,8 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
 
     V2 text_position = starting_position;
     text_position.x += middle(total_available_width_for_text, x_advance);
+    text_position.y = icon_aabb.min.y + icon_aabb.size.height;
     text_position.y += ui_context.font.pixel_height;
-    text_position.y += icon_aabb.size.height;
 
     window->rendering_index_count += display_text_and_truncate_if_necissary(
         text_position, total_available_width_for_text, window->alpha,
@@ -3435,7 +3446,7 @@ internal void display_grid_item(const V2 position, const i32 index,
                                 UI_FILE_ICON_BIG_TEXTURE, item, list))
         {
             hit_index->first = 1;
-            hit_index->second = index - new_index;
+            hit_index->second = new_index;
         }
     }
 }

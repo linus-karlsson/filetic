@@ -309,6 +309,8 @@ add_move_in_history_button(const AABB* aabb, const V4 icon_co, const b8 disable,
 
 internal b8 show_search_result_window(SearchPage* page, const u32 window,
                                       const f32 list_item_height,
+                                      ThreadTaskQueue* task_queue,
+                                      SafeIdTexturePropertiesArray* textures,
                                       DirectoryHistory* directory_history)
 {
     if (ui_window_begin(window, "Search result", true, true))
@@ -324,7 +326,7 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
         {
             directory_open_folder(
                 page->search_result_folder_array.array.data[selected_item].path,
-                directory_history);
+                task_queue, textures, directory_history);
         }
         list_position.y +=
             list_item_height * page->search_result_folder_array.array.size;
@@ -352,9 +354,44 @@ internal char* get_parent_directory_name(DirectoryPage* current)
 }
 
 internal b8 show_directory_window(const u32 window, const f32 list_item_height,
-                                  const b8 check_collision, DirectoryTab* tab)
+                                  const b8 check_collision,
+                                  ThreadTaskQueue* task_queue,
+                                  DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
+    platform_mutex_lock(&tab->textures.mutex);
+    for (u32 i = 0; i < tab->textures.array.size; ++i)
+    {
+        IdTextureProperties* texture = tab->textures.array.data + i;
+        DirectoryItem* item = NULL;
+        for (u32 j = 0; j < current->directory.files.size; ++j)
+        {
+            DirectoryItem* current_item = current->directory.files.data + j;
+            if (!guid_compare(texture->id, current_item->id))
+            {
+                item = current_item;
+                break;
+            }
+        }
+        if (item)
+        {
+            if (item->texture_id)
+            {
+                texture_delete(item->texture_id);
+            }
+            item->texture_id =
+                texture_create(&texture->texture_properties, GL_RGBA8, GL_RGBA);
+            item->texture_width = texture->texture_properties.width;
+            item->texture_height = texture->texture_properties.height;
+            free(texture->texture_properties.bytes);
+        }
+        else
+        {
+            free(texture->texture_properties.bytes);
+        }
+    }
+    tab->textures.array.size = 0;
+    platform_mutex_unlock(&tab->textures.mutex);
     if (ui_window_begin(window, get_parent_directory_name(current), true, true))
     {
         tab->directory_list.reload = false;
@@ -371,7 +408,7 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
             {
                 directory_open_folder(
                     current->directory.sub_directories.data[selected_item].path,
-                    &tab->directory_history);
+                    task_queue, &tab->textures, &tab->directory_history);
 
                 directory_clear_selected_items(
                     &tab->directory_list.selected_item_values);
@@ -399,7 +436,7 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                     directory_open_folder(
                         current->directory.sub_directories.data[result.second]
                             .path,
-                        &tab->directory_history);
+                        task_queue, &tab->textures, &tab->directory_history);
                 }
                 else
                 {
@@ -1180,7 +1217,10 @@ internal void load_application_state(ApplicationContext* app)
             path[path_length++] = '\\';
             path[path_length++] = '*';
 
-            array_push(&app->tabs, directory_tab_add(path));
+            DirectoryTab tab = { 0 };
+            array_push(&app->tabs, tab);
+            directory_tab_add(path, &app->thread_queue.task_queue,
+                              array_back(&app->tabs));
 
             path[path_length - 2] = '\0';
             path[path_length - 1] = '\0';
@@ -1396,7 +1436,10 @@ u8* application_initialize(ApplicationContext* app)
     load_application_state(app);
     if (app->tabs.size == 0)
     {
-        array_push(&app->tabs, directory_tab_add("C:\\*"));
+        DirectoryTab tab = { 0 };
+        array_push(&app->tabs, tab);
+        directory_tab_add("C:\\*", &app->thread_queue.task_queue,
+                          array_back(&app->tabs));
         array_back(&app->tabs)->window_id =
             app->tab_windows.data[app->current_tab_window_index++];
         saved = false;
@@ -1540,7 +1583,10 @@ void application_begin_frame(ApplicationContext* app)
 
     if (event_is_ctrl_and_key_pressed(FTIC_KEY_T))
     {
-        array_push(&app->tabs, directory_tab_add("C:\\*"));
+        DirectoryTab tab = { 0 };
+        array_push(&app->tabs, tab);
+        directory_tab_add("C:\\*", &app->thread_queue.task_queue,
+                          array_back(&app->tabs));
         app->tab_index = app->tabs.size - 1;
         u32 window_id = 0;
         if (app->free_window_ids.size)
@@ -1694,7 +1740,7 @@ internal void finding_callback(void* data)
     }
     if (should_free_directory)
     {
-        platform_reset_directory(&directory);
+        platform_reset_directory(&directory, true);
     }
     free(arguments->start_directory);
     free(data);
@@ -1994,7 +2040,7 @@ void application_run()
                             if (app.font_change_directory.parent)
                             {
                                 platform_reset_directory(
-                                    &app.font_change_directory);
+                                    &app.font_change_directory, true);
                             }
                             const char* font_directory_path =
                                 "C:\\Windows\\Fonts\\*";
@@ -2305,7 +2351,8 @@ void application_run()
                                               arrow_up_icon_co,
                                               UI_ARROW_ICON_TEXTURE, disable))
                 {
-                    directory_go_up(&tab->directory_history);
+                    directory_go_up(&app.thread_queue.task_queue,
+                                    &tab->textures, &tab->directory_history);
                 }
 
                 button_aabb.min.x += ui_window_row_end() + 10.0f;
@@ -2354,6 +2401,7 @@ void application_run()
                         if (!directory_go_to(
                                 app.parent_directory_input.buffer.data,
                                 app.parent_directory_input.buffer.size,
+                                &app.thread_queue.task_queue, &tab->textures,
                                 &tab->directory_history))
                         {
                         }
@@ -2457,6 +2505,7 @@ void application_run()
                     {
                         directory_open_folder(
                             app.quick_access_folders.data[selected_item].path,
+                            &app.thread_queue.task_queue, &tab->textures,
                             &tab->directory_history);
                     }
                     app.show_quick_access = !ui_window_end();
@@ -2467,7 +2516,8 @@ void application_run()
             {
                 app.show_search_page = !show_search_result_window(
                     &app.search_page, app.search_result_window,
-                    list_item_height, &tab->directory_history);
+                    list_item_height, &app.thread_queue.task_queue,
+                    &tab->textures, &tab->directory_history);
             }
 
             if (preview_index != -1)
@@ -2565,8 +2615,9 @@ void application_run()
                 ui_window_get(window_id)->alpha =
                     i == app.tab_index ? 1.0f : 0.7f;
 
-                if (show_directory_window(window_id, list_item_height,
-                                          check_collision, app.tabs.data + i))
+                if (show_directory_window(
+                        window_id, list_item_height, check_collision,
+                        &app.thread_queue.task_queue, app.tabs.data + i))
                 {
                     DirectoryTab tab_to_remove = app.tabs.data[i];
                     for (u32 j = i; j < app.tabs.size - 1; ++j)

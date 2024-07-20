@@ -1,6 +1,7 @@
 #pragma once
 #include "platform/platform.h"
 #include "logging.h"
+#include "texture.h"
 
 #include <stdio.h>
 #include <Windows.h>
@@ -604,11 +605,16 @@ Directory platform_get_directory(const char* directory_path,
     return directory;
 }
 
-void platform_reset_directory(Directory* directory)
+void platform_reset_directory(Directory* directory, b8 delete_textures)
 {
     for (u32 i = 0; i < directory->files.size; ++i)
     {
-        free(directory->files.data[i].path);
+        DirectoryItem* file = directory->files.data + i;
+        free(file->path);
+        if(delete_textures && file->texture_id)
+        {
+            texture_delete(file->texture_id);
+        }
     }
     for (u32 i = 0; i < directory->sub_directories.size; ++i)
     {

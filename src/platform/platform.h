@@ -34,6 +34,9 @@ typedef struct DirectoryItem
     V2 after_animation;
     f32 animation_precent; 
 
+    u32 texture_id;
+    i32 texture_width;
+    i32 texture_height;
     b8 animation_on;
     b8 rename;
 } DirectoryItem;
@@ -119,7 +122,7 @@ void platform_change_cursor(Platform* platform, u32 cursor_id);
 
 b8 platform_directory_exists(const char* directory_path);
 Directory platform_get_directory(const char* directory_path, const u32 directory_len);
-void platform_reset_directory(Directory* directory);
+void platform_reset_directory(Directory* directory, b8 delete_textures);
 
 FTicMutex platform_mutex_create(void);
 void platform_mutex_lock(FTicMutex* mutex);

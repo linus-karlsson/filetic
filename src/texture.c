@@ -1,6 +1,7 @@
 #include "texture.h"
 #include <glad/glad.h>
 #include <stb/stb_image.h>
+#include <stb/stb_image_resize2.h>
 
 void texture_load(const char* file_path, TextureProperties* texture_properties)
 {
@@ -8,6 +9,41 @@ void texture_load(const char* file_path, TextureProperties* texture_properties)
     texture_properties->bytes = (u8*)stbi_load(
         file_path, &texture_properties->width, &texture_properties->height,
         &texture_properties->channels, 4);
+    texture_properties->channels = 4;
+}
+void texture_resize(TextureProperties* texture_properties, int box_width,
+                    int box_height)
+{
+    const f32 aspect_ratio =
+        (f32)texture_properties->width / texture_properties->height;
+    int new_width = box_width;
+    int new_height = box_height;
+
+    if (texture_properties->width < texture_properties->height)
+    {
+        new_width = (int)(box_height * aspect_ratio);
+    }
+    else
+    {
+        new_height = (int)(box_width / aspect_ratio);
+    }
+
+    TextureProperties result = { 0 };
+
+    result.bytes =
+        (u8*)malloc(new_width * new_height * texture_properties->channels);
+
+    stbir_resize_uint8_linear(
+        texture_properties->bytes, texture_properties->width,
+        texture_properties->height, 0, result.bytes, new_width, new_height, 0,
+        texture_properties->channels);
+
+    result.width = new_width;
+    result.height = new_height;
+    result.channels = texture_properties->channels;
+
+    free(texture_properties->bytes);
+    *texture_properties = result;
 }
 
 u32 texture_create(const TextureProperties* texture_properties,
