@@ -2930,40 +2930,49 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
     b8 typed = false;
     if (input->active)
     {
-        typed = erase_char(input);
-        typed |= add_from_key_buffer(size.width - 10.0f, input);
-
-        if (event_is_ctrl_and_key_pressed(FTIC_KEY_V))
+        if (event_is_key_pressed_once(FTIC_KEY_ESCAPE))
         {
-            const char* clip_board = window_get_clipboard();
-            if (clip_board)
-            {
-                const u32 clip_board_length = (u32)strlen(clip_board);
-                for (u32 i = 0; i < clip_board_length; ++i)
-                {
-                    array_push(&input->buffer, clip_board[i]);
-                    for (i32 j = ((i32)input->buffer.size) - 1;
-                         j > input->input_index; --j)
-                    {
-                        input->buffer.data[j] = input->buffer.data[j - 1];
-                    }
-                    input->buffer.data[input->input_index++] = clip_board[i];
-                }
-                array_push(&input->buffer, '\0');
-                input->buffer.size--;
-                typed = true;
-            }
+            input->active = false;
         }
-        else if (event_is_ctrl_and_key_pressed(FTIC_KEY_X))
+        else
         {
-            if (input->chars_selected.size)
+            typed = erase_char(input);
+            typed |= add_from_key_buffer(size.width - 10.0f, input);
+
+            if (event_is_ctrl_and_key_pressed(FTIC_KEY_V))
             {
-                ui_input_buffer_copy_selection_to_clipboard(input);
-                ui_input_buffer_erase_from_selection(input);
-                typed = true;
+                const char* clip_board = window_get_clipboard();
+                if (clip_board)
+                {
+                    const u32 clip_board_length = (u32)strlen(clip_board);
+                    for (u32 i = 0; i < clip_board_length; ++i)
+                    {
+                        array_push(&input->buffer, clip_board[i]);
+                        for (i32 j = ((i32)input->buffer.size) - 1;
+                             j > input->input_index; --j)
+                        {
+                            input->buffer.data[j] = input->buffer.data[j - 1];
+                        }
+                        input->buffer.data[input->input_index++] =
+                            clip_board[i];
+                    }
+                    array_push(&input->buffer, '\0');
+                    input->buffer.size--;
+                    typed = true;
+                }
+            }
+            else if (event_is_ctrl_and_key_pressed(FTIC_KEY_X))
+            {
+                if (input->chars_selected.size)
+                {
+                    ui_input_buffer_copy_selection_to_clipboard(input);
+                    ui_input_buffer_erase_from_selection(input);
+                    typed = true;
+                }
             }
         }
     }
+
     V2 text_position =
         v2f(position.x + 5.0f,
             position.y + (middle(size.y, ui_context.font.pixel_height) * 0.8f));

@@ -1366,7 +1366,8 @@ u8* application_initialize(ApplicationContext* app)
     app->window = window_create("FileTic", 1250, 800);
     event_initialize(app->window);
     platform_init_drag_drop();
-    thread_initialize(100000, 8, &app->thread_queue);
+    thread_initialize(100000, platform_get_core_count() - 1,
+                      &app->thread_queue);
 
     app->font = (FontTTF){ 0 };
     const i32 width_atlas = 512;
@@ -2440,14 +2441,30 @@ void application_run()
                 if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
                                               &app.search_page.input))
                 {
-                    search_page_search(&app.search_page,
-                                       &tab->directory_history,
-                                       &app.thread_queue.task_queue);
+                    search_page_clear_result(&app.search_page);
+                    app.search_page
+                        .running_callbacks[app.search_page.last_running_id] =
+                        false;
                     if (!app.show_search_page)
                     {
                         open_window(&app, app.search_result_window);
                         app.show_search_page = true;
                     }
+                }
+                if (app.search_page.input.active)
+                {
+                    if (event_is_key_pressed_once(FTIC_KEY_ENTER))
+                    {
+                        search_page_search(&app.search_page,
+                                           &tab->directory_history,
+                                           &app.thread_queue.task_queue);
+                    }
+                }
+                else
+                {
+                    app.search_page
+                        .running_callbacks[app.search_page.last_running_id] =
+                        false;
                 }
 
                 ui_window_end();

@@ -1,5 +1,6 @@
 #include "thread_queue.h"
 #include "platform/platform.h"
+#include "logging.h"
 #include "hash.h"
 #include <stdlib.h>
 
@@ -36,6 +37,9 @@ void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task,
 {
     platform_semaphore_wait_and_decrement(&task_queue->mutex);
 
+    //static u32 value = 0;
+    //log_u64(" ", value++);
+
     // TODO: make it growing or something else
     if (task_queue->size < task_queue->capacity)
     {
@@ -45,16 +49,6 @@ void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task,
 
         task_queue->tail++;
         task_queue->size++;
-
-        u64* count = hash_table_get_uu64(&task_queue->id_to_count, task.id);
-        if (count)
-        {
-            ++(*count);
-        }
-        else
-        {
-            hash_table_insert_uu64(&task_queue->id_to_count, task.id, 1);
-        }
     }
 
     platform_semaphore_increment(&task_queue->mutex, NULL);
@@ -96,12 +90,6 @@ internal ThreadTaskInternal thread_task_pop(ThreadTaskQueue* task_queue)
 
     task_queue->head++;
     task_queue->size--;
-    u64* count = hash_table_get_uu64(&task_queue->id_to_count, task.task.id);
-    if (count)
-    {
-        --(*count);
-    }
-
     platform_semaphore_increment(&task_queue->mutex, NULL);
     return task;
 }
@@ -142,20 +130,14 @@ u64 thread_get_task_count(ThreadTaskQueue* task_queue, u64 id)
 {
     platform_semaphore_wait_and_decrement(&task_queue->mutex);
 
-    u64* count = hash_table_get_uu64(&task_queue->id_to_count, id);
-
     platform_semaphore_increment(&task_queue->mutex, NULL);
 
-    return count ? *count : 0;
+    return 0;
 }
 
 void thread_initialize(u32 capacity, u32 thread_count, ThreadQueue* queue)
 {
     ftic_assert(!queue->pool);
-    if (thread_count > 8)
-    {
-        thread_count = 8;
-    }
     queue->pool =
         (FTicThreadHandle*)calloc(thread_count, sizeof(FTicThreadHandle));
     queue->pool_size = thread_count;
@@ -169,8 +151,6 @@ void thread_initialize(u32 capacity, u32 thread_count, ThreadQueue* queue)
     queue->task_queue.capacity = capacity;
     queue->task_queue.tasks = (ThreadTaskInternal*)calloc(
         queue->task_queue.capacity, sizeof(ThreadTaskInternal));
-    queue->task_queue.id_to_count =
-        hash_table_create_uu64(100, hash_u64);
 
     for (u32 i = 0; i < thread_count; i++)
     {
@@ -205,7 +185,6 @@ void threads_uninitialize(ThreadQueue* queue)
     free(queue->pool);
     free(queue->attribs);
     free(queue->task_queue.tasks);
-    free(queue->task_queue.id_to_count.cells);
     platform_semaphore_destroy(&queue->task_queue.start_semaphore);
     platform_semaphore_destroy(&queue->task_queue.mutex);
 }

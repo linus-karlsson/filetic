@@ -25,7 +25,6 @@ typedef struct ThreadTaskQueue
 {
     FTicSemaphore mutex;
     FTicSemaphore start_semaphore;
-    HashTableUU64 id_to_count;
     ThreadTaskInternal* tasks;
     u32 capacity;
     volatile u32 size;
