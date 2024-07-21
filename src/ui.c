@@ -7,10 +7,14 @@
 #include "set.h"
 #include "hash.h"
 #include "globals.h"
+#include "particle_system.h"
+#include "random.h"
 #include <string.h>
 #include <stdio.h>
 #include <glad/glad.h>
 #include <math.h>
+
+global u32 random_seed = 0;
 
 #define icon_1_co(width, height)                                               \
     {                                                                          \
@@ -149,6 +153,9 @@ typedef struct UiContext
     b8 mouse_box_is_dragging;
 
     FontTTF font;
+
+    UnorderedCircularParticleBuffer particles;
+    u32 particles_index_offset;
 
     V4 docking_color;
 
@@ -1197,6 +1204,8 @@ void ui_context_create()
     u32 list_icon_texture = load_icon_as_white("res/icons/list.png");
     u32 grid_icon_texture = load_icon_as_white("res/icons/grid.png");
 
+    u32 circle_texture = load_icon("res/Circle.png");
+
     u32 folder_icon_texture = load_icon("res/icons/folder.png");
     u32 file_icon_texture = load_icon("res/icons/file.png");
     u32 file_png_icon_texture = load_icon("res/icons/png.png");
@@ -1216,12 +1225,14 @@ void ui_context_create()
     u32 file_c_icon_big_texture = load_icon("res/icons/cbig.png");
 
     U32Array textures = { 0 };
-    array_create(&textures, 21);
+    array_create(&textures, 22);
     array_push(&textures, default_texture);
     array_push(&textures, font_texture);
     array_push(&textures, arrow_icon_texture);
     array_push(&textures, list_icon_texture);
     array_push(&textures, grid_icon_texture);
+
+    array_push(&textures, circle_texture);
 
     array_push(&textures, folder_icon_texture);
     array_push(&textures, file_icon_texture);
@@ -1266,6 +1277,8 @@ void ui_context_create()
     ui_context.docking_color =
         v4f(global_get_secondary_color().r, global_get_secondary_color().g,
             global_get_secondary_color().b, 0.4f);
+
+    particle_buffer_create(&ui_context.particles, 1000);
 }
 
 internal u8 look_for_window_resize(UiWindow* window)
@@ -1553,6 +1566,71 @@ internal void check_if_window_should_be_docked()
     ui_context.dock_side_hit = -1;
 }
 
+internal void emit_aabb_particles(const AABB* aabb, const V4 color,
+                                  const u32 random_count_high)
+{
+    if (aabb->size.height < 1.0f || aabb->size.width < 1.0f) return;
+
+    const f32 flated_line = aabb->size.width + aabb->size.height;
+    const f32 probability_top_or_bottom =
+        aabb->size.width / (flated_line + flated_line);
+    const f32 probability_left_or_right =
+        aabb->size.height / (flated_line + flated_line);
+
+    u32 random_count = random_u32ss(random_seed++, 0, random_count_high);
+    for (u32 i = 0; i < random_count; ++i)
+    {
+        const f32 r = random_f32s(random_seed++, 0.0f, 1.0f);
+        u32 random_side = 0; // 0 - 3 
+        f32 threshold = probability_top_or_bottom;
+        random_side += (r >= threshold);
+        threshold += probability_top_or_bottom;
+        random_side += (r >= threshold);
+        threshold += probability_left_or_right;
+        random_side += (r >= threshold);
+
+        V2 current = aabb->min;
+
+        switch (random_side)
+        {
+            case 1:
+            {
+                current.y += aabb->size.height * (random_side == 1);
+            }
+            case 0:
+            {
+                current.x += random_f32s(random_seed++, 0.0f, aabb->size.width);
+                break;
+            }
+            case 2:
+            {
+                current.x += aabb->size.width;
+            }
+            case 3:
+            {
+                current.y +=
+                    random_f32s(random_seed++, 0.0f, aabb->size.height);
+                break;
+            }
+            default: break;
+        }
+
+        Particle* particle = particle_buffer_get_next(&ui_context.particles);
+        particle->position = current;
+        particle->velocity = v2f(random_f32s(random_seed, -50.0f, 50.0f),
+                                 random_f32s(random_seed + 1, -50.0f, 50.0f));
+        particle->acceleration =
+            v2f(particle->velocity.x, particle->velocity.y);
+        particle->dimension = v2i(random_f32s(random_seed + 2, 2.0f, 4.0f));
+        particle->life = v2i(random_f32s(random_seed + 3, 0.1f, 0.4f));
+        particle->color = color;
+
+        particle_buffer_set_next(&ui_context.particles, particle);
+
+        random_seed += 4;
+    }
+}
+
 internal void check_dock_space_resize()
 {
     const MouseButtonEvent* event = event_get_mouse_button_event();
@@ -1585,10 +1663,11 @@ internal void check_dock_space_resize()
                 {
                     window_set_cursor(ftic_window, FTIC_RESIZE_H_CURSOR);
                 }
+                const V4 color = v4_s_multi(global_get_secondary_color(), 0.8f);
+                emit_aabb_particles(&ui_context.dock_resize_aabb, color, 10);
                 quad(&ui_context.render.vertices,
                      ui_context.dock_resize_aabb.min,
-                     ui_context.dock_resize_aabb.size,
-                     v4_s_multi(global_get_secondary_color(), 0.8f), 0.0f);
+                     ui_context.dock_resize_aabb.size, color, 0.0f);
                 ui_context.extra_index_count += 6;
             }
             else
@@ -1599,6 +1678,8 @@ internal void check_dock_space_resize()
 
         if (ui_context.dock_resize)
         {
+            emit_aabb_particles(&ui_context.dock_resize_aabb,
+                                global_get_secondary_color(), 15);
             quad(&ui_context.render.vertices, ui_context.dock_resize_aabb.min,
                  ui_context.dock_resize_aabb.size, global_get_secondary_color(),
                  0.0f);
@@ -1938,6 +2019,10 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
     AABB whole_screen_scissor = { .size = ui_context.dimensions };
     render_draw(ui_context.extra_index_offset, ui_context.extra_index_count,
                 &whole_screen_scissor);
+
+    render_draw(ui_context.particles_index_offset,
+                ui_context.particles.size * 6, &whole_screen_scissor);
+
     render_end_draw(&ui_context.render.render);
 }
 
@@ -1996,6 +2081,36 @@ void ui_context_end()
     array_create(&dock_spaces_index_offsets_and_counts, dock_spaces.size);
     TabChange tab_change =
         update_tabs(&dock_spaces, &dock_spaces_index_offsets_and_counts);
+
+    static u32 seed = 0;
+    if (event_is_key_pressed(FTIC_KEY_F))
+    {
+        for (u32 i = 0; i < 4; ++i)
+        {
+            Particle* particle =
+                particle_buffer_get_next(&ui_context.particles);
+            particle->position = event_get_mouse_position();
+            particle->velocity = v2f(random_f32s(seed, -50.0f, 50.0f),
+                                     random_f32s(seed + 1, -50.0f, 50.0f));
+            particle->acceleration =
+                v2f(particle->velocity.x, particle->velocity.y);
+            particle->dimension = v2i(random_f32s(seed + 2, 10.0f, 20.0f));
+            particle->life = v2i(2.0f);
+
+            particle_buffer_set_next(&ui_context.particles, particle);
+            seed += 3;
+        }
+    }
+
+    ui_context.particles_index_offset = ui_context.current_index_offset;
+    particle_buffer_update(&ui_context.particles, ui_context.delta_time);
+    for (u32 i = 0; i < ui_context.particles.size; ++i)
+    {
+        Particle* particle = ui_context.particles.data + i;
+        quad(&ui_context.render.vertices, particle->position,
+             particle->dimension, particle->color, UI_CIRCLE_TEXTURE);
+    }
+    ui_context.current_index_offset += ui_context.particles.size * 6;
 
     rendering_properties_check_and_grow_vertex_buffer(&ui_context.render);
     rendering_properties_check_and_grow_index_buffer(

@@ -72,7 +72,7 @@
 #define safe_array_free(arr)                                                   \
     do                                                                         \
     {                                                                          \
-        array_free(&(arr)->array);                                                       \
+        array_free(&(arr)->array);                                             \
         platform_mutex_destroy(&(arr)->mutex);                                 \
     } while (0)
 

@@ -161,7 +161,7 @@ void event_poll()
     /*
      * NOTE: after 8 seconds of no events the main thread will go to sleep.
      */
-#if 1
+#if 0
     if (window_get_time() - event_context.last_event_time >= 8.0f)
     {
         window_wait_event();

@@ -32,7 +32,7 @@ IF (WIN32)
 ELSE()
 ENDIF()
 
-add_executable(${EXE} ${SOURCES} ${PLATFORM} ${STB} "${CMAKE_SOURCE_DIR}/lib/glad/src/glad.c" "${CMAKE_SOURCE_DIR}/lib/math/ftic_math.c")
+add_executable(${EXE} ${SOURCES} ${PLATFORM} ${STB} "${CMAKE_SOURCE_DIR}/lib/glad/src/glad.c" "${CMAKE_SOURCE_DIR}/src/math/ftic_math.c")
 
 target_include_directories(${EXE}
     PUBLIC "${CMAKE_SOURCE_DIR}"

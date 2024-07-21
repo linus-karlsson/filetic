@@ -37,8 +37,8 @@ void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task,
 {
     platform_semaphore_wait_and_decrement(&task_queue->mutex);
 
-    //static u32 value = 0;
-    //log_u64(" ", value++);
+    // static u32 value = 0;
+    // log_u64(" ", value++);
 
     // TODO: make it growing or something else
     if (task_queue->size < task_queue->capacity)
@@ -51,9 +51,10 @@ void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task,
         task_queue->size++;
     }
 
+    platform_semaphore_increment(&task_queue->start_semaphore, NULL);
+
     platform_semaphore_increment(&task_queue->mutex, NULL);
 
-    platform_semaphore_increment(&task_queue->start_semaphore, NULL);
 }
 
 void thread_tasks_push(ThreadTaskQueue* task_queue, ThreadTask* tasks,
@@ -82,14 +83,14 @@ internal ThreadTaskInternal thread_task_pop(ThreadTaskQueue* task_queue)
 {
     platform_semaphore_wait_and_decrement(&task_queue->mutex);
     ThreadTaskInternal task = { 0 };
+    if (task_queue->size)
+    {
+        task_queue->head %= task_queue->capacity;
+        task = task_queue->tasks[task_queue->head];
 
-    ftic_assert(task_queue->size > 0);
-
-    task_queue->head %= task_queue->capacity;
-    task = task_queue->tasks[task_queue->head];
-
-    task_queue->head++;
-    task_queue->size--;
+        task_queue->head++;
+        task_queue->size--;
+    }
     platform_semaphore_increment(&task_queue->mutex, NULL);
     return task;
 }
@@ -100,6 +101,7 @@ thread_return_value thread_loop(void* data)
 
     for (;;)
     {
+        // TODO: one more mutex that can be used to pause the threads
         if (platform_interlock_compare_exchange(&attrib->stop_flag, 0, 0))
         {
             break;
@@ -133,6 +135,21 @@ u64 thread_get_task_count(ThreadTaskQueue* task_queue, u64 id)
     platform_semaphore_increment(&task_queue->mutex, NULL);
 
     return 0;
+}
+
+void thread_tasks_clear(ThreadQueue* thread_queue)
+{
+    platform_semaphore_wait_and_decrement(&thread_queue->task_queue.mutex);
+    for (i32 i = 0; i < ((i32)thread_queue->task_queue.size) -
+                            ((i32)thread_queue->pool_size);
+         ++i)
+    {
+        platform_semaphore_wait_and_decrement(thread_queue->task_queue.start_semaphore);
+    }
+
+    thread_queue->task_queue.head = 0;
+    thread_queue->task_queue.size = 0;
+    platform_semaphore_increment(&thread_queue->task_queue.mutex, NULL);
 }
 
 void thread_initialize(u32 capacity, u32 thread_count, ThreadQueue* queue)
@@ -178,7 +195,7 @@ void threads_uninitialize(ThreadQueue* queue)
     {
         // TODO: This might not be a good idea. Should only be called on program
         // close
-        //platform_thread_terminate(queue->pool[i]);
+        // platform_thread_terminate(queue->pool[i]);
         platform_thread_join(queue->pool[i]);
         platform_thread_close(queue->pool[i]);
     }

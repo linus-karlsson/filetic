@@ -2451,6 +2451,24 @@ void application_run()
                         app.show_search_page = true;
                     }
                 }
+                if (app.search_page
+                        .running_callbacks[app.search_page.last_running_id])
+                {
+                    V2 dim = v2f(ui_font_pixel_height + 12.0f,
+                                 ui_font_pixel_height + 10.0f);
+                    V4 color = button_color;
+                    if (ui_window_add_button(
+                            v2f(button_aabb.min.x +
+                                    (button_aabb.size.width - dim.width) - 5.0f,
+                                button_aabb.min.y +
+                                    middle(button_aabb.size.height,
+                                           dim.height)),
+                            &dim, &color, "X"))
+                    {
+                        app.search_page.running_callbacks
+                            [app.search_page.last_running_id] = false;
+                    }
+                }
                 if (app.search_page.input.active)
                 {
                     if (event_is_key_pressed_once(FTIC_KEY_ENTER))

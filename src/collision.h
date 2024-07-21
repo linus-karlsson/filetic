@@ -1,6 +1,6 @@
 #pragma once
 #include "define.h"
-#include "ftic_math.h"
+#include "math/ftic_math.h"
 
 typedef struct AABB
 {
