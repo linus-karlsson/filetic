@@ -467,7 +467,9 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                     &tab->directory_list.selected_item_values);
             }
         }
-        return ui_window_end();
+        b8 result = ui_window_end();
+
+        return result;
     }
     return false;
 }
@@ -1994,6 +1996,10 @@ void application_run()
         ui_context_begin(app.dimensions, &dock_space, app.delta_time,
                          check_collision);
         {
+            const DirectoryTab* current_tab = tab;
+            const DirectoryPage* current_directory =
+                directory_current(&tab->directory_history);
+
             const V4 button_color =
                 v4a(v4_s_multi(global_get_clear_color(), 3.0f), 1.0f);
             UiWindow* top_bar_menu = ui_window_get(app.menu_window);
@@ -2670,6 +2676,23 @@ void application_run()
                     }
                     --i;
                 }
+            }
+            if (current_tab == tab)
+            {
+                const DirectoryPage* next_directory =
+                    directory_current(&tab->directory_history);
+                if (current_directory != next_directory)
+                {
+                    ui_window_set_end_scroll_offset(tab->window_id,
+                                                    next_directory->offset);
+                    ui_window_set_current_scroll_offset(tab->window_id, 0.0f);
+                }
+            }
+            for (u32 i = 0; i < app.tabs.size; ++i)
+            {
+                directory_current(&app.tabs.data[i].directory_history)->offset =
+                    ui_window_get(app.tabs.data[i].window_id)
+                        ->end_scroll_offset;
             }
         }
         ui_context_end();

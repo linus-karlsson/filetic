@@ -1581,7 +1581,7 @@ internal void emit_aabb_particles(const AABB* aabb, const V4 color,
     for (u32 i = 0; i < random_count; ++i)
     {
         const f32 r = random_f32s(random_seed++, 0.0f, 1.0f);
-        u32 random_side = 0; // 0 - 3 
+        u32 random_side = 0; // 0 - 3
         f32 threshold = probability_top_or_bottom;
         random_side += (r >= threshold);
         threshold += probability_top_or_bottom;
@@ -2192,9 +2192,19 @@ u32 ui_window_create()
     return id;
 }
 
-UiWindow* ui_window_get(u32 window_id)
+UiWindow* ui_window_get(const u32 window_id)
 {
     return ui_context.windows.data + ui_context.id_to_index.data[window_id];
+}
+
+void ui_window_set_end_scroll_offset(const u32 window_id, const f32 offset)
+{
+    ui_window_get(window_id)->end_scroll_offset = offset;
+}
+
+void ui_window_set_current_scroll_offset(const u32 window_id, const f32 offset)
+{
+    ui_window_get(window_id)->current_scroll_offset = offset;
 }
 
 u32 ui_window_in_focus()
@@ -3127,10 +3137,11 @@ internal u32 display_text_and_truncate_if_necissary(const V2 position,
 }
 
 internal b8 item_in_view(const f32 position_y, const f32 height,
-                         const f32 window_height)
+                         const f32 window_position_y, const f32 window_height)
 {
     const f32 value = position_y + height;
-    return closed_interval(-height, value, window_height + height);
+    return closed_interval(window_position_y, value,
+                           window_position_y + window_height + height);
 }
 
 internal b8 check_directory_item_collision(V2 starting_position,
@@ -3501,8 +3512,8 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index,
     i32 double_clicked_index = -1;
     for (i32 i = 0; i < (i32)items->size; ++i)
     {
-        if (item_in_view(position.y, item_dimensions.height,
-                         position.y + window->size.height))
+        if (item_in_view(position.y, item_dimensions.height, window->position.y,
+                         window->size.height))
         {
             DirectoryItem* item = items->data + i;
             if (directory_item(position, item_dimensions, icon_index, item,
@@ -3610,8 +3621,8 @@ II32 ui_window_add_directory_item_grid(V2 position,
     II32 hit_index = { .first = -1, .second = -1 };
     for (i32 row = 0; row < rows; ++row)
     {
-        if (item_in_view(position.y, item_dimensions.height,
-                         position.y + window->size.height))
+        if (item_in_view(position.y, item_dimensions.height, window->position.y,
+                         window->size.height))
         {
             for (i32 column = 0; column < columns; ++column)
             {
@@ -3625,8 +3636,8 @@ II32 ui_window_add_directory_item_grid(V2 position,
         position.y += item_dimensions.height + grid_padding;
         relative_position.y += item_dimensions.height + grid_padding;
     }
-    if (item_in_view(position.y, item_dimensions.height,
-                     position.y + window->size.height))
+    if (item_in_view(position.y, item_dimensions.height, window->position.y,
+                     window->size.height))
     {
         for (i32 column = 0; column < last_row; ++column)
         {

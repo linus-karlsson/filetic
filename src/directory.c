@@ -349,7 +349,6 @@ void directory_move_in_history(const i32 index_add,
 {
     directory_history->current_index += index_add;
     DirectoryPage* current = directory_current(directory_history);
-    current->scroll_offset = 0.0f;
     directory_clear_selected_items(selected_item_values);
     directory_reload(current);
     directory_history_update_directory_change_handle(directory_history);

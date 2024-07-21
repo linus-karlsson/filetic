@@ -212,10 +212,13 @@ void ui_context_set_animation(b8 on);
 void ui_context_set_highlight_focused_window(b8 on);
 
 u32 ui_window_create();
-UiWindow* ui_window_get(u32 window_id);
+UiWindow* ui_window_get(const u32 window_id);
 u32 ui_window_in_focus();
 b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable);
 b8 ui_window_end();
+
+void ui_window_set_end_scroll_offset(const u32 window_id, const f32 offest);
+void ui_window_set_current_scroll_offset(const u32 window_id, const f32 offset);
 
 void ui_window_close(u32 window_id);
 

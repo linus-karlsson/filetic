@@ -77,7 +77,7 @@ void render_begin_draw(const Render* render, const MVP* mvp)
     shader_bind(render->shader_properties.shader);
     shader_set_mvp(&render->shader_properties, mvp);
 
-    int textures[64] = { 0 };
+    int textures[256] = { 0 };
     for (u32 i = 0; i < render->textures.size; ++i)
     {
         textures[i] = (int)i;

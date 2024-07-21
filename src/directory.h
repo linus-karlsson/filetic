@@ -17,8 +17,6 @@ typedef struct DirectoryPage
     SortBy sort_by;
     u32 sort_count;
     f32 offset;
-    f32 scroll_offset;
-    f64 pulse_x;
     Directory directory;
 } DirectoryPage;
 
