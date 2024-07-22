@@ -15,6 +15,7 @@
 #define DELETE_OPTION_INDEX 2
 #define ADD_TO_QUICK_OPTION_INDEX 3
 #define PROPERTIES_OPTION_INDEX 4
+#define MORE_OPTION_INDEX 5
 
 typedef struct SafeFileArray
 {
@@ -64,6 +65,7 @@ typedef struct MainDropDownSelectionData
     DirectoryPage* directory;
     DirectoryItemArray* quick_access;
     const CharPtrArray* selected_paths;
+    FTicWindow* window;
     b8 show_hidden_files;
 } MainDropDownSelectionData;
 

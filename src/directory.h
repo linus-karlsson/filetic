@@ -56,6 +56,7 @@ typedef struct LoadThumpnailData
     FticGUID file_id;
     char* file_path;
     SafeIdTexturePropertiesArray* array;
+    i32 size;
 } LoadThumpnailData;
 
 void load_thumpnails(void* data);

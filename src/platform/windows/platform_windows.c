@@ -1257,19 +1257,48 @@ internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
     int count = GetMenuItemCount(h_menu);
     for (int i = 0; i < count; ++i)
     {
-        wchar_t buffer[256] = { 0 };
+        char buffer[256] = { 0 };
 
-        MENUITEMINFOW mii = {
-            .cbSize = sizeof(MENUITEMINFOW),
-            .fMask = MIIM_STRING | MIIM_ID | MIIM_SUBMENU,
+        MENUITEMINFO mii = {
+            .cbSize = sizeof(MENUITEMINFO),
+            .fMask = MIIM_STRING | MIIM_ID | MIIM_SUBMENU | MIIM_BITMAP,
             .dwTypeData = buffer,
-            .cch = sizeof(buffer) / sizeof(wchar_t),
+            .cch = sizeof(buffer),
         };
-        if (GetMenuItemInfoW(h_menu, i, TRUE, &mii))
+        if (GetMenuItemInfo(h_menu, i, TRUE, &mii))
         {
             MenuItem item = { 0 };
             item.id = mii.wID;
-            item.text = wchar_to_char(buffer);
+            item.text = string_copy(buffer, (u32)strlen(buffer), 2);
+            HBITMAP h_bitmap = mii.hbmpItem;
+            if (h_bitmap != NULL)
+            {
+                HDC hdc = GetDC(NULL);
+
+                BITMAP bitmap;
+                GetObject(h_bitmap, sizeof(BITMAP), &bitmap);
+
+                BITMAPINFOHEADER bi;
+                ZeroMemory(&bi, sizeof(BITMAPINFOHEADER));
+                bi.biSize = sizeof(BITMAPINFOHEADER);
+                bi.biWidth = bitmap.bmWidth;
+                bi.biHeight = bitmap.bmHeight;
+                bi.biPlanes = 1;
+                bi.biBitCount = 32;
+                bi.biCompression = BI_RGB;
+                bi.biSizeImage =
+                    ((bitmap.bmWidth * 32 + 31) / 32) * 4 * bitmap.bmHeight;
+
+                BITMAPINFO bmi;
+                bmi.bmiHeader = bi;
+
+                u8* pixels = (u8*)calloc(bi.biSizeImage, sizeof(u8));
+
+                GetDIBits(hdc, h_bitmap, 0, bitmap.bmHeight, pixels, &bmi,
+                          DIB_RGB_COLORS);
+
+                ReleaseDC(NULL, hdc);
+            }
             if (mii.hSubMenu)
             {
                 array_create(&item.submenu_items, 2);
@@ -1454,12 +1483,10 @@ b8 directory_look_for_directory_change(void* handle)
 
 PlatformTime platform_time_from_u64(u64 time)
 {
-    const FILETIME file_time = {
-        .dwHighDateTime = (time >> 32),
-        .dwLowDateTime = (time & MAXDWORD)
-    };
+    const FILETIME file_time = { .dwHighDateTime = (time >> 32),
+                                 .dwLowDateTime = (time & MAXDWORD) };
 
-    PlatformTime result = {0};
+    PlatformTime result = { 0 };
     FileTimeToSystemTime(&file_time, (SYSTEMTIME*)&result);
     return result;
 }

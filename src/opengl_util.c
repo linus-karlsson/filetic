@@ -337,6 +337,16 @@ u32 load_icon_as_white(const char* file_path)
     return icon_texture;
 }
 
+u32 load_icon_and_resize(const char* file_path, int width, int height)
+{
+    TextureProperties texture_properties = { 0 };
+    texture_load(file_path, &texture_properties);
+    texture_resize(&texture_properties, width, height);
+    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    free(texture_properties.bytes);
+    return icon_texture;
+}
+
 u32 load_icon(const char* file_path)
 {
     TextureProperties texture_properties = { 0 };

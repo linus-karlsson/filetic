@@ -21,10 +21,11 @@ void load_thumpnails(void* data)
         return;
     }
 
-    if (value.texture_properties.width > 128 ||
-        value.texture_properties.height > 128)
+    if (value.texture_properties.width > arguments->size ||
+        value.texture_properties.height > arguments->size)
     {
-        texture_resize(&value.texture_properties, 128, 128);
+        texture_resize(&value.texture_properties, arguments->size,
+                       arguments->size);
     }
 
     platform_mutex_lock(&arguments->array->mutex);

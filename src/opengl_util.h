@@ -22,3 +22,4 @@ void generate_indicies(IndexArray* array, u32 offset, u32 indices_count);
 u32 create_default_texture();
 u32 load_icon_as_white(const char* file_path);
 u32 load_icon(const char* file_path);
+u32 load_icon_and_resize(const char* file_path, int width, int height);

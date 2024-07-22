@@ -1215,14 +1215,23 @@ void ui_context_create()
     u32 file_cpp_icon_texture = load_icon("res/icons/cpp.png");
     u32 file_c_icon_texture = load_icon("res/icons/c.png");
 
-    u32 folder_icon_big_texture = load_icon("res/icons/folderbig.png");
-    u32 file_icon_big_texture = load_icon("res/icons/filebig.png");
-    u32 file_png_icon_big_texture = load_icon("res/icons/pngbig.png");
-    u32 file_jpg_icon_big_texture = load_icon("res/icons/jpgbig.png");
-    u32 file_pdf_icon_big_texture = load_icon("res/icons/pdfbig.png");
-    u32 file_java_icon_big_texture = load_icon("res/icons/javabig.png");
-    u32 file_cpp_icon_big_texture = load_icon("res/icons/cppbig.png");
-    u32 file_c_icon_big_texture = load_icon("res/icons/cbig.png");
+    u32 folder_icon_big_texture =
+        load_icon_and_resize("res/icons/folderbig.png", (i32)UI_BIG_ICON_SIZE,
+                             (i32)UI_BIG_ICON_SIZE);
+    u32 file_icon_big_texture = load_icon_and_resize(
+        "res/icons/filebig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
+    u32 file_png_icon_big_texture = load_icon_and_resize(
+        "res/icons/pngbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
+    u32 file_jpg_icon_big_texture = load_icon_and_resize(
+        "res/icons/jpgbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
+    u32 file_pdf_icon_big_texture = load_icon_and_resize(
+        "res/icons/pdfbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
+    u32 file_java_icon_big_texture = load_icon_and_resize(
+        "res/icons/javabig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
+    u32 file_cpp_icon_big_texture = load_icon_and_resize(
+        "res/icons/cppbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
+    u32 file_c_icon_big_texture = load_icon_and_resize(
+        "res/icons/cbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
 
     U32Array textures = { 0 };
     array_create(&textures, 22);
@@ -3184,16 +3193,18 @@ internal b8 check_directory_item_collision(V2 starting_position,
         *selected = check_if_selected ? true : false;
     }
 
-    b8 alt_pressed = event_get_key_event()->alt_pressed;
+    const b8 alt_pressed = event_get_key_event()->alt_pressed;
 
     AABB aabb = { .min = starting_position, .size = item_dimensions };
     const b8 hit = (hover_clicked_index.index == (i32)aabbs->size) ||
                    (collision_aabb_in_aabb(&ui_context.mouse_drag_box, &aabb) &&
                     alt_pressed);
 
-    b8 mouse_button_clicked =
-        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) ||
+    const b8 mouse_button_clicked_right =
         event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT);
+    const b8 mouse_button_clicked =
+        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) ||
+        mouse_button_clicked_right;
 
     b8 clicked_on_same = false;
     if (mouse_button_clicked && list)
@@ -3242,7 +3253,7 @@ internal b8 check_directory_item_collision(V2 starting_position,
                         list->selected_item_values.last_selected = NULL;
                         item->rename = false;
                     }
-                    else
+                    else if (!mouse_button_clicked_right)
                     {
                         list->input_pressed = window_get_time();
                         item->rename = true;
@@ -3484,7 +3495,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
         window->rendering_index_count += 6;
     }
 
-    V2 icon_size = v2i(128.0f);
+    V2 icon_size = v2i(UI_BIG_ICON_SIZE);
     if (item->texture_id)
     {
         icon_index = (f32)ui_context.render.render.textures.size;
@@ -3503,6 +3514,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
             thump_nail_data->file_id = guid_copy(&item->id);
             thump_nail_data->array = textures;
             thump_nail_data->file_path = item->path;
+            thump_nail_data->size = (i32)UI_BIG_ICON_SIZE;
             ThreadTask task = {
                 .data = thump_nail_data,
                 .task_callback = load_thumpnails,
@@ -3512,12 +3524,12 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
         }
     }
 
-    AABB icon_aabb =
-        quad(&ui_context.render.vertices,
-             v2f(starting_position.x +
-                     middle(item_dimensions.width, icon_size.width),
-                 starting_position.y + 3.0f + (128.0f - icon_size.height)),
-             icon_size, v4a(v4i(1.0f), window->alpha), icon_index);
+    AABB icon_aabb = quad(
+        &ui_context.render.vertices,
+        v2f(starting_position.x +
+                middle(item_dimensions.width, icon_size.width),
+            starting_position.y + 3.0f + (UI_BIG_ICON_SIZE - icon_size.height)),
+        icon_size, v4a(v4i(1.0f), window->alpha), icon_index);
     window->rendering_index_count += 6;
 
     const f32 total_available_width_for_text = item_dimensions.width;
@@ -3980,7 +3992,8 @@ void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)
         max(window->total_width, relative_position.x + image_dimensions.width);
 }
 
-V2 ui_window_get_button_dimensions(V2 dimensions, const char* text, f32* x_advance_out)
+V2 ui_window_get_button_dimensions(V2 dimensions, const char* text,
+                                   f32* x_advance_out)
 {
     f32 x_advance = 20.0f;
     f32 pixel_height = 10.0f;
@@ -3990,18 +4003,18 @@ V2 ui_window_get_button_dimensions(V2 dimensions, const char* text, f32* x_advan
                                     (u32)strlen(text), 1.0f);
         pixel_height += ui_context.font.pixel_height;
 
-        if(x_advance_out)
+        if (x_advance_out)
         {
             *x_advance_out = x_advance - 20.0f;
         }
     }
 
     return v2f(max(dimensions.width, x_advance),
-                            max(dimensions.height, pixel_height));
+               max(dimensions.height, pixel_height));
 }
 
 b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color,
-                        const char* text, const Alignment alignment)
+                        const char* text)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
@@ -4013,16 +4026,18 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color,
     V2 relative_position = position;
     v2_add_equal(&position, window->first_item_position);
 
-    V2 end_dimensions; 
+    V2 end_dimensions;
     f32 x_advance;
-    if(dimensions)
+    if (dimensions)
     {
-        end_dimensions = ui_window_get_button_dimensions(*dimensions, text, &x_advance);
+        end_dimensions =
+            ui_window_get_button_dimensions(*dimensions, text, &x_advance);
         *dimensions = end_dimensions;
     }
     else
     {
-        end_dimensions = ui_window_get_button_dimensions(v2d(), text, &x_advance);
+        end_dimensions =
+            ui_window_get_button_dimensions(v2d(), text, &x_advance);
     }
 
     if (ui_context.column || ui_context.row)
@@ -4039,24 +4054,6 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color,
             ui_context.column_current +=
                 end_dimensions.height + ui_context.column_padding;
         }
-    }
-
-    switch (alignment)
-    {
-        case ALIGN_MIDDLE:
-        {
-            position.x = window->position.x +
-                         middle(window->size.width, end_dimensions.width);
-            break;
-        }
-        case ALIGN_RIGHT:
-        {
-            position.x = (window->position.x + window->size.width -
-                          end_dimensions.width) -
-                         relative_position.x;
-            break;
-        }
-        default: break;
     }
 
     b8 collided = hover_clicked_index.index == (i32)aabbs->size;
@@ -4117,7 +4114,7 @@ i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item)
         V2 current_dimensions = v2d();
         const f32 current_x_position = ui_context.row_current;
         if (ui_window_add_button(window->position, &current_dimensions, NULL,
-                                 values->data[i], ALIGN_NONE))
+                                 values->data[i]))
         {
             if (position_of_clicked_item)
             {
@@ -4162,6 +4159,11 @@ void ui_window_add_icon(V2 position, const V2 size,
     window->rendering_index_count += 6;
 }
 
+V2 ui_window_get_switch_size()
+{
+    return v2_s_add(v2f(24.0f, 4.0f), ui_context.font.pixel_height);
+}
+
 void ui_window_add_switch(V2 position, b8* selected, f32* x)
 {
     const u32 window_index =
@@ -4173,7 +4175,7 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x)
 
     v2_add_equal(&position, window->first_item_position);
 
-    V2 size = v2_s_add(v2f(24.0f, 4.0f), ui_context.font.pixel_height);
+    V2 size = ui_window_get_switch_size();
     if (ui_context.row)
     {
         position.x += ui_context.row_current;
