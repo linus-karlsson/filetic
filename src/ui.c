@@ -183,6 +183,7 @@ typedef struct UiContext
     b8 animation_off;
     b8 highlight_fucused_window_off;
 
+    b8 non_docked_window_hover;
 } UiContext;
 
 typedef struct UU32Array
@@ -1375,6 +1376,10 @@ internal b8 check_window_collisions(const u32 window_index, const u32 i)
         }
         else
         {
+            if (!window->docked)
+            {
+                ui_context.non_docked_window_hover = true;
+            }
             window->area_hit = true;
         }
     }
@@ -1450,6 +1455,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
     }
     ui_context.any_window_top_bar_hold = false;
     ui_context.any_window_hold = false;
+    ui_context.non_docked_window_hover = false;
     i32 index_window_dragging = -1;
     for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
     {
@@ -2010,6 +2016,7 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
                         const UU32Array* dock_spaces_index_offsets_and_counts)
 {
     const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
+    AABB whole_screen_scissor = { .size = ui_context.dimensions };
 
     render_begin_draw(&ui_context.render.render, &ui_context.mvp);
     for (u32 i = 0; i < dock_spaces->size; ++i)
@@ -2037,7 +2044,6 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
         render_draw(index_offset_and_count.first, index_offset_and_count.second,
                     &scissor);
     }
-    AABB whole_screen_scissor = { .size = ui_context.dimensions };
     render_draw(ui_context.extra_index_offset, ui_context.extra_index_count,
                 &whole_screen_scissor);
 
@@ -2085,7 +2091,10 @@ void ui_context_end()
     else if (!ui_context.any_window_hold)
     {
         check_if_window_should_be_docked();
-        check_dock_space_resize();
+        if (!ui_context.non_docked_window_hover)
+        {
+            check_dock_space_resize();
+        }
     }
 
 #endif
