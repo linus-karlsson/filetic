@@ -68,11 +68,11 @@ void directory_sort(DirectoryPage* directory_page);
 void directory_sort_by_name(DirectoryItemArray* array);
 void directory_sort_by_size(DirectoryItemArray* array);
 void directory_flip_array(DirectoryItemArray* array);
-b8 directory_go_to(char* path, u32 length, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* texures, DirectoryHistory* directory_history);
-void directory_open_folder(char* folder_path, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* texures, DirectoryHistory* directory_history);
+b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history);
+void directory_open_folder(char* folder_path, DirectoryHistory* directory_history);
 void directory_move_in_history(const i32 index_add, SelectedItemValues* selected_item_values, DirectoryHistory* directory_history);
 b8   directory_can_go_up(char* parent);
-void directory_go_up(ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, DirectoryHistory* directory_history);
+void directory_go_up(DirectoryHistory* directory_history);
 
 void directory_tab_add(const char* dir, ThreadTaskQueue* task_queue, DirectoryTab* tab);
 void directory_tab_clear(DirectoryTab* tab);

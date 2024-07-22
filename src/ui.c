@@ -25,7 +25,7 @@ global u32 random_seed = 0;
     };
 
 global const V4 file_icon_co = icon_1_co(512.0f, 128.0f);
-global const V4 arrow_back_icon_co = icon_1_co(384.0f, 128.0f);
+global const V4 arrow_back_icon_co = icon_1_co(96.0f, 32.0f);
 
 #define icon_2_co(width, height)                                               \
     {                                                                          \
@@ -35,7 +35,7 @@ global const V4 arrow_back_icon_co = icon_1_co(384.0f, 128.0f);
         .w = 128.0f / height,                                                  \
     };
 global const V4 folder_icon_co = icon_2_co(512.0f, 128.0f);
-global const V4 arrow_up_icon_co = icon_2_co(384.0f, 128.0f);
+global const V4 arrow_up_icon_co = icon_2_co(96.0f, 32.0f);
 
 #define icon_3_co(width, height)                                               \
     {                                                                          \
@@ -45,7 +45,7 @@ global const V4 arrow_up_icon_co = icon_2_co(384.0f, 128.0f);
         .w = 128.0f / height,                                                  \
     };
 global const V4 pdf_icon_co = icon_3_co(512.0f, 128.0f);
-global const V4 arrow_right_icon_co = icon_3_co(384.0f, 128.0f);
+global const V4 arrow_right_icon_co = icon_3_co(96.0f, 32.0f);
 
 #define icon_4_co(width, height)                                               \
     {                                                                          \
@@ -946,6 +946,7 @@ internal void insert_window(DockNode* node, const u32 id, const b8 docked)
         .dock_node = node,
         .docked = docked,
         .alpha = 1.0f,
+        .back_ground_alpha = 1.0f,
     };
     array_push(&ui_context.windows, window);
 
@@ -1201,7 +1202,7 @@ void ui_context_create()
     // TODO: make all of these icons into a sprite sheet.
     u32 default_texture = create_default_texture();
     u32 arrow_icon_texture =
-        load_icon_as_white("res/icons/arrow_sprite_sheet.png");
+        load_icon_as_white_resize("res/icons/arrow_sprite_sheet.png", 72, 24);
     u32 list_icon_texture = load_icon_as_white("res/icons/list.png");
     u32 grid_icon_texture = load_icon_as_white("res/icons/grid.png");
 
@@ -1697,9 +1698,11 @@ internal void check_dock_space_resize()
 
         if (ui_context.dock_resize)
         {
+#if 0
             emit_aabb_particles(&ui_context.dock_resize_aabb,
                                 global_get_secondary_color(), v2f(2.0f, 4.0f),
                                 15);
+#endif
             quad(&ui_context.render.vertices, ui_context.dock_resize_aabb.min,
                  ui_context.dock_resize_aabb.size, global_get_secondary_color(),
                  0.0f);
@@ -1898,7 +1901,7 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                     tab_color = v4ic(0.35f);
                 }
                 b8 tab_collided = false;
-                if (should_check_collision && tab_window->area_hit &&
+                if (should_check_collision && window->area_hit &&
                     !tab_change.close_tab && !any_tab_hit &&
                     collision_point_in_aabb(mouse_position, &tab_aabb))
                 {
@@ -1957,7 +1960,7 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                 b8 collided =
                     collision_point_in_aabb(mouse_position, &button_aabb);
 
-                if (should_check_collision && collided && tab_window->area_hit)
+                if (should_check_collision && collided && window->area_hit)
                 {
                     if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
                     {
@@ -2517,8 +2520,10 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
 
     window->total_height = 0.0f;
     window->total_width = 0.0f;
-    window->top_color = global_get_clear_color();
-    window->bottom_color = global_get_clear_color();
+    window->top_color =
+        v4a(global_get_clear_color(), window->back_ground_alpha);
+    window->bottom_color =
+        v4a(global_get_clear_color(), window->back_ground_alpha);
 
     if (window->hide) return false;
 
@@ -2861,7 +2866,6 @@ b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color,
     V2 icon_position =
         v2_add(position, v2f(middle(size.width, icon_size.width),
                              middle(size.height, icon_size.height)));
-    v2_add_equal(&position, window->first_item_position);
 
     quad_co(&ui_context.render.vertices, icon_position, icon_size, button_color,
             texture_coordinates, texture_index);
@@ -3416,7 +3420,10 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
                           back_drop_aabb.size, v4a(color, window->alpha),
                           global_get_clear_color(), 0.0f);
 #else
-        emit_aabb_particles(&back_drop_aabb, color, 5);
+        if (selected)
+        {
+            emit_aabb_particles(&back_drop_aabb, color, v2f(1.0f, 2.0f), 5);
+        }
         quad(&ui_context.render.vertices, back_drop_aabb.min,
              back_drop_aabb.size, color, 0.0f);
 

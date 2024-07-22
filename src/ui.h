@@ -120,6 +120,7 @@ typedef struct UiWindow
     DockNode* dock_node;
 
     f32 alpha;
+    f32 back_ground_alpha;
 
     b8 docked;
     b8 hide;

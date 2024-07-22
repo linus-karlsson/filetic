@@ -23,39 +23,39 @@ global const V4 full_icon_co = {
     {                                                                          \
         .x = 0.0f / width,                                                     \
         .y = 0.0f / height,                                                    \
-        .z = 128.0f / width,                                                   \
-        .w = 128.0f / height,                                                  \
+        .z = height / width,                                                   \
+        .w = height / height,                                                  \
     };
 
 global const V4 file_icon_co = icon_1_co(512.0f, 128.0f);
-global const V4 arrow_back_icon_co = icon_1_co(384.0f, 128.0f);
+global const V4 arrow_back_icon_co = icon_1_co(72.0f, 24.0f);
 
 #define icon_2_co(width, height)                                               \
     {                                                                          \
-        .x = 128.0f / width,                                                   \
+        .x = height / width,                                                   \
         .y = 0.0f / height,                                                    \
-        .z = 256.0f / width,                                                   \
-        .w = 128.0f / height,                                                  \
+        .z = (height * 2.0f) / width,                                          \
+        .w = height / height,                                                  \
     };
 global const V4 folder_icon_co = icon_2_co(512.0f, 128.0f);
-global const V4 arrow_up_icon_co = icon_2_co(384.0f, 128.0f);
+global const V4 arrow_up_icon_co = icon_2_co(72.0f, 24.0f);
 
 #define icon_3_co(width, height)                                               \
     {                                                                          \
-        .x = 256.0f / width,                                                   \
+        .x = (height * 2.0f) / width,                                          \
         .y = 0.0f / height,                                                    \
-        .z = 384.0f / width,                                                   \
-        .w = 128.0f / height,                                                  \
+        .z = (height * 3.0f) / width,                                          \
+        .w = height / height,                                                  \
     };
 global const V4 pdf_icon_co = icon_3_co(512.0f, 128.0f);
-global const V4 arrow_right_icon_co = icon_3_co(384.0f, 128.0f);
+global const V4 arrow_right_icon_co = icon_3_co(72.0f, 24.0f);
 
 #define icon_4_co(width, height)                                               \
     {                                                                          \
-        .x = 384.0f / width,                                                   \
+        .x = (height * 3.0f) / width,                                          \
         .y = 0.0f / height,                                                    \
-        .z = 512.0f / width,                                                   \
-        .w = 128.0f / height,                                                  \
+        .z = (height * 4.0f) / width,                                          \
+        .w = height / height,                                                  \
     };
 global const V4 png_icon_co = icon_4_co(512.0f, 128.0f);
 
@@ -288,8 +288,6 @@ add_move_in_history_button(const AABB* aabb, const V4 icon_co, const b8 disable,
 
 internal b8 show_search_result_window(SearchPage* page, const u32 window,
                                       const f32 list_item_height,
-                                      ThreadTaskQueue* task_queue,
-                                      SafeIdTexturePropertiesArray* textures,
                                       DirectoryHistory* directory_history)
 {
     if (ui_window_begin(window, "Search result", true, true))
@@ -305,7 +303,7 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
         {
             directory_open_folder(
                 page->search_result_folder_array.array.data[selected_item].path,
-                task_queue, textures, directory_history);
+                directory_history);
         }
         list_position.y +=
             list_item_height * page->search_result_folder_array.array.size;
@@ -325,6 +323,44 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
     return false;
 }
 
+internal void add_to_recent(DirectoryItemArray* recent, const char* path_temp)
+{
+    if (platform_directory_exists(path_temp))
+    {
+        for (u32 i = 0; i < recent->size; ++i)
+        {
+            if (!strcmp(path_temp, recent->data[i].path))
+            {
+                DirectoryItem temp = recent->data[i];
+                for (i32 j = i; j >= 1; --j)
+                {
+                    recent->data[j] = recent->data[j - 1];
+                }
+                recent->data[0] = temp;
+                return;
+            }
+        }
+        const u32 length = (u32)strlen(path_temp);
+        char* path = (char*)calloc(length + 1, sizeof(char));
+        memcpy(path, path_temp, length);
+        DirectoryItem item = {
+            .path = path,
+            .name = path + get_path_length(path, length),
+        };
+        if (recent->size == 10)
+        {
+            free(array_back(recent)->path);
+            recent->size--;
+        }
+        array_push(recent, item);
+        for (i32 i = (i32)recent->size - 1; i >= 1; --i)
+        {
+            recent->data[i] = recent->data[i - 1];
+        }
+        recent->data[0] = item;
+    }
+}
+
 internal char* get_parent_directory_name(DirectoryPage* current)
 {
     return current->directory.parent +
@@ -334,6 +370,7 @@ internal char* get_parent_directory_name(DirectoryPage* current)
 
 internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                                   const b8 check_collision,
+                                  DirectoryItemArray* recent,
                                   ThreadTaskQueue* task_queue,
                                   DirectoryTab* tab)
 {
@@ -389,8 +426,8 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
         {
             II32 result = ui_window_add_directory_item_grid(
                 v2f(0.0f, list_position.y), &current->directory.sub_directories,
-                &current->directory.files, UI_BIG_ICON_SIZE, task_queue, &tab->textures,
-                &tab->directory_list);
+                &current->directory.files, UI_BIG_ICON_SIZE, task_queue,
+                &tab->textures, &tab->directory_list);
 
             if (result.first > -1)
             {
@@ -399,9 +436,13 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                     directory_open_folder(
                         current->directory.sub_directories.data[result.second]
                             .path,
-                        task_queue, &tab->textures, &tab->directory_history);
+                        &tab->directory_history);
                     directory_clear_selected_items(
                         &tab->directory_list.selected_item_values);
+
+                    add_to_recent(recent, current->directory.sub_directories
+                                              .data[result.second]
+                                              .path);
                 }
                 else
                 {
@@ -419,10 +460,14 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
             {
                 directory_open_folder(
                     current->directory.sub_directories.data[selected_item].path,
-                    task_queue, &tab->textures, &tab->directory_history);
+                    &tab->directory_history);
 
                 directory_clear_selected_items(
                     &tab->directory_list.selected_item_values);
+
+                add_to_recent(recent, current->directory.sub_directories
+                                          .data[selected_item]
+                                          .path);
             }
             list_position.y +=
                 list_item_height * current->directory.sub_directories.size;
@@ -457,7 +502,7 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
             }
         }
         V4 color = global_get_clear_color();
-        color.a = 0.9f;
+        color.a = 0.95f;
         ui_window_row_begin(0.0f);
         if (ui_window_add_button(position, &button_size, &color, "Name"))
         {
@@ -1463,6 +1508,7 @@ u8* application_initialize(ApplicationContext* app)
     app->menu_window = app->windows.data[5];
     app->windows_window = app->windows.data[6];
     app->font_change_window = app->windows.data[7];
+    app->recent_window = app->windows.data[8];
 
     array_create(&app->free_window_ids, 10);
     array_create(&app->tab_windows, 20);
@@ -1542,6 +1588,9 @@ u8* application_initialize(ApplicationContext* app)
     array_create(&app->quick_access_folders, 10);
     quick_access_load(&app->quick_access_folders);
     app->show_quick_access = true;
+
+    array_create(&app->recent_folders, 10);
+    app->show_recent = true;
 
     app->show_search_page = true;
 
@@ -1826,6 +1875,37 @@ void search_page_search(SearchPage* page, DirectoryHistory* directory_history,
     }
 }
 
+internal b8 open_window_with_only_folders(
+    const u32 window, const char* title, const b8 should_open,
+    const f32 list_item_height, b8* show_switch, DirectoryItemArray* folders,
+    DirectoryItemArray* recent, DirectoryHistory* directory_history)
+{
+    b8 result = should_open;
+    if (should_open)
+    {
+        if (ui_window_begin(window, title, true, true))
+        {
+            V2 list_position = v2i(10.0f);
+            i32 selected_item = -1;
+            if (ui_window_add_folder_list(list_position, list_item_height,
+                                          folders, NULL, &selected_item))
+            {
+                directory_open_folder(folders->data[selected_item].path,
+                                      directory_history);
+
+                add_to_recent(recent, folders->data[selected_item].path);
+            }
+
+            result = !ui_window_end();
+        }
+        if (!result)
+        {
+            *show_switch = false;
+        }
+    }
+    return result;
+}
+
 void application_run()
 {
     ApplicationContext app = { 0 };
@@ -2005,7 +2085,7 @@ void application_run()
 
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
-        const f32 top_bar_height = 28.0f + ui_font_pixel_height;
+        const f32 top_bar_height = 24.0f + ui_font_pixel_height;
         const f32 top_bar_menu_height = 10.0f + ui_font_pixel_height;
         const f32 bottom_bar_height = 10.0f + ui_font_pixel_height;
         const f32 list_item_height = 16.0f + ui_font_pixel_height;
@@ -2017,6 +2097,12 @@ void application_run()
         ui_context_begin(app.dimensions, &dock_space, app.delta_time,
                          check_collision);
         {
+            presist b8 show_quick_access_switch = true;
+            presist b8 show_recent_switch = true;
+            presist b8 show_search_result_switch = true;
+
+            const f32 drop_down_width = 350.0f;
+
             const DirectoryTab* current_tab = tab;
             const DirectoryPage* current_directory =
                 directory_current(&tab->directory_history);
@@ -2024,18 +2110,19 @@ void application_run()
             const V4 button_color =
                 v4a(v4_s_multi(global_get_clear_color(), 3.0f), 1.0f);
             UiWindow* top_bar_menu = ui_window_get(app.menu_window);
+            top_bar_menu->back_ground_alpha = 0.95f;
             if (app.open_menu_window)
             {
                 if (ui_window_begin(app.menu_window, NULL, false, false))
                 {
-                    static b8 animation_on_selected = true;
-                    static b8 dark_mode_selected = true;
-                    static b8 highlight_fucused_window_selected = true;
+                    presist b8 animation_on_selected = true;
+                    presist b8 dark_mode_selected = true;
+                    presist b8 highlight_fucused_window_selected = true;
 
-                    static f32 dark_mode_x = 0.0f;
-                    static f32 hidden_files_x = 0.0f;
-                    static f32 focused_window_x = 0.0f;
-                    static f32 animation_x = 0.0f;
+                    presist f32 dark_mode_x = 0.0f;
+                    presist f32 hidden_files_x = 0.0f;
+                    presist f32 focused_window_x = 0.0f;
+                    presist f32 animation_x = 0.0f;
                     if (ui_window_set_overlay() && app.open_menu_window)
                     {
                         dark_mode_x = 0.0f;
@@ -2044,8 +2131,6 @@ void application_run()
                         animation_x = 0.0f;
                         app.open_menu_window = false;
                     }
-
-                    const f32 drop_down_width = 350.0f;
 
                     AABB row = {
                         .min = v2i(10.0f),
@@ -2243,31 +2328,40 @@ void application_run()
             }
 
             UiWindow* top_bar_windows = ui_window_get(app.windows_window);
+            top_bar_windows->back_ground_alpha = 0.95f;
             if (app.open_windows_window)
             {
                 if (ui_window_begin(app.windows_window, NULL, false, false))
                 {
+                    presist f32 quick_access_x = 0.0f;
+                    presist f32 recent_x = 0.0f;
+                    presist f32 search_result_x = 0.0f;
+
                     if (ui_window_set_overlay() && app.windows_window)
                     {
+                        quick_access_x = 0.0f;
+                        recent_x = 0.0f;
+                        search_result_x = 0.0f;
                         app.open_windows_window = false;
                     }
-
-                    f32 end_width = 0.0f;
 
                     AABB row = {
                         .min = v2i(10.0f),
                         .size = v2f(200.0f, 40.0f),
                     };
 
-                    ui_window_row_begin(20.0f);
-                    {
-                        ui_window_add_text(row.min, "Quick access: ", false);
-                        static b8 selected = true;
-                        static f32 x = 0.0f;
-                        b8 selected_before = selected;
-                        ui_window_add_switch(row.min, &selected, &x);
+                    const V2 switch_size = ui_window_get_switch_size();
+                    const f32 switch_x =
+                        drop_down_width - switch_size.width - row.min.x;
 
-                        if (selected)
+                    {
+                        ui_window_add_text(row.min, "Quick access:", false);
+                        b8 selected_before = show_quick_access_switch;
+                        ui_window_add_switch(v2f(switch_x, row.min.y),
+                                             &show_quick_access_switch,
+                                             &quick_access_x);
+
+                        if (show_quick_access_switch)
                         {
                             if (!app.show_quick_access)
                             {
@@ -2275,7 +2369,7 @@ void application_run()
                                 app.show_quick_access = true;
                             }
                         }
-                        else if (selected_before != selected)
+                        else if (selected_before != show_quick_access_switch)
                         {
                             if (app.show_quick_access)
                             {
@@ -2283,19 +2377,40 @@ void application_run()
                             }
                         }
                     }
-                    f32 end_row_position = ui_window_row_end();
-                    end_width = max(end_width, end_row_position);
 
                     row.min.y += ui_font_pixel_height + 20.0f;
-                    ui_window_row_begin(20.0f);
                     {
-                        ui_window_add_text(row.min, "Search result: ", false);
-                        static b8 selected = true;
-                        static f32 x = 0.0f;
-                        b8 selected_before = selected;
-                        ui_window_add_switch(row.min, &selected, &x);
+                        ui_window_add_text(row.min, "Recent:", false);
+                        b8 selected_before = show_recent_switch;
+                        ui_window_add_switch(v2f(switch_x, row.min.y),
+                                             &show_recent_switch, &recent_x);
 
-                        if (selected)
+                        if (show_recent_switch)
+                        {
+                            if (!app.show_recent)
+                            {
+                                open_window(&app, app.recent_window);
+                                app.show_recent = true;
+                            }
+                        }
+                        else if (selected_before != show_recent_switch)
+                        {
+                            if (app.show_recent)
+                            {
+                                ui_window_close(app.recent_window);
+                            }
+                        }
+                    }
+
+                    row.min.y += ui_font_pixel_height + 20.0f;
+                    {
+                        ui_window_add_text(row.min, "Search result:", false);
+                        b8 selected_before = show_search_result_switch;
+                        ui_window_add_switch(v2f(switch_x, row.min.y),
+                                             &show_search_result_switch,
+                                             &search_result_x);
+
+                        if (show_search_result_switch)
                         {
                             if (!app.show_search_page)
                             {
@@ -2303,7 +2418,7 @@ void application_run()
                                 app.show_search_page = true;
                             }
                         }
-                        else if (selected_before != selected)
+                        else if (selected_before != show_search_result_switch)
                         {
                             if (app.show_search_page)
                             {
@@ -2311,12 +2426,10 @@ void application_run()
                             }
                         }
                     }
-                    end_row_position = ui_window_row_end();
-                    end_width = max(end_width, end_row_position);
                     ui_window_end();
 
                     row.min.y += ui_font_pixel_height + 20.0f;
-                    top_bar_windows->size.width = end_width + 10.0f;
+                    top_bar_windows->size.width = drop_down_width;
                     top_bar_windows->size.height = row.min.y;
                 }
             }
@@ -2390,8 +2503,10 @@ void application_run()
                 }
 
                 AABB button_aabb = { 0 };
-                button_aabb.size = v2i(top_bar_height - 10.0f),
-                button_aabb.min = v2f(10.0f, top_bar_menu_height + 5.0f);
+                button_aabb.size = v2i(34.4f),
+                button_aabb.min = v2f(
+                    10.0f, top_bar_menu_height - 2.0f +
+                               middle(top_bar_height, button_aabb.size.height));
 
                 ui_window_row_begin(0.0f);
 
@@ -2418,12 +2533,15 @@ void application_run()
                                               arrow_up_icon_co,
                                               UI_ARROW_ICON_TEXTURE, disable))
                 {
-                    directory_go_up(&app.thread_queue.task_queue,
-                                    &tab->textures, &tab->directory_history);
+                    directory_go_up(&tab->directory_history);
                 }
 
                 button_aabb.min.x += ui_window_row_end() + 10.0f;
-                button_aabb.size.x =
+                button_aabb.size.height = top_bar_height - 10.0f,
+                button_aabb.min.y =
+                    top_bar_menu_height +
+                    middle(top_bar_height, button_aabb.size.height);
+                button_aabb.size.width =
                     (app.dimensions.width - (search_bar_width + 20.0f)) -
                     button_aabb.min.x;
 
@@ -2468,7 +2586,6 @@ void application_run()
                         if (!directory_go_to(
                                 app.parent_directory_input.buffer.data,
                                 app.parent_directory_input.buffer.size,
-                                &app.thread_queue.task_queue, &tab->textures,
                                 &tab->directory_history))
                         {
                         }
@@ -2515,6 +2632,7 @@ void application_run()
                     {
                         open_window(&app, app.search_result_window);
                         app.show_search_page = true;
+                        show_search_result_switch = true;
                     }
                 }
                 if (app.search_page
@@ -2593,32 +2711,26 @@ void application_run()
                 ui_window_end();
             }
 
-            if (app.show_quick_access)
-            {
-                if (ui_window_begin(app.quick_access_window, "Quick access",
-                                    true, true))
-                {
-                    V2 list_position = v2i(10.0f);
-                    i32 selected_item = -1;
-                    if (ui_window_add_folder_list(
-                            list_position, list_item_height,
-                            &app.quick_access_folders, NULL, &selected_item))
-                    {
-                        directory_open_folder(
-                            app.quick_access_folders.data[selected_item].path,
-                            &app.thread_queue.task_queue, &tab->textures,
-                            &tab->directory_history);
-                    }
-                    app.show_quick_access = !ui_window_end();
-                }
-            }
+            app.show_quick_access = open_window_with_only_folders(
+                app.quick_access_window, "Quick access", app.show_quick_access,
+                list_item_height, &show_quick_access_switch,
+                &app.quick_access_folders, &app.recent_folders,
+                &tab->directory_history);
+
+            app.show_recent = open_window_with_only_folders(
+                app.recent_window, "Recent", app.show_recent, list_item_height,
+                &show_recent_switch, &app.recent_folders, &app.recent_folders,
+                &tab->directory_history);
 
             if (app.show_search_page)
             {
                 app.show_search_page = !show_search_result_window(
                     &app.search_page, app.search_result_window,
-                    list_item_height, &app.thread_queue.task_queue,
-                    &tab->textures, &tab->directory_history);
+                    list_item_height, &tab->directory_history);
+                if (!app.show_search_page)
+                {
+                    show_search_result_switch = false;
+                }
             }
 
             if (preview_index != -1)
@@ -2716,9 +2828,10 @@ void application_run()
                 ui_window_get(window_id)->alpha =
                     i == app.tab_index ? 1.0f : 0.7f;
 
-                if (show_directory_window(
-                        window_id, list_item_height, check_collision,
-                        &app.thread_queue.task_queue, app.tabs.data + i))
+                if (show_directory_window(window_id, list_item_height,
+                                          check_collision, &app.recent_folders,
+                                          &app.thread_queue.task_queue,
+                                          app.tabs.data + i))
                 {
                     DirectoryTab tab_to_remove = app.tabs.data[i];
                     for (u32 j = i; j < app.tabs.size - 1; ++j)

@@ -132,6 +132,7 @@ typedef struct ApplicationContext
     u32 menu_window;
     u32 windows_window;
     u32 font_change_window;
+    u32 recent_window;
 
     Directory font_change_directory;
 
@@ -144,6 +145,9 @@ typedef struct ApplicationContext
 
     DirectoryItemArray quick_access_folders;
     b8 show_quick_access;
+
+    DirectoryItemArray recent_folders;
+    b8 show_recent;
 
     InputBuffer parent_directory_input;
     DropDownMenu2 suggestions;

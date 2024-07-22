@@ -369,9 +369,7 @@ internal b8 should_be_grid_view(const DirectoryPage* page)
     return false;
 }
 
-b8 directory_go_to(char* path, u32 length, ThreadTaskQueue* task_queue,
-                   SafeIdTexturePropertiesArray* texures,
-                   DirectoryHistory* directory_history)
+b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
 {
     b8 result = false;
     char saved_chars[3];
@@ -414,13 +412,11 @@ b8 directory_go_to(char* path, u32 length, ThreadTaskQueue* task_queue,
     return result;
 }
 
-void directory_open_folder(char* folder_path, ThreadTaskQueue* task_queue,
-                           SafeIdTexturePropertiesArray* texures,
+void directory_open_folder(char* folder_path,
                            DirectoryHistory* directory_history)
 {
     u32 length = (u32)strlen(folder_path);
-    directory_go_to(folder_path, length, task_queue, texures,
-                    directory_history);
+    directory_go_to(folder_path, length, directory_history);
 }
 
 void directory_move_in_history(const i32 index_add,
@@ -457,9 +453,7 @@ b8 directory_can_go_up(char* parent)
     return false;
 }
 
-void directory_go_up(ThreadTaskQueue* task_queue,
-                     SafeIdTexturePropertiesArray* textures,
-                     DirectoryHistory* directory_history)
+void directory_go_up(DirectoryHistory* directory_history)
 {
     DirectoryPage* current = directory_current(directory_history);
     char* parent = current->directory.parent;
@@ -467,8 +461,7 @@ void directory_go_up(ThreadTaskQueue* task_queue,
 
     char* new_parent = (char*)calloc(parent_length + 1, sizeof(char));
     memcpy(new_parent, parent, parent_length);
-    directory_go_to(new_parent, parent_length, task_queue, textures,
-                    directory_history);
+    directory_go_to(new_parent, parent_length, directory_history);
     free(new_parent);
 }
 
