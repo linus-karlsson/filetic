@@ -522,7 +522,8 @@ b8 platform_directory_exists(const char* directory_path)
 }
 
 internal void insert_directory_item(const u32 directory_len, const u64 size,
-                                    char* path, DirectoryItemArray* items)
+                                    const u64 last_write_time, char* path,
+                                    DirectoryItemArray* items)
 {
     HANDLE h = CreateFile(
         path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
@@ -537,6 +538,7 @@ internal void insert_directory_item(const u32 directory_len, const u64 size,
         {
             DirectoryItem item = {
                 .size = size,
+                .last_write_time = last_write_time,
                 .path = path,
                 .name = path + directory_len - 1,
             };
@@ -584,9 +586,14 @@ Directory platform_get_directory(const char* directory_path,
             char* path =
                 concatinate(directory_path, directory_len - 1, ffd.cFileName,
                             (u32)strlen(ffd.cFileName), 0, 2, NULL);
+
+            u64 last_write_time =
+                (ffd.ftLastWriteTime.dwHighDateTime * (MAXDWORD + 1)) +
+                ffd.ftLastWriteTime.dwLowDateTime;
+
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
-                insert_directory_item(directory_len, 0, path,
+                insert_directory_item(directory_len, 0, last_write_time, path,
                                       &directory.sub_directories);
             }
             else
@@ -594,7 +601,7 @@ Directory platform_get_directory(const char* directory_path,
                 insert_directory_item(directory_len,
                                       (ffd.nFileSizeHigh * (MAXDWORD + 1)) +
                                           ffd.nFileSizeLow,
-                                      path, &directory.files);
+                                      last_write_time, path, &directory.files);
             }
 
         } while (FindNextFile(file_handle, &ffd));
@@ -611,7 +618,7 @@ void platform_reset_directory(Directory* directory, b8 delete_textures)
     {
         DirectoryItem* file = directory->files.data + i;
         free(file->path);
-        if(delete_textures && file->texture_id)
+        if (delete_textures && file->texture_id)
         {
             texture_delete(file->texture_id);
         }
@@ -1445,3 +1452,14 @@ b8 directory_look_for_directory_change(void* handle)
     return result == WAIT_OBJECT_0;
 }
 
+PlatformTime platform_time_from_u64(u64 time)
+{
+    const FILETIME file_time = {
+        .dwHighDateTime = (time >> 32),
+        .dwLowDateTime = (time & MAXDWORD)
+    };
+
+    PlatformTime result = {0};
+    FileTimeToSystemTime(&file_time, (SYSTEMTIME*)&result);
+    return result;
+}

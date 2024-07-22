@@ -11,6 +11,8 @@ typedef struct Particle
     V2 life;
     V2 start_dimensions;
     V4 color;
+    b8 size_change;
+    b8 alpha_change;
 } Particle;
 
 typedef struct UnorderedCircularParticleBuffer

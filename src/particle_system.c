@@ -25,10 +25,11 @@ void particle_buffer_set_next(UnorderedCircularParticleBuffer* buffer,
 
 void particle_update(Particle* particle, const f64 delta_time)
 {
-    particle->velocity = v2_add(particle->velocity,
-                                v2_s_multi(particle->acceleration, (f32)delta_time));
-    particle->position =
-        v2_add(particle->position, v2_s_multi(particle->velocity, (f32)delta_time));
+    particle->velocity =
+        v2_add(particle->velocity,
+               v2_s_multi(particle->acceleration, (f32)delta_time));
+    particle->position = v2_add(
+        particle->position, v2_s_multi(particle->velocity, (f32)delta_time));
 }
 
 void particle_buffer_update(UnorderedCircularParticleBuffer* buffer,
@@ -43,8 +44,15 @@ void particle_buffer_update(UnorderedCircularParticleBuffer* buffer,
             particle->life.x -= (f32)delta_time;
             particle->life.x = max(particle->life.x, 0.0f);
             const f32 life_remaining = particle->life.x / particle->life.y;
-            particle->dimension =
-                v2_s_multi(particle->start_dimensions, life_remaining);
+            if (particle->size_change)
+            {
+                particle->dimension =
+                    v2_s_multi(particle->start_dimensions, life_remaining);
+            }
+            if (particle->alpha_change)
+            {
+                particle->color.a = life_remaining;
+            }
         }
         else
         {

@@ -77,7 +77,7 @@ void render_begin_draw(const Render* render, const MVP* mvp)
     shader_bind(render->shader_properties.shader);
     shader_set_mvp(&render->shader_properties, mvp);
 
-    int textures[256] = { 0 };
+    int* textures = (int*)calloc(render->textures.size, sizeof(int));
     for (u32 i = 0; i < render->textures.size; ++i)
     {
         textures[i] = (int)i;
@@ -93,6 +93,8 @@ void render_begin_draw(const Render* render, const MVP* mvp)
     }
     vertex_array_bind(render->vertex_array_id);
     index_buffer_bind(render->index_buffer_id);
+
+    free(textures);
 }
 
 void render_draw(const u32 index_offset, const u32 index_count,

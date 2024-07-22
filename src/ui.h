@@ -4,6 +4,8 @@
 #include "hash_table.h"
 #include "platform/platform.h"
 #include "font.h"
+#include "thread_queue.h"
+#include "texture.h"
 
 #define UI_DEFAULT_TEXTURE 0.0f
 #define UI_FONT_TEXTURE 1.0f
@@ -190,6 +192,14 @@ typedef struct UU32
     u32 second;
 } UU32;
 
+typedef enum Alignment
+{
+    ALIGN_NONE,
+    ALIGN_LEFT,
+    ALIGN_MIDDLE,
+    ALIGN_RIGHT,
+}Alignment;
+
 InputBuffer ui_input_buffer_create();
 void ui_input_buffer_delete(InputBuffer* input);
 void ui_input_buffer_clear_selection(InputBuffer* input);
@@ -231,10 +241,11 @@ void ui_window_start_size_animation(UiWindow* window, V2 start_size, V2 end_size
 void ui_window_start_position_animation(UiWindow* window, V2 start_position, V2 end_position);
 
 b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color, const V4 texture_coordinates, const f32 texture_index, const b8 disable);
-b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text);
+V2 ui_window_get_button_dimensions(V2 dimensions, const char* text, f32* x_advance_out);
+b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text, const Alignment alignment);
 b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index);
 b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index);
-II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, const f32 item_height, List* list);
+II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, const f32 item_height, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, List* list);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
 void ui_window_add_text(V2 position, const char* text, b8 scrolling);

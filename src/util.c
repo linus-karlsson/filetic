@@ -91,7 +91,7 @@ void file_write(const char* file_path, const char* content, u32 size)
 
 const char* file_get_extension(const char* path, const u32 path_length)
 {
-    for (i32 i = path_length - 1; i >= 0; --i)
+    for (i32 i = (i32)path_length - 1; i >= 0; --i)
     {
         char current_char = path[i];
         if (current_char == '\\' || current_char == '/')
@@ -100,7 +100,7 @@ const char* file_get_extension(const char* path, const u32 path_length)
         }
         else if (current_char == '.')
         {
-            return path + i;
+            return path + i + (i != ((i32)path_length - 1));
         }
     }
     return NULL;

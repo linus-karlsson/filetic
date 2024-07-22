@@ -1,5 +1,6 @@
 #pragma once
 #include "define.h"
+#include "ftic_guid.h"
 
 typedef struct TextureProperties
 {
@@ -8,6 +9,24 @@ typedef struct TextureProperties
     int channels;
     u8* bytes;
 } TextureProperties;
+
+typedef struct IdTextureProperties{
+    FticGUID id;
+    TextureProperties texture_properties;
+}IdTextureProperties;
+
+typedef struct IdTexturePropertiesArray
+{
+    u32 size;
+    u32 capacity;
+    IdTextureProperties* data;
+}IdTexturePropertiesArray;
+
+typedef struct SafeIdTexturePropertiesArray
+{
+    IdTexturePropertiesArray array;
+    FTicMutex mutex;
+} SafeIdTexturePropertiesArray;
 
 void texture_load(const char* file_path, TextureProperties* texture_properties);
 void texture_resize(TextureProperties* texture_properties, int box_width, int box_height);

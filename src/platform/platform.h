@@ -23,10 +23,23 @@ typedef struct ClientRect
     int bottom;
 } ClientRect;
 
+typedef struct PlatformTime
+{
+    u16 wYear;
+    u16 wMonth;
+    u16 wDayOfWeek;
+    u16 wDay;
+    u16 wHour;
+    u16 wMinute;
+    u16 wSecond;
+    u16 wMilliseconds;
+}PlatformTime;
+
 typedef struct DirectoryItem
 {
     FticGUID id;                                   
     u64 size;
+    u64 last_write_time;
     char* name;
     char* path;
 
@@ -37,6 +50,8 @@ typedef struct DirectoryItem
     u32 texture_id;
     i32 texture_width;
     i32 texture_height;
+
+    b8 reload_thumbnail;
     b8 animation_on;
     b8 rename;
 } DirectoryItem;
@@ -171,3 +186,5 @@ void* directory_listen_to_directory_changes(const char* path);
 void directory_unlisten_to_directory_changes(void* handle);
 b8 directory_look_for_directory_change(void* handle);
 void platform_show_hidden_files(b8 show);
+
+PlatformTime platform_time_from_u64(u64 time);

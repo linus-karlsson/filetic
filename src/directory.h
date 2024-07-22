@@ -10,6 +10,7 @@ typedef enum SortBy
     SORT_NONE = 0,
     SORT_NAME = 1,
     SORT_SIZE = 2,
+    SORT_DATE = 3,
 } SortBy;
 
 typedef struct DirectoryPage
@@ -18,6 +19,7 @@ typedef struct DirectoryPage
     u32 sort_count;
     f32 offset;
     Directory directory;
+    b8 grid_view;
 } DirectoryPage;
 
 typedef struct DirectoryArray
@@ -34,31 +36,12 @@ typedef struct DirectoryHistory
     DirectoryArray history;
 } DirectoryHistory;
 
-typedef struct IdTextureProperties{
-    FticGUID id;
-    TextureProperties texture_properties;
-}IdTextureProperties;
-
-typedef struct IdTexturePropertiesArray
-{
-    u32 size;
-    u32 capacity;
-    IdTextureProperties* data;
-}IdTexturePropertiesArray;
-
-typedef struct SafeIdTexturePropertiesArray
-{
-    IdTexturePropertiesArray array;
-    FTicMutex mutex;
-} SafeIdTexturePropertiesArray;
-
 typedef struct DirectoryTab
 {
     u32 window_id;
     SafeIdTexturePropertiesArray textures;
     DirectoryHistory directory_history;
     List directory_list;
-    b8 list_view;
 } DirectoryTab;
 
 typedef struct DirectoryTabArray
@@ -67,6 +50,15 @@ typedef struct DirectoryTabArray
     u32 capacity;
     DirectoryTab* data;
 } DirectoryTabArray;
+
+typedef struct LoadThumpnailData
+{
+    FticGUID file_id;
+    char* file_path;
+    SafeIdTexturePropertiesArray* array;
+} LoadThumpnailData;
+
+void load_thumpnails(void* data);
 
 DirectoryPage* directory_current(DirectoryHistory* history);
 void directory_paste_in_directory(DirectoryPage* current_directory);

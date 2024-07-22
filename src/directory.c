@@ -9,14 +9,7 @@ DirectoryPage* directory_current(DirectoryHistory* history)
     return history->history.data + history->current_index;
 }
 
-typedef struct LoadThumpnailData
-{
-    FticGUID file_id;
-    char* file_path;
-    SafeIdTexturePropertiesArray* array;
-} LoadThumpnailData;
-
-internal void load_thumpnails(void* data)
+void load_thumpnails(void* data)
 {
     LoadThumpnailData* arguments = (LoadThumpnailData*)data;
 
@@ -50,7 +43,6 @@ internal void load_thumpnails(void* data)
 internal void look_for_same_items(const DirectoryItemArray* existing_items,
                                   DirectoryItemArray* reloaded_items)
 {
-    u32 count = 0;
     for (u32 i = 0; i < reloaded_items->size; ++i)
     {
         DirectoryItem* reloaded_item = reloaded_items->data + i;
@@ -64,10 +56,15 @@ internal void look_for_same_items(const DirectoryItemArray* existing_items,
                 reloaded_item->after_animation = existing_item->after_animation;
                 reloaded_item->animation_precent =
                     existing_item->animation_precent;
+
+                reloaded_item->texture_id = existing_item->texture_id;
+                reloaded_item->texture_width = existing_item->texture_width;
+                reloaded_item->texture_height = existing_item->texture_height;
+
+                reloaded_item->reload_thumbnail =
+                    existing_item->reload_thumbnail;
                 reloaded_item->animation_on = existing_item->animation_on;
                 reloaded_item->rename = existing_item->rename;
-                reloaded_item->texture_id = existing_item->texture_id;
-                ++count;
                 break;
             }
         }
@@ -223,6 +220,40 @@ void directory_sort_by_size(DirectoryItemArray* array)
     free(output);
 }
 
+void directory_sort_by_date(DirectoryItemArray* array)
+{
+    if (array->size <= 1) return;
+
+    DirectoryItem* output =
+        (DirectoryItem*)calloc(array->size, sizeof(DirectoryItem));
+    u32 count[256] = { 0 };
+
+    for (u32 shift = 0, s = 0; shift < 8; ++shift, s += 8)
+    {
+        memset(count, 0, sizeof(count));
+
+        for (u32 i = 0; i < array->size; ++i)
+        {
+            count[(array->data[i].last_write_time >> s) & 0xff]++;
+        }
+
+        for (u32 i = 1; i < 256; ++i)
+        {
+            count[i] += count[i - 1];
+        }
+
+        for (i32 i = array->size - 1; i >= 0; --i)
+        {
+            u32 index = (array->data[i].last_write_time >> s) & 0xff;
+            output[--count[index]] = array->data[i];
+        }
+        DirectoryItem* tmp = array->data;
+        array->data = output;
+        output = tmp;
+    }
+    free(output);
+}
+
 void directory_sort(DirectoryPage* directory_page)
 {
     switch (directory_page->sort_by)
@@ -248,6 +279,15 @@ void directory_sort(DirectoryPage* directory_page)
             }
             break;
         }
+        case SORT_DATE:
+        {
+            directory_sort_by_date(&directory_page->directory.files);
+            if (directory_page->sort_count == 2)
+            {
+                directory_flip_array(&directory_page->directory.files);
+            }
+            break;
+        }
         default:
         {
             // directory_sort_by_name(&directory_page->directory.sub_directories);
@@ -265,19 +305,19 @@ void directory_history_update_directory_change_handle(
         directory_current(directory_history)->directory.parent);
 }
 
-internal void
-look_for_and_get_thumbnails(DirectoryItemArray* files,
-                            ThreadTaskQueue* task_queue,
-                            SafeIdTexturePropertiesArray* textures)
+internal u32 look_for_and_get_thumbnails(const DirectoryItemArray* files,
+                                         ThreadTaskQueue* task_queue,
+                                         SafeIdTexturePropertiesArray* textures)
 {
+    u32 count = 0;
     for (u32 i = 0; i < files->size; ++i)
     {
-        DirectoryItem* item = files->data + i;
+        const DirectoryItem* item = files->data + i;
         const char* extension =
             file_get_extension(item->path, (u32)strlen(item->path));
 
         if (extension &&
-            (!strcmp(extension, ".jpg") || !strcmp(extension, ".png")))
+            (!strcmp(extension, "jpg") || !strcmp(extension, "png")))
         {
             LoadThumpnailData* thump_nail_data =
                 (LoadThumpnailData*)calloc(1, sizeof(LoadThumpnailData));
@@ -289,8 +329,43 @@ look_for_and_get_thumbnails(DirectoryItemArray* files,
                 .task_callback = load_thumpnails,
             };
             thread_tasks_push(task_queue, &task, 1, NULL);
+            ++count;
         }
     }
+    return count;
+}
+
+internal u32 count_image_files(const DirectoryItemArray* files)
+{
+    u32 count = 0;
+    for (u32 i = 0; i < files->size; ++i)
+    {
+        DirectoryItem* item = files->data + i;
+        const char* extension =
+            file_get_extension(item->path, (u32)strlen(item->path));
+
+        if (extension &&
+            (!strcmp(extension, "jpg") || !strcmp(extension, "png")))
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+internal b8 should_be_grid_view(const DirectoryPage* page)
+{
+    u32 count = count_image_files(&page->directory.files);
+
+    if (count)
+    {
+        if (((f32)count / (f32)(page->directory.files.size +
+                                page->directory.sub_directories.size)) >= 0.8f)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 b8 directory_go_to(char* path, u32 length, ThreadTaskQueue* task_queue,
@@ -322,8 +397,12 @@ b8 directory_go_to(char* path, u32 length, ThreadTaskQueue* task_queue,
         array_push(&directory_history->history, new_page); // size + 1
                                                            //
         DirectoryPage* page = array_back(&directory_history->history);
-        look_for_and_get_thumbnails(&page->directory.files, task_queue,
-                                    texures);
+#if 0
+        u32 count = look_for_and_get_thumbnails(&page->directory.files,
+                                                task_queue, texures);
+
+#endif
+        page->grid_view = should_be_grid_view(page);
 
         path[length--] = saved_chars[2];
         path[length--] = saved_chars[1];
@@ -351,6 +430,16 @@ void directory_move_in_history(const i32 index_add,
     DirectoryPage* current = directory_current(directory_history);
     directory_clear_selected_items(selected_item_values);
     directory_reload(current);
+    for (u32 i = 0; i < current->directory.files.size; ++i)
+    {
+        DirectoryItem* item = current->directory.files.data + i;
+        if (item->texture_id)
+        {
+            texture_delete(item->texture_id);
+            item->texture_id = 0;
+            item->reload_thumbnail = false;
+        }
+    }
     directory_history_update_directory_change_handle(directory_history);
 }
 
@@ -401,11 +490,13 @@ void directory_tab_add(const char* dir, ThreadTaskQueue* task_queue,
         hash_table_create_guid(100, hash_guid);
 
     tab->directory_list.input = ui_input_buffer_create();
-    tab->list_view = true;
 
     DirectoryPage* last_page = array_back(&tab->directory_history.history);
+#if 0
     look_for_and_get_thumbnails(&last_page->directory.files, task_queue,
                                 &tab->textures);
+#endif
+    last_page->grid_view = should_be_grid_view(last_page);
 }
 
 void directory_tab_clear(DirectoryTab* tab)
