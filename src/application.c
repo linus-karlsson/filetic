@@ -2010,6 +2010,11 @@ internal void application_open_menu_window(ApplicationContext* app,
                     }
                 }
                 app->open_font_change_window = true;
+                dark_mode_x = 0.0f;
+                hidden_files_x = 0.0f;
+                focused_window_x = 0.0f;
+                animation_x = 0.0f;
+                app->open_menu_window = false;
             }
         }
 
@@ -2427,9 +2432,10 @@ void application_run()
                                font_change_window->size.height));
                 if (ui_window_begin(app.font_change_window, NULL, false, false))
                 {
-                    if (ui_window_set_overlay(false))
+                    if (ui_window_set_overlay(true))
                     {
                         app.open_font_change_window = false;
+                        app.open_menu_window = true;
                     }
                     else
                     {
@@ -2447,6 +2453,7 @@ void application_run()
                             ui_context_change_font_pixel_height(
                                 ui_font_pixel_height);
                             app.open_font_change_window = false;
+                            app.open_menu_window = true;
                         }
                     }
                     ui_window_end();
@@ -2470,7 +2477,7 @@ void application_run()
                     top_bar_menu->back_ground_alpha = 0.95f;
 
                     app.open_windows_window = false;
-                    app.open_menu_window ^= true;
+                    app.open_menu_window = true;
                 }
                 else if (index_clicked == 1)
                 {
@@ -2480,7 +2487,7 @@ void application_run()
                     top_bar_windows->back_ground_alpha = 0.95f;
 
                     app.open_menu_window = false;
-                    app.open_windows_window ^= true;
+                    app.open_windows_window = true;
                 }
 
                 AABB button_aabb = { 0 };
