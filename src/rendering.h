@@ -28,6 +28,7 @@ void render_destroy(Render* render);
 void rendering_properties_clear(RenderingProperties* rendering_properties);
 void rendering_properties_check_and_grow_vertex_buffer(RenderingProperties* rendering_properties);
 void rendering_properties_check_and_grow_index_buffer( RenderingProperties* rendering_properties, const u32 total_index_count);
+void render_begin_draw_shader(const Render* render, const u32 shader, const MVP* mvp);
 void render_begin_draw(const Render* render, const u32 shader, const MVP* mvp);
 void render_draw(const u32 index_offset, const u32 index_count, const AABB* scissor);
 void render_end_draw(const Render* render);

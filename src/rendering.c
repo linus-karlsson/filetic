@@ -72,7 +72,8 @@ void rendering_properties_check_and_grow_index_buffer(
     }
 }
 
-void render_begin_draw(const Render* render, const u32 shader, const MVP* mvp)
+void render_begin_draw_shader(const Render* render, const u32 shader,
+                              const MVP* mvp)
 {
     shader_bind(shader);
     shader_set_mvp(&render->shader_properties, mvp);
@@ -82,10 +83,15 @@ void render_begin_draw(const Render* render, const u32 shader, const MVP* mvp)
     {
         textures[i] = (int)i;
     }
-    int location =
-        glGetUniformLocation(shader, "textures");
+    int location = glGetUniformLocation(shader, "textures");
     ftic_assert(location != -1);
     glUniform1iv(location, render->textures.size, textures);
+    free(textures);
+}
+
+void render_begin_draw(const Render* render, const u32 shader, const MVP* mvp)
+{
+    render_begin_draw_shader(render, shader, mvp);
 
     for (u32 i = 0; i < render->textures.size; ++i)
     {
@@ -94,7 +100,6 @@ void render_begin_draw(const Render* render, const u32 shader, const MVP* mvp)
     vertex_array_bind(render->vertex_array_id);
     index_buffer_bind(render->index_buffer_id);
 
-    free(textures);
 }
 
 void render_draw(const u32 index_offset, const u32 index_count,
@@ -104,7 +109,8 @@ void render_draw(const u32 index_offset, const u32 index_count,
     {
         glEnable(GL_SCISSOR_TEST);
         glScissor((int)roundf(scissor->min.x), (int)roundf(scissor->min.y),
-                  (int)roundf(scissor->size.width), (int)roundf(scissor->size.height));
+                  (int)roundf(scissor->size.width),
+                  (int)roundf(scissor->size.height));
 
         GLintptr offset = index_offset * sizeof(u32);
         glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT,

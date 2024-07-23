@@ -2014,7 +2014,7 @@ internal void application_open_menu_window(ApplicationContext* app,
                 hidden_files_x = 0.0f;
                 focused_window_x = 0.0f;
                 animation_x = 0.0f;
-                app->open_menu_window = false;
+                //app->open_menu_window = false;
             }
         }
 
@@ -2435,7 +2435,6 @@ void application_run()
                     if (ui_window_set_overlay(true))
                     {
                         app.open_font_change_window = false;
-                        app.open_menu_window = true;
                     }
                     else
                     {

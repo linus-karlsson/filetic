@@ -2035,14 +2035,14 @@ internal void add_frosted_background(V2 position, const V2 size,
         v->texture_index = (f32)frosted_texture_index;
         v->texture_coordinates = texture_coordinates[i];
     }
-    buffer_set_sub_data(ui_context.render.render.vertex_buffer_id,
-                        GL_ARRAY_BUFFER, background_offset, sizeof(Vertex) * 4,
-                        ui_context.render.vertices.data);
+}
 
-    render_begin_draw(&ui_context.render.render, ui_context.frosted_shader,
-                      &ui_context.mvp);
+internal void draw_frosted_background(const u32 index_offset,
+                                      const AABB* scissor)
+{
+    render_begin_draw_shader(&ui_context.render.render,
+                             ui_context.frosted_shader, &ui_context.mvp);
     render_draw(index_offset, 6, scissor);
-    render_end_draw(&ui_context.render.render);
 }
 
 internal void render_ui(const DockNodePtrArray* dock_spaces,
@@ -2079,14 +2079,12 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
             }
             else if (frosted_texture_index)
             {
-                render_end_draw(&ui_context.render.render);
-                add_frosted_background(window->position, window->size,
-                                       window->offset_to_background,
-                                       window->rendering_index_offset, &scissor,
-                                       frosted_texture_index);
+                draw_frosted_background(window->rendering_index_offset,
+                                        &scissor);
                 window->rendering_index_offset += 6;
                 window->rendering_index_count -= 6;
-                render_begin_draw(
+
+                render_begin_draw_shader(
                     &ui_context.render.render,
                     ui_context.render.render.shader_properties.shader,
                     &ui_context.mvp);
@@ -2253,6 +2251,39 @@ void ui_context_end()
         {
             texture_index = ui_context.render.render.textures.size;
             array_push(&ui_context.render.render.textures, fbo_texture);
+
+            const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
+            for (u32 i = 0; i < dock_spaces.size; ++i)
+            {
+                DockNode* node = dock_spaces.data[i];
+                UiWindow* window =
+                    ui_window_get(node->windows.data[node->window_in_focus]);
+
+                if (window->overlay)
+                {
+                    AABB scissor = { 0 };
+                    if (ui_context.dimensions.y)
+                    {
+                        scissor.min.x = window->position.x;
+                        scissor.min.y =
+                            ui_context.dimensions.y -
+                            (window->position.y + window->size.height);
+                        scissor.size = window->size;
+                        scissor.size.height -=
+                            (window->top_bar * top_bar_height);
+                        scissor.size.height =
+                            clampf32_low(scissor.size.height, 0.0f);
+                    }
+                    add_frosted_background(window->position, window->size,
+                                           window->offset_to_background,
+                                           window->rendering_index_offset,
+                                           &scissor, texture_index);
+                }
+            }
+            buffer_set_sub_data(
+                ui_context.render.render.vertex_buffer_id, GL_ARRAY_BUFFER, 0,
+                sizeof(Vertex) * ui_context.render.vertices.size,
+                ui_context.render.vertices.data);
         }
     }
 
