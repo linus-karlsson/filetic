@@ -12,8 +12,8 @@ void main()
 {
     int index = int(fTexIndex);
 
-    const float blurAmount = 0.0026;
-    const int samples = 25; 
+    const float blurAmount = 0.0028;
+    const int samples = 30; 
 
     vec4 colorSum = vec4(0.0);
     float weightSum = 0.0;

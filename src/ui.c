@@ -2031,7 +2031,7 @@ internal void add_frosted_background(V2 position, const V2 size,
     for (u32 i = 0; i < 4; ++i)
     {
         Vertex* v = ui_context.render.vertices.data + background_offset + i;
-        v->color = v4ic(0.8f);
+        v->color = v4ic(0.6f);
         v->texture_index = (f32)frosted_texture_index;
         v->texture_coordinates = texture_coordinates[i];
     }

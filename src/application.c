@@ -2809,8 +2809,10 @@ void application_run()
                     app.tab_index = i;
                 }
 
+                /*
                 ui_window_get(window_id)->alpha =
                     i == app.tab_index ? 1.0f : 0.7f;
+                    */
 
                 if (show_directory_window(window_id, list_item_height,
                                           check_collision, &app.recent,

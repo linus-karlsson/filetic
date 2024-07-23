@@ -125,19 +125,19 @@ typedef struct UiWindow
     f32 back_ground_alpha;
     u8 resize_dragging;
 
-    b8 docked : 1;
-    b8 hide : 1;
-    b8 area_hit : 1;
-    b8 top_bar : 1;
-    b8 top_bar_pressed : 1;
-    b8 release_from_dock_space : 1;
-    b8 top_bar_hold : 1;
-    b8 resizeable : 1;
-    b8 any_holding : 1;
-    b8 size_animation_on : 1;
-    b8 position_animation_on : 1;
-    b8 closing : 1;
-    b8 overlay : 1;
+    b8 docked;
+    b8 hide;
+    b8 area_hit;
+    b8 top_bar;
+    b8 top_bar_pressed;
+    b8 release_from_dock_space;
+    b8 top_bar_hold;
+    b8 resizeable;
+    b8 any_holding;
+    b8 size_animation_on;
+    b8 position_animation_on;
+    b8 closing;
+    b8 overlay;
 } UiWindow;
 
 #define DOCK_SIDE_RIGHT 0
