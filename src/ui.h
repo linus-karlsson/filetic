@@ -84,7 +84,7 @@ typedef struct DockNode
 
 typedef struct UiWindow
 {
-    const char* title;
+    CharArray title;
     u32 id;
     V2 size;
     V2 position;

@@ -1,12 +1,9 @@
 C:\Users\linus\dev
 C:\Users\linus\dev\filetic
 C:\Users\linus\Images
-C:\Program Files
 C:\Users
 C:\Windows
-C:\Users\linus\Documents
 C:\Users\linus
-C:\VulkanSDK
 C:\Users\linus\dev\help
 C:\Users\linus\dev\filetic\lib
 C:\Users\linus\dev\filetic\remedy

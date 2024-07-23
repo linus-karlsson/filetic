@@ -1772,6 +1772,31 @@ internal DockNodePtrArray get_active_dock_spaces()
     return dock_spaces;
 }
 
+internal u32 display_text_and_truncate_if_necissary(const V2 position,
+                                                    const f32 total_width,
+                                                    const f32 alpha, char* text)
+{
+    const u32 text_len = (u32)strlen(text);
+    const i32 i = text_check_length_within_boundary(
+        ui_context.font.chars, text, text_len, 1.0f, total_width);
+    const b8 too_long = i >= 3;
+    char saved_name[4] = "...";
+    if (too_long)
+    {
+        i32 j = i - 3;
+        string_swap(text + j, saved_name); // Truncate
+    }
+    u32 index_count = text_generation_color(
+        ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f,
+        ui_context.font.pixel_height, v4a(global_get_text_color(), alpha), NULL,
+        NULL, NULL, &ui_context.render.vertices);
+    if (too_long)
+    {
+        memcpy(text + (i - 3), saved_name, sizeof(saved_name));
+    }
+    return index_count;
+}
+
 typedef struct TabChange
 {
     DockNode* dock_space;
@@ -1807,6 +1832,8 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                                 ui_context.window_in_focus &&
                             !ui_context.highlight_fucused_window_off;
         V4 window_border_color = global_get_border_color();
+
+        const f32 min_tab_width = window->size.width / dock_space->windows.size;
         if (in_focus)
         {
             window_border_color = global_get_secondary_color();
@@ -1839,17 +1866,13 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
 
                 const V2 button_size = v2i(top_bar_dimensions.height - 4.0f);
 
-                f32 x_advance =
-                    tab_window->title
-                        ? text_x_advance(ui_context.font.chars,
-                                         tab_window->title,
-                                         (u32)strlen(tab_window->title), 1.0f)
-                        : 0.0f;
-
                 const f32 tab_padding = 8.0f;
-                V2 tab_dimensions = v2f(x_advance + (tab_padding * 2.0f) +
+                V2 tab_dimensions = v2f(100.0f + (tab_padding * 2.0f) +
                                             button_size.width + 8.0f,
                                         top_bar_dimensions.height);
+
+                tab_dimensions.width = min(tab_dimensions.width, min_tab_width);
+
                 AABB tab_aabb = {
                     .min = tab_position,
                     .size = tab_dimensions,
@@ -1895,27 +1918,26 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                      tab_color, 0.0f);
                 index_offset_and_count.second += 6;
 
-                V2 text_position =
-                    v2f(tab_position.x + tab_padding,
-                        tab_position.y + ui_context.font.pixel_height);
-                f32 title_advance = 0.0f;
-                if (tab_window->title)
-                {
-                    index_offset_and_count.second += text_generation(
-                        ui_context.font.chars, tab_window->title,
-                        UI_FONT_TEXTURE, text_position, 1.0f,
-                        ui_context.font.line_height, NULL, &title_advance, NULL,
-                        &ui_context.render.vertices);
-                }
-
-                V2 button_position =
-                    v2f(text_position.x + x_advance + tab_padding + 4.0f,
-                        tab_position.y + 2.0f);
+                V2 button_position = v2f(tab_position.x + tab_dimensions.width -
+                                             button_size.width - 5.0f,
+                                         tab_position.y + 2.0f);
 
                 AABB button_aabb = {
                     .min = button_position,
                     .size = button_size,
                 };
+
+                V2 text_position =
+                    v2f(tab_position.x + tab_padding,
+                        tab_position.y + ui_context.font.pixel_height);
+                f32 title_advance = 0.0f;
+                if (tab_window->title.size)
+                {
+                    index_offset_and_count.second +=
+                        display_text_and_truncate_if_necissary(
+                            text_position, button_position.x - text_position.x,
+                            tab_window->alpha, tab_window->title.data);
+                }
 
                 b8 collided =
                     collision_point_in_aabb(mouse_position, &button_aabb);
@@ -2458,7 +2480,26 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
         }
     }
 
-    window->title = title;
+    if (title)
+    {
+        const u32 title_length = (u32)strlen(title);
+        if(!window->title.data)
+        {
+            array_create(&window->title, (u32)strlen(title));
+        }
+        window->title.size = 0;
+        for(u32 i = 0; i < title_length; ++i)
+        {
+            array_push(&window->title, title[i]);
+        }
+        array_push(&window->title, '\0');
+        array_push(&window->title, '\0');
+        array_push(&window->title, '\0');
+    }
+    else
+    {
+        window->title.size = 0;
+    }
     window->rendering_index_offset = ui_context.current_index_offset;
     window->rendering_index_count = 0;
     window->resizeable = resizeable;
@@ -3111,31 +3152,6 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
                         global_get_border_color(), 1.0f, 0.4f, 3, 0.0f);
 
     return typed;
-}
-
-internal u32 display_text_and_truncate_if_necissary(const V2 position,
-                                                    const f32 total_width,
-                                                    const f32 alpha, char* text)
-{
-    const u32 text_len = (u32)strlen(text);
-    const i32 i = text_check_length_within_boundary(
-        ui_context.font.chars, text, text_len, 1.0f, total_width);
-    const b8 too_long = i >= 3;
-    char saved_name[4] = "...";
-    if (too_long)
-    {
-        i32 j = i - 3;
-        string_swap(text + j, saved_name); // Truncate
-    }
-    u32 index_count = text_generation_color(
-        ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f,
-        ui_context.font.pixel_height, v4a(global_get_text_color(), alpha), NULL,
-        NULL, NULL, &ui_context.render.vertices);
-    if (too_long)
-    {
-        memcpy(text + (i - 3), saved_name, sizeof(saved_name));
-    }
-    return index_count;
 }
 
 internal b8 item_in_view(const f32 position_y, const f32 height,

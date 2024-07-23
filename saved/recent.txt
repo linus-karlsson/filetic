@@ -1,6 +1,7 @@
+C:\Users\linus\dev\filetic
+C:\Users\linus\Downloads\apache-maven-3.9.6-bin
 C:\Users\linus\Images
 C:\Users\linus\dev\filetic\res
 C:\Users\linus\dev\filetic\res\icons
-C:\Users\linus\dev\filetic
 C:\Windows
 C:\Users\linus\dev
