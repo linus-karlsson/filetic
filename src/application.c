@@ -290,7 +290,8 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
                                       const f32 list_item_height,
                                       DirectoryHistory* directory_history)
 {
-    if (ui_window_begin(window, "Search result", true, true))
+    if (ui_window_begin(window, "Search result",
+                        UI_WINDOW_TOP_BAR | UI_WINDOW_RESIZEABLE))
     {
         platform_mutex_lock(&page->search_result_file_array.mutex);
         platform_mutex_lock(&page->search_result_folder_array.mutex);
@@ -409,7 +410,8 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
     }
     tab->textures.array.size = 0;
     platform_mutex_unlock(&tab->textures.mutex);
-    if (ui_window_begin(window, get_parent_directory_name(current), true, true))
+    if (ui_window_begin(window, get_parent_directory_name(current),
+                        UI_WINDOW_TOP_BAR | UI_WINDOW_RESIZEABLE))
     {
 
         V2 position = v2f(0.0f, 0.0f);
@@ -1356,7 +1358,8 @@ internal void access_panel_open(AccessPanel* panel, const char* title,
 {
     if (panel->menu_item.show)
     {
-        if (ui_window_begin(panel->menu_item.window, title, true, true))
+        if (ui_window_begin(panel->menu_item.window, title,
+                            UI_WINDOW_TOP_BAR | UI_WINDOW_RESIZEABLE))
         {
             V2 list_position = v2i(10.0f);
             i32 selected_item = -1;
@@ -1937,7 +1940,8 @@ internal void application_open_menu_window(ApplicationContext* app,
                                            const f32 drop_down_width,
                                            const V4 button_color)
 {
-    if (ui_window_begin(app->menu_window, NULL, false, false))
+    if (ui_window_begin(app->menu_window, NULL,
+                        UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
     {
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
@@ -1949,15 +1953,6 @@ internal void application_open_menu_window(ApplicationContext* app,
         presist f32 hidden_files_x = 0.0f;
         presist f32 focused_window_x = 0.0f;
         presist f32 animation_x = 0.0f;
-
-        if (ui_window_set_overlay(true) && app->open_menu_window)
-        {
-            dark_mode_x = 0.0f;
-            hidden_files_x = 0.0f;
-            focused_window_x = 0.0f;
-            animation_x = 0.0f;
-            app->open_menu_window = false;
-        }
 
         AABB row = {
             .min = v2i(10.0f),
@@ -2010,11 +2005,6 @@ internal void application_open_menu_window(ApplicationContext* app,
                     }
                 }
                 app->open_font_change_window = true;
-                dark_mode_x = 0.0f;
-                hidden_files_x = 0.0f;
-                focused_window_x = 0.0f;
-                animation_x = 0.0f;
-                //app->open_menu_window = false;
             }
         }
 
@@ -2125,7 +2115,14 @@ internal void application_open_menu_window(ApplicationContext* app,
             }
         }
 
-        ui_window_end();
+        if (ui_window_end() && app->open_menu_window)
+        {
+            dark_mode_x = 0.0f;
+            hidden_files_x = 0.0f;
+            focused_window_x = 0.0f;
+            animation_x = 0.0f;
+            app->open_menu_window = false;
+        }
 
         row.min.y += ui_font_pixel_height + 20.0f;
         UiWindow* top_bar_menu = ui_window_get(app->menu_window);
@@ -2165,17 +2162,10 @@ internal void application_open_windows_window(ApplicationContext* app,
                                               const f32 drop_down_width,
                                               const V4 button_color)
 {
-    if (ui_window_begin(app->windows_window, NULL, false, false))
+    if (ui_window_begin(app->windows_window, NULL,
+                        UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
     {
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
-
-        if (ui_window_set_overlay(true) && app->windows_window)
-        {
-            app->quick_access.menu_item.switch_x = 0.0f;
-            app->recent.panel.menu_item.switch_x = 0.0f;
-            app->search_result_window_item.switch_x = 0.0f;
-            app->open_windows_window = false;
-        }
 
         AABB row = {
             .min = v2i(10.0f),
@@ -2198,7 +2188,13 @@ internal void application_open_windows_window(ApplicationContext* app,
         window_open_menu_item_add(&app->search_result_window_item, row.min,
                                   switch_x, "Search result:", app->dimensions);
 
-        ui_window_end();
+        if (ui_window_end() && app->open_windows_window)
+        {
+            app->quick_access.menu_item.switch_x = 0.0f;
+            app->recent.panel.menu_item.switch_x = 0.0f;
+            app->search_result_window_item.switch_x = 0.0f;
+            app->open_windows_window = false;
+        }
 
         row.min.y += ui_font_pixel_height + 20.0f;
         UiWindow* top_bar_windows = ui_window_get(app->windows_window);
@@ -2430,32 +2426,26 @@ void application_run()
                                font_change_window->size.width),
                         middle(app.dimensions.height,
                                font_change_window->size.height));
-                if (ui_window_begin(app.font_change_window, NULL, false, false))
+                if (ui_window_begin(app.font_change_window, NULL,
+                                    UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
                 {
-                    if (ui_window_set_overlay(true))
+                    V2 list_position = v2f(10.0f, 10.0f);
+                    i32 selected_item = -1;
+                    if (ui_window_add_file_list(
+                            list_position, list_item_height,
+                            &app.font_change_directory.files, NULL,
+                            &selected_item))
                     {
+                        const char* path =
+                            app.font_change_directory.files.data[selected_item]
+                                .path;
+                        ui_context_set_font_path(path);
+                        ui_context_change_font_pixel_height(
+                            ui_font_pixel_height);
                         app.open_font_change_window = false;
+                        app.open_menu_window = true;
                     }
-                    else
-                    {
-                        V2 list_position = v2f(10.0f, 10.0f);
-                        i32 selected_item = -1;
-                        if (ui_window_add_file_list(
-                                list_position, list_item_height,
-                                &app.font_change_directory.files, NULL,
-                                &selected_item))
-                        {
-                            const char* path = app.font_change_directory.files
-                                                   .data[selected_item]
-                                                   .path;
-                            ui_context_set_font_path(path);
-                            ui_context_change_font_pixel_height(
-                                ui_font_pixel_height);
-                            app.open_font_change_window = false;
-                            app.open_menu_window = true;
-                        }
-                    }
-                    ui_window_end();
+                    app.open_font_change_window = !ui_window_end();
                 }
             }
 
@@ -2464,7 +2454,7 @@ void application_run()
             top_bar->size =
                 v2f(app.dimensions.width, top_bar_height + top_bar_menu_height);
 
-            if (ui_window_begin(app.top_bar_window, NULL, false, false))
+            if (ui_window_begin(app.top_bar_window, NULL, UI_WINDOW_NONE))
             {
                 V2 drop_down_position = v2d();
                 i32 index_clicked =
@@ -2663,7 +2653,7 @@ void application_run()
             bottom_bar->position =
                 v2f(0.0f, app.dimensions.height - bottom_bar_height);
             bottom_bar->size = v2f(app.dimensions.width, bottom_bar_height);
-            if (ui_window_begin(app.bottom_bar_window, NULL, false, false))
+            if (ui_window_begin(app.bottom_bar_window, NULL, UI_WINDOW_NONE))
             {
                 DirectoryPage* current =
                     directory_current(&tab->directory_history);
@@ -2736,13 +2726,12 @@ void application_run()
                     preview->top_color = global_get_clear_color();
                     preview->bottom_color = global_get_clear_color();
 
-                    if (ui_window_begin(app.preview_window, NULL, false, false))
+                    if (ui_window_begin(app.preview_window, NULL, UI_WINDOW_OVERLAY))
                     {
-                        if (ui_window_set_overlay(false)) preview_index = -1;
                         ui_window_add_image(v2d(), image_dimensions,
                                             preview_textures.data[0]);
 
-                        ui_window_end();
+                        if(ui_window_end()) preview_index = -1;
                     }
                 }
                 else if (preview_index == 1)
@@ -2774,15 +2763,11 @@ void application_run()
                     preview->top_color = v4ic(0.0f);
                     preview->bottom_color = v4ic(0.0f);
 
-                    if (ui_window_begin(app.preview_window, NULL, false, false))
+                    if (ui_window_begin(app.preview_window, NULL, UI_WINDOW_OVERLAY))
                     {
-                        if (ui_window_set_overlay(false)) preview_index = -1;
                         ui_window_add_text_colored(v2f(10.0f, 10.0f),
                                                    &preview_file_colored, true);
-                        // ui_window_add_text(v2f(10.0f, 10.0f),
-                        //                   (char*)preview_file.buffer,
-                        //                   true);
-                        ui_window_end();
+                        if(ui_window_end())preview_index = -1;
                     }
                 }
             }

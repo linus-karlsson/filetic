@@ -8,6 +8,7 @@ typedef struct TextureCoordinates
     V2 coordinates[4];
 } TextureCoordinates;
 
+AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size, V4 color, f32 texture_index, TextureCoordinates texture_coordinates);
 AABB quad_co(VertexArray* vertex_array, V2 position, V2 size, V4 color, V4 texture_coordinates, f32 texture_index);
 AABB quad(VertexArray* vertex_array, V2 position, V2 size, V4 color, f32 texture_index);
 AABB quad_shadow(VertexArray* vertex_array, V2 position, V2 size, V4 color, f32 texture_index);

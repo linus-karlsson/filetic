@@ -3,7 +3,7 @@
 #include <glad/glad.h>
 #include <math.h>
 
-internal AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size,
+AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size,
                                V4 color, f32 texture_index,
                                TextureCoordinates texture_coordinates)
 {

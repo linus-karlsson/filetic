@@ -91,13 +91,17 @@ typedef struct UiContext
     U32Array last_frame_top_bar_windows;
     U32Array current_frame_top_bar_windows;
 
+    U32Array last_frame_overlay_windows;
+    U32Array current_frame_overlay_windows;
+
+    RenderingProperties frosted_render;
+
     UiWindowArray windows;
     AABBArrayArray window_aabbs;
     HoverClickedIndexArray window_hover_clicked_indices;
 
     RenderingProperties render;
     u32 default_textures_offset;
-    u32 frosted_shader;
 
     u32 extra_index_offset;
     u32 extra_index_count;
@@ -145,8 +149,6 @@ typedef struct UiContext
     b8 highlight_fucused_window_off;
 
     b8 non_docked_window_hover;
-
-    b8 overlay_exists;
 } UiContext;
 
 typedef struct UU32Array
@@ -1136,6 +1138,9 @@ void ui_context_create()
     array_create(&ui_context.last_frame_top_bar_windows, 10);
     array_create(&ui_context.current_frame_top_bar_windows, 10);
 
+    array_create(&ui_context.last_frame_overlay_windows, 10);
+    array_create(&ui_context.current_frame_overlay_windows, 10);
+
     array_create(&ui_context.windows, 10);
     array_create(&ui_context.window_aabbs, 10);
     array_create(&ui_context.window_hover_clicked_indices, 10);
@@ -1156,11 +1161,11 @@ void ui_context_create()
     u32 shader =
         shader_create("res/shaders/vertex.glsl", "res/shaders/fragment.glsl");
 
-    ui_context.frosted_shader = shader_create("res/shaders/vertex.glsl",
-                                              "res/shaders/fragment_blur.glsl");
+    u32 frosted_shader = shader_create("res/shaders/vertex.glsl",
+                                       "res/shaders/fragment_blur.glsl");
 
     ftic_assert(shader);
-    ftic_assert(ui_context.frosted_shader);
+    ftic_assert(frosted_shader);
 
     char* font_path = "C:/Windows/Fonts/arial.ttf";
     memset(ui_context.font_path, 0, sizeof(ui_context.font_path));
@@ -1254,6 +1259,33 @@ void ui_context_create()
 
     ui_context.default_textures_offset = textures.size;
 
+    {
+        U32Array frosted_textures = { 0 };
+        array_create(&frosted_textures, 2);
+
+        array_create(&ui_context.frosted_render.vertices, 10 * 4);
+        u32 frosted_vertex_buffer_id = vertex_buffer_create();
+        vertex_buffer_orphan(frosted_vertex_buffer_id,
+                             ui_context.frosted_render.vertices.capacity *
+                                 sizeof(Vertex),
+                             GL_STREAM_DRAW, NULL);
+        ui_context.frosted_render.vertex_buffer_capacity =
+            ui_context.frosted_render.vertices.capacity;
+
+        array_create(&ui_context.frosted_render.indices, 10 * 6);
+        generate_indicies(&ui_context.frosted_render.indices, 0, 10);
+        u32 frosted_index_buffer_id = index_buffer_create();
+        index_buffer_orphan(
+            frosted_index_buffer_id,
+            ui_context.frosted_render.indices.size * sizeof(u32),
+            GL_STATIC_DRAW, ui_context.frosted_render.indices.data);
+        free(ui_context.frosted_render.indices.data);
+
+        ui_context.frosted_render.render = render_create(
+            frosted_shader, frosted_textures, &vertex_buffer_layout,
+            frosted_vertex_buffer_id, frosted_index_buffer_id);
+    }
+
     ui_context.docking_color =
         v4f(global_get_secondary_color().r, global_get_secondary_color().g,
             global_get_secondary_color().b, 0.4f);
@@ -1339,8 +1371,11 @@ internal b8 check_window_collisions(const u32 window_index, const u32 i)
 
     if (aabbs->size)
     {
-        // NOTE: the first aabb is the window area
-        if (!collision_point_in_aabb(mouse_position, &aabbs->data[0]))
+        AABB back_ground_aabb = {
+            .min = window->position,
+            .size = window->size,
+        };
+        if (!collision_point_in_aabb(mouse_position, &back_ground_aabb))
         {
             return false;
         }
@@ -1369,7 +1404,7 @@ internal b8 check_window_collisions(const u32 window_index, const u32 i)
             {
                 hover_clicked_index->pressed = mouse_button_pressed;
                 hover_clicked_index->clicked = mouse_button_clicked;
-                if (!window->docked)
+                if (!window->overlay && !window->docked)
                 {
                     push_window_to_back(&ui_context.last_frame_windows, i);
                 }
@@ -1378,7 +1413,7 @@ internal b8 check_window_collisions(const u32 window_index, const u32 i)
             return true;
         }
     }
-    return false;
+    return window->area_hit;
 }
 
 f32 ui_context_get_font_pixel_height()
@@ -1418,8 +1453,6 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
     ui_context.row_current = 0;
     ui_context.row_padding = 0.0f;
 
-    ui_context.overlay_exists = false;
-
     for (u32 i = 0; i < ui_context.window_hover_clicked_indices.size; ++i)
     {
         ui_context.window_hover_clicked_indices.data[i] =
@@ -1437,7 +1470,6 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
         window->rendering_index_count = 0;
         window->rendering_index_offset = 0;
         window->area_hit = window->any_holding;
-        window->overlay = false;
         ui_context.any_window_hold |= window->any_holding;
         ui_context.any_window_top_bar_hold |= window->top_bar_hold;
         if (window->top_bar_hold)
@@ -1445,6 +1477,17 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
             index_window_dragging = i;
         }
     }
+    for (u32 i = 0; i < ui_context.last_frame_overlay_windows.size; ++i)
+    {
+        u32 window_index =
+            ui_context.id_to_index
+                .data[ui_context.last_frame_overlay_windows.data[i]];
+        UiWindow* window = ui_context.windows.data + window_index;
+        window->rendering_index_count = 0;
+        window->rendering_index_offset = 0;
+        window->area_hit = false;
+    }
+
     if (index_window_dragging != -1)
     {
         ui_context.window_in_focus = get_window_index(index_window_dragging);
@@ -1455,6 +1498,17 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
         !ui_context.dock_resize && !ui_context.any_window_top_bar_hold &&
         !ui_context.any_window_hold)
     {
+        for (i32 i = ((i32)ui_context.last_frame_overlay_windows.size) - 1;
+             i >= 0; --i)
+        {
+            u32 window_index =
+                ui_context.id_to_index
+                    .data[ui_context.last_frame_overlay_windows.data[i]];
+            if (check_window_collisions(window_index, i))
+            {
+                goto collision_check_done;
+            }
+        }
         for (i32 i = ((i32)ui_context.last_frame_windows.size) - 1; i >= 0; --i)
         {
             u32 window_index = get_window_index(i);
@@ -1726,19 +1780,20 @@ internal void check_and_display_mouse_drag_box()
     }
 }
 
-internal void sync_current_frame_windows()
+internal void sync_current_frame_windows(U32Array* current_frame,
+                                         U32Array* last_frame)
 {
     // TODO: can be very expensive. Consider a more efficient way.
-    for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
+    for (u32 i = 0; i < last_frame->size; ++i)
     {
-        u32 window = ui_context.last_frame_windows.data[i];
+        u32 window = last_frame->data[i];
         b8 exist = false;
-        for (u32 j = 0; j < ui_context.current_frame_windows.size; ++j)
+        for (u32 j = 0; j < current_frame->size; ++j)
         {
-            if (ui_context.current_frame_windows.data[j] == window)
+            if (current_frame->data[j] == window)
             {
-                push_window_to_back(&ui_context.current_frame_windows, j--);
-                ui_context.current_frame_windows.size--;
+                push_window_to_back(current_frame, j--);
+                current_frame->size--;
                 exist = true;
                 break;
             }
@@ -1746,17 +1801,16 @@ internal void sync_current_frame_windows()
 
         if (!exist)
         {
-            push_window_to_back(&ui_context.last_frame_windows, i--);
-            ui_context.last_frame_windows.size--;
+            push_window_to_back(last_frame, i--);
+            last_frame->size--;
         }
     }
 
-    for (u32 i = 0; i < ui_context.current_frame_windows.size; ++i)
+    for (u32 i = 0; i < current_frame->size; ++i)
     {
-        array_push(&ui_context.last_frame_windows,
-                   ui_context.current_frame_windows.data[i]);
+        array_push(last_frame, current_frame->data[i]);
     }
-    ui_context.current_frame_windows.size = 0;
+    current_frame->size = 0;
 }
 
 internal DockNodePtrArray get_active_dock_spaces()
@@ -2010,44 +2064,32 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
 }
 
 internal void add_frosted_background(V2 position, const V2 size,
-                                     const u32 background_offset,
-                                     const u32 index_offset,
-                                     const AABB* scissor,
                                      const u32 frosted_texture_index)
 {
+    V2 saved_position = position;
     position.y = ui_context.dimensions.y - (position.y + size.height);
 
-    V2 texture_coordinates[4] = {
+    TextureCoordinates texture_coordinates;
+    texture_coordinates.coordinates[0] =
         v2f(position.x / ui_context.dimensions.width,
-            (position.y + size.height) / ui_context.dimensions.height),
+            (position.y + size.height) / ui_context.dimensions.height);
+    texture_coordinates.coordinates[1] =
         v2f(position.x / ui_context.dimensions.width,
-            position.y / ui_context.dimensions.height),
+            position.y / ui_context.dimensions.height);
+    texture_coordinates.coordinates[2] =
         v2f((position.x + size.width) / ui_context.dimensions.width,
-            position.y / ui_context.dimensions.height),
+            position.y / ui_context.dimensions.height);
+    texture_coordinates.coordinates[3] =
         v2f((position.x + size.width) / ui_context.dimensions.width,
-            (position.y + size.height) / ui_context.dimensions.height),
-    };
+            (position.y + size.height) / ui_context.dimensions.height);
 
-    for (u32 i = 0; i < 4; ++i)
-    {
-        Vertex* v = ui_context.render.vertices.data + background_offset + i;
-        v->color = v4ic(0.6f);
-        v->texture_index = (f32)frosted_texture_index;
-        v->texture_coordinates = texture_coordinates[i];
-    }
-}
-
-internal void draw_frosted_background(const u32 index_offset,
-                                      const AABB* scissor)
-{
-    render_begin_draw_shader(&ui_context.render.render,
-                             ui_context.frosted_shader, &ui_context.mvp);
-    render_draw(index_offset, 6, scissor);
+    set_up_verticies(&ui_context.frosted_render.vertices, saved_position, size,
+                     v4ic(0.6f), (f32)frosted_texture_index,
+                     texture_coordinates);
 }
 
 internal void render_ui(const DockNodePtrArray* dock_spaces,
-                        const UU32Array* dock_spaces_index_offsets_and_counts,
-                        const u32 frosted_texture_index, const b8 frame_buffer)
+                        const UU32Array* dock_spaces_index_offsets_and_counts)
 {
     const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
     AABB whole_screen_scissor = { .size = ui_context.dimensions };
@@ -2071,26 +2113,6 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
             scissor.size.height -= (window->top_bar * top_bar_height);
             scissor.size.height = clampf32_low(scissor.size.height, 0.0f);
         }
-        if (window->overlay)
-        {
-            if (frame_buffer)
-            {
-                continue;
-            }
-            else if (frosted_texture_index)
-            {
-                draw_frosted_background(window->rendering_index_offset,
-                                        &scissor);
-                window->rendering_index_offset += 6;
-                window->rendering_index_count -= 6;
-
-                render_begin_draw_shader(
-                    &ui_context.render.render,
-                    ui_context.render.render.shader_properties.shader,
-                    &ui_context.mvp);
-            }
-        }
-
         render_draw(window->rendering_index_offset,
                     window->rendering_index_count, &scissor);
 
@@ -2106,6 +2128,48 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
     render_draw(ui_context.particles_index_offset,
                 ui_context.particles.size * 6, &whole_screen_scissor);
 
+    render_end_draw(&ui_context.render.render);
+}
+
+internal void render_overlay_ui(const u32 index_offset, const u32 index_count)
+{
+    AABB whole_screen_scissor = { .size = ui_context.dimensions };
+    render_begin_draw(&ui_context.render.render,
+                      ui_context.render.render.shader_properties.shader,
+                      &ui_context.mvp);
+    for (u32 i = 0, j = 0; i < ui_context.last_frame_overlay_windows.size; ++i)
+    {
+        UiWindow* window =
+            ui_window_get(ui_context.last_frame_overlay_windows.data[i]);
+
+        AABB scissor = { 0 };
+        if (ui_context.dimensions.y)
+        {
+            scissor.min.x = window->position.x;
+            scissor.min.y = ui_context.dimensions.y -
+                            (window->position.y + window->size.height);
+            scissor.size = window->size;
+        }
+
+        if (window->frosted_background)
+        {
+            render_begin_draw(
+                &ui_context.frosted_render.render,
+                ui_context.frosted_render.render.shader_properties.shader,
+                &ui_context.mvp);
+            render_draw(j++ * 6, 6, &whole_screen_scissor);
+            render_end_draw(&ui_context.frosted_render.render);
+
+            render_begin_draw(&ui_context.render.render,
+                              ui_context.render.render.shader_properties.shader,
+                              &ui_context.mvp);
+        }
+
+        render_draw(window->rendering_index_offset,
+                    window->rendering_index_count, &scissor);
+
+        render_draw(index_offset + (index_count * i), index_count, &scissor);
+    }
     render_end_draw(&ui_context.render.render);
 }
 
@@ -2159,7 +2223,11 @@ void ui_context_end()
     ui_context.current_index_offset =
         ui_context.extra_index_offset + ui_context.extra_index_count;
 
-    sync_current_frame_windows();
+    sync_current_frame_windows(&ui_context.current_frame_windows,
+                               &ui_context.last_frame_windows);
+
+    sync_current_frame_windows(&ui_context.current_frame_overlay_windows,
+                               &ui_context.last_frame_overlay_windows);
 
     DockNodePtrArray dock_spaces = get_active_dock_spaces();
 
@@ -2167,34 +2235,6 @@ void ui_context_end()
     array_create(&dock_spaces_index_offsets_and_counts, dock_spaces.size);
     TabChange tab_change =
         update_tabs(&dock_spaces, &dock_spaces_index_offsets_and_counts);
-
-    if (event_is_key_pressed(FTIC_KEY_F))
-    {
-        for (u32 i = 0; i < 4; ++i)
-        {
-        }
-    }
-
-    /*
-    static f64 time = 0.0f;
-    time += ui_context.delta_time;
-    if (time >= random_f32s(random_seed++, 5.0f, 10.0f))
-    {
-        Particle* particle = particle_buffer_get_next(&ui_context.particles);
-        particle->position =
-            v2f(random_f32s(random_seed++, 0.0f, ui_context.dimensions.width),
-                -10.0f);
-        particle->velocity =
-            v2f(0.0f, random_f32s(random_seed++, 10.0f, 50.0f));
-        particle->acceleration = v2d();
-        particle->dimension = v2i(random_f32s(random_seed++, 4.0f, 6.0f));
-        particle->life = v2i(10.0f);
-        particle->color = v4ic(1.0f);
-        particle_buffer_set_next(&ui_context.particles, particle);
-        random_seed += 3;
-        time = 0.0f;
-    }
-    */
 
     ui_context.particles_index_offset = ui_context.current_index_offset;
     particle_buffer_update(&ui_context.particles, ui_context.delta_time);
@@ -2206,6 +2246,22 @@ void ui_context_end()
     }
     ui_context.current_index_offset += ui_context.particles.size * 6;
 
+    u32 overlay_index_offset = ui_context.current_index_offset;
+    u32 overlay_index_count = 0;
+    for (u32 i = 0; i < ui_context.last_frame_overlay_windows.size; ++i)
+    {
+        UiWindow* window =
+            ui_window_get(ui_context.last_frame_overlay_windows.data[i]);
+
+        overlay_index_count = 0;
+        quad_border(&ui_context.render.vertices, &overlay_index_count,
+                    window->position, window->size,
+                    global_get_secondary_color(), 1.0f, 0.0f);
+    }
+
+    ui_context.current_index_offset +=
+        overlay_index_count * ui_context.last_frame_overlay_windows.size;
+
     rendering_properties_check_and_grow_vertex_buffer(&ui_context.render);
     rendering_properties_check_and_grow_index_buffer(
         &ui_context.render, ui_context.current_index_offset);
@@ -2215,10 +2271,11 @@ void ui_context_end()
                         sizeof(Vertex) * ui_context.render.vertices.size,
                         ui_context.render.vertices.data);
 
+    ui_context.frosted_render.vertices.size = 0;
+    ui_context.frosted_render.render.textures.size = 0;
     u32 fbo = 0;
     u32 fbo_texture = 0;
-    u32 texture_index = 0;
-    if (ui_context.overlay_exists)
+    if (ui_context.last_frame_overlay_windows.size)
     {
         glGenFramebuffers(1, &fbo);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -2237,8 +2294,7 @@ void ui_context_end()
 
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
         {
-            render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts, 0,
-                      true);
+            render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts);
         }
         else
         {
@@ -2249,48 +2305,34 @@ void ui_context_end()
 
         if (fbo_texture)
         {
-            texture_index = ui_context.render.render.textures.size;
-            array_push(&ui_context.render.render.textures, fbo_texture);
-
-            const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
-            for (u32 i = 0; i < dock_spaces.size; ++i)
+            ui_context.frosted_render.render.textures.size = 1;
+            ui_context.frosted_render.render.textures.data[0] = fbo_texture;
+            for (u32 i = 0; i < ui_context.last_frame_overlay_windows.size; ++i)
             {
-                DockNode* node = dock_spaces.data[i];
-                UiWindow* window =
-                    ui_window_get(node->windows.data[node->window_in_focus]);
-
-                if (window->overlay)
+                UiWindow* window = ui_window_get(
+                    ui_context.last_frame_overlay_windows.data[i]);
+                if (window->frosted_background)
                 {
-                    AABB scissor = { 0 };
-                    if (ui_context.dimensions.y)
-                    {
-                        scissor.min.x = window->position.x;
-                        scissor.min.y =
-                            ui_context.dimensions.y -
-                            (window->position.y + window->size.height);
-                        scissor.size = window->size;
-                        scissor.size.height -=
-                            (window->top_bar * top_bar_height);
-                        scissor.size.height =
-                            clampf32_low(scissor.size.height, 0.0f);
-                    }
-                    add_frosted_background(window->position, window->size,
-                                           window->offset_to_background,
-                                           window->rendering_index_offset,
-                                           &scissor, texture_index);
+                    add_frosted_background(window->position, window->size, 0);
                 }
             }
             buffer_set_sub_data(
-                ui_context.render.render.vertex_buffer_id, GL_ARRAY_BUFFER, 0,
-                sizeof(Vertex) * ui_context.render.vertices.size,
-                ui_context.render.vertices.data);
+                ui_context.frosted_render.render.vertex_buffer_id,
+                GL_ARRAY_BUFFER, 0,
+                sizeof(Vertex) * ui_context.frosted_render.vertices.size,
+                ui_context.frosted_render.vertices.data);
         }
     }
+    render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts);
 
-    render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts,
-              texture_index, false);
+    AABB whole_screen_scissor = { .size = ui_context.dimensions };
 
-    if (ui_context.overlay_exists)
+    if (ui_context.last_frame_overlay_windows.size)
+    {
+        render_overlay_ui(overlay_index_offset, overlay_index_count);
+    }
+
+    if (ui_context.last_frame_overlay_windows.size)
     {
         if (fbo_texture)
         {
@@ -2331,6 +2373,7 @@ void ui_context_end()
     array_free(&dock_spaces);
     array_free(&dock_spaces_index_offsets_and_counts);
 
+    ui_context.current_frame_top_bar_windows.size = 0;
     ui_context.current_frame_top_bar_windows.size = 0;
 }
 
@@ -2603,7 +2646,7 @@ internal void handle_window_resize_events(UiWindow* window)
     window->top_bar_offset = mouse_position;
 }
 
-b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
+b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
 {
     ui_context.current_window_id = window_id;
 
@@ -2611,6 +2654,11 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
     UiWindow* window = ui_context.windows.data + window_index;
     AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
     aabbs->size = 0;
+
+    window->resizeable = check_bit(flags, UI_WINDOW_RESIZEABLE);
+    window->top_bar = check_bit(flags, UI_WINDOW_TOP_BAR);
+    window->frosted_background = check_bit(flags, UI_WINDOW_FROSTED_GLASS);
+    window->overlay = check_bit(flags, UI_WINDOW_OVERLAY);
 
     if (event_get_mouse_button_event()->action == FTIC_RELEASE)
     {
@@ -2626,8 +2674,15 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
     if (!window->closing || window->size_animation_on ||
         window->position_animation_on)
     {
-        array_push(&ui_context.current_frame_windows, window->id);
-        if (top_bar)
+        if (window->overlay)
+        {
+            array_push(&ui_context.current_frame_overlay_windows, window->id);
+        }
+        else
+        {
+            array_push(&ui_context.current_frame_windows, window->id);
+        }
+        if (window->top_bar)
         {
             array_push(&ui_context.current_frame_top_bar_windows, window->id);
         }
@@ -2655,8 +2710,6 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
     }
     window->rendering_index_offset = ui_context.current_index_offset;
     window->rendering_index_count = 0;
-    window->resizeable = resizeable;
-    window->top_bar = top_bar;
 
     if (window->resize_dragging)
     {
@@ -2670,7 +2723,7 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
 
     const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
     window->first_item_position = window->position;
-    window->first_item_position.y += top_bar_height * top_bar;
+    window->first_item_position.y += top_bar_height * window->top_bar;
 
     window->total_height = 0.0f;
     window->total_width = 0.0f;
@@ -2681,12 +2734,14 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
 
     if (window->hide) return false;
 
-    window->offset_to_background = ui_context.render.vertices.size;
-    array_push(aabbs,
-               quad_gradiant_t_b(&ui_context.render.vertices, window->position,
-                                 window->size, window->top_color,
-                                 window->bottom_color, 0.0f));
-    window->rendering_index_count += 6;
+    if (!window->frosted_background)
+    {
+        array_push(aabbs, quad_gradiant_t_b(&ui_context.render.vertices,
+                                            window->position, window->size,
+                                            window->top_color,
+                                            window->bottom_color, 0.0f));
+        window->rendering_index_count += 6;
+    }
 
     return true;
 }
@@ -2924,6 +2979,12 @@ b8 ui_window_end()
     {
         window->closing = false;
         return true;
+    }
+    if (window->overlay)
+    {
+        return !window->area_hit &&
+               (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
+                event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
     }
     return false;
 }
@@ -4088,34 +4149,6 @@ void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text,
         window->total_width =
             max(window->total_width, relative_position.x + x_advance + 20.0f);
     }
-}
-
-b8 ui_window_set_overlay(b8 frosted_background)
-{
-    const u32 window_index =
-        ui_context.id_to_index.data[ui_context.current_window_id];
-    UiWindow* window = ui_context.windows.data + window_index;
-
-    if (frosted_background)
-    {
-        ui_context.overlay_exists = true;
-        window->overlay = true;
-    }
-
-    // TODO
-    for (i32 i = ((i32)ui_context.last_frame_windows.size) - 1; i >= 0; --i)
-    {
-        if (ui_context.last_frame_windows.data[i] == window->id)
-        {
-            push_window_to_back(&ui_context.last_frame_windows, i);
-            ui_context.window_in_focus =
-                ui_context.id_to_index.data[window->id];
-        }
-    }
-
-    return !window->area_hit &&
-           (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
-            event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
 }
 
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)
