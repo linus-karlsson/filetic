@@ -25,14 +25,14 @@ typedef struct ClientRect
 
 typedef struct PlatformTime
 {
-    u16 wYear;
-    u16 wMonth;
-    u16 wDayOfWeek;
-    u16 wDay;
-    u16 wHour;
-    u16 wMinute;
-    u16 wSecond;
-    u16 wMilliseconds;
+    u16 year;
+    u16 month;
+    u16 dayOfWeek;
+    u16 day;
+    u16 hour;
+    u16 minute;
+    u16 second;
+    u16 milliseconds;
 }PlatformTime;
 
 typedef struct DirectoryItem
@@ -100,6 +100,8 @@ typedef struct DirectoryChangeData
     char* path;
     b8 changed;
 }DirectoryChangeData;
+
+i32 platform_time_compare(const PlatformTime* first, const PlatformTime* second);
 
 void platform_init(const char* title, u16 width, u16 height, Platform** platform);
 void platform_shut_down(Platform* platform);
@@ -181,6 +183,7 @@ void platform_context_menu_create(ContextMenu* menu, const char* path);
 void platform_context_menu_destroy(ContextMenu* menu);
 
 void platform_open_context(void* window, const char* path);
+void platform_open_background_context(void* window, const char* path);
 
 void* directory_listen_to_directory_changes(const char* path);
 void directory_unlisten_to_directory_changes(void* handle);
@@ -188,3 +191,4 @@ b8 directory_look_for_directory_change(void* handle);
 void platform_show_hidden_files(b8 show);
 
 PlatformTime platform_time_from_u64(u64 time);
+void platform_open_terminal(const char* path);

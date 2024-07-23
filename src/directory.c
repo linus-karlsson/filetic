@@ -110,7 +110,24 @@ void directory_paste_in_directory(DirectoryPage* current_directory)
     free(pasted_paths.data);
 }
 
-internal void merge(DirectoryItem* array, u32 left, u32 mid, u32 right)
+internal i32 name_compare_function(const DirectoryItem* first,
+                                   const DirectoryItem* second)
+{
+    return string_compare_case_insensitive(first->name, second->name);
+}
+
+internal i32 date_compare_function(const DirectoryItem* first,
+                                   const DirectoryItem* second)
+{
+    PlatformTime first_time = platform_time_from_u64(first->last_write_time);
+    PlatformTime second_time = platform_time_from_u64(second->last_write_time);
+    return platform_time_compare(&first_time, &second_time);
+}
+
+internal void merge(DirectoryItem* array,
+                    i32 (*compare_function)(const DirectoryItem*,
+                                            const DirectoryItem*),
+                    u32 left, u32 mid, u32 right)
 {
     u32 n1 = mid - left + 1;
     u32 n2 = right - mid;
@@ -134,8 +151,7 @@ internal void merge(DirectoryItem* array, u32 left, u32 mid, u32 right)
     u32 k = left;
     while (i < n1 && j < n2)
     {
-        if (string_compare_case_insensitive(left_array[i].name,
-                                            right_array[j].name) <= 0)
+        if (compare_function(left_array + i, right_array + j) <= 0)
         {
             array[k] = left_array[i++];
         }
@@ -160,20 +176,28 @@ internal void merge(DirectoryItem* array, u32 left, u32 mid, u32 right)
     free(right_array);
 }
 
-internal void merge_sort(DirectoryItem* array, u32 left, u32 right)
+internal void merge_sort(DirectoryItem* array,
+                         i32 (*compare_function)(const DirectoryItem*,
+                                                 const DirectoryItem*),
+                         u32 left, u32 right)
 {
     if (left < right)
     {
         u32 mid = left + (right - left) / 2;
-        merge_sort(array, left, mid);
-        merge_sort(array, mid + 1, right);
-        merge(array, left, mid, right);
+        merge_sort(array, compare_function, left, mid);
+        merge_sort(array, compare_function, mid + 1, right);
+        merge(array, compare_function, left, mid, right);
     }
 }
 
 void directory_sort_by_name(DirectoryItemArray* array)
 {
-    merge_sort(array->data, 0, array->size - 1);
+    merge_sort(array->data, name_compare_function, 0, array->size - 1);
+}
+
+void directory_merge_sort_by_date(DirectoryItemArray* array)
+{
+    merge_sort(array->data, date_compare_function, 0, array->size - 1);
 }
 
 void directory_flip_array(DirectoryItemArray* array)

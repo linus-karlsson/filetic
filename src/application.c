@@ -323,20 +323,21 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
     return false;
 }
 
-internal void add_to_recent(DirectoryItemArray* recent, const char* path_temp)
+internal void recent_panel_add_item(RecentPanel* recent, const char* path_temp)
 {
     if (platform_directory_exists(path_temp))
     {
-        for (u32 i = 0; i < recent->size; ++i)
+        DirectoryItemArray* items = &recent->panel.items;
+        for (u32 i = 0; i < items->size; ++i)
         {
-            if (!strcmp(path_temp, recent->data[i].path))
+            if (!strcmp(path_temp, items->data[i].path))
             {
-                DirectoryItem temp = recent->data[i];
+                DirectoryItem temp = items->data[i];
                 for (i32 j = i; j >= 1; --j)
                 {
-                    recent->data[j] = recent->data[j - 1];
+                    items->data[j] = items->data[j - 1];
                 }
-                recent->data[0] = temp;
+                items->data[0] = temp;
                 return;
             }
         }
@@ -347,17 +348,17 @@ internal void add_to_recent(DirectoryItemArray* recent, const char* path_temp)
             .path = path,
             .name = path + get_path_length(path, length),
         };
-        if (recent->size == 10)
+        if (items->size == recent->total)
         {
-            free(array_back(recent)->path);
-            recent->size--;
+            free(array_back(items)->path);
+            items->size--;
         }
-        array_push(recent, item);
-        for (i32 i = (i32)recent->size - 1; i >= 1; --i)
+        array_push(items, item);
+        for (i32 i = (i32)items->size - 1; i >= 1; --i)
         {
-            recent->data[i] = recent->data[i - 1];
+            items->data[i] = items->data[i - 1];
         }
-        recent->data[0] = item;
+        items->data[0] = item;
     }
 }
 
@@ -369,8 +370,7 @@ internal char* get_parent_directory_name(DirectoryPage* current)
 }
 
 internal b8 show_directory_window(const u32 window, const f32 list_item_height,
-                                  const b8 check_collision,
-                                  DirectoryItemArray* recent,
+                                  const b8 check_collision, RecentPanel* recent,
                                   ThreadTaskQueue* task_queue,
                                   DirectoryTab* tab)
 {
@@ -440,9 +440,10 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                     directory_clear_selected_items(
                         &tab->directory_list.selected_item_values);
 
-                    add_to_recent(recent, current->directory.sub_directories
-                                              .data[result.second]
-                                              .path);
+                    recent_panel_add_item(
+                        recent,
+                        current->directory.sub_directories.data[result.second]
+                            .path);
                 }
                 else
                 {
@@ -465,9 +466,9 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                 directory_clear_selected_items(
                     &tab->directory_list.selected_item_values);
 
-                add_to_recent(recent, current->directory.sub_directories
-                                          .data[selected_item]
-                                          .path);
+                recent_panel_add_item(recent, current->directory.sub_directories
+                                                  .data[selected_item]
+                                                  .path);
             }
             list_position.y +=
                 list_item_height * current->directory.sub_directories.size;
@@ -1121,6 +1122,25 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close,
             }
             break;
         }
+        case OPEN_IN_TERMINAL_OPTION_INDEX:
+        {
+            if (item_clicked && hit)
+            {
+                should_close = true;
+                if (arguments->selected_paths->size != 0)
+                {
+                    if (platform_directory_exists(
+                            arguments->selected_paths->data[0]))
+                    {
+                        platform_open_terminal(
+                            arguments->selected_paths->data[0]);
+                        break;
+                    }
+                }
+                platform_open_terminal(arguments->directory->directory.parent);
+            }
+            break;
+        }
         case MORE_OPTION_INDEX:
         {
             if (arguments->selected_paths->size == 0)
@@ -1170,75 +1190,22 @@ internal b8 suggestion_selection(u32 index, b8 hit, b8 should_close,
     return should_close;
 }
 
-internal void open_window(ApplicationContext* app, u32 window_id)
+internal void open_window(const V2 dimensions, const u32 window_id)
 {
     UiWindow* window = ui_window_get(window_id);
     V2 end_size = v2i(200.0f);
-    V2 end_position = v2f(middle(app->dimensions.width, end_size.width),
-                          middle(app->dimensions.height, end_size.height));
+    V2 end_position = v2f(middle(dimensions.width, end_size.width),
+                          middle(dimensions.height, end_size.height));
 
     window->size = v2i(0.0f);
-    window->position = v2f(middle(app->dimensions.width, window->size.width),
-                           middle(app->dimensions.height, window->size.height));
+    window->position = v2f(middle(dimensions.width, window->size.width),
+                           middle(dimensions.height, window->size.height));
 
     window->dock_node->aabb.min = end_position;
     window->dock_node->aabb.size = end_size;
 
     ui_window_start_position_animation(window, window->position, end_position);
     ui_window_start_size_animation(window, window->size, end_size);
-}
-
-internal b8 top_bar_window_menu_selection(u32 index, b8 hit, b8 should_close,
-                                          b8 item_clicked, V4* text_color,
-                                          void* data)
-{
-    ApplicationContext* app = (ApplicationContext*)data;
-    if (item_clicked)
-    {
-        switch (index)
-        {
-            case 0:
-            {
-                if (!app->show_quick_access)
-                {
-                    app->show_quick_access = true;
-                    open_window(app, app->quick_access_window);
-                }
-                return true;
-            }
-            case 1:
-            {
-                if (!app->show_search_page)
-                {
-                    app->show_search_page = true;
-                    open_window(app, app->search_result_window);
-                }
-                return true;
-            }
-        }
-    }
-    return should_close;
-}
-
-internal b8 top_bar_menu_selection(u32 index, b8 hit, b8 should_close,
-                                   b8 item_clicked, V4* text_color, void* data)
-{
-    ApplicationContext* app = (ApplicationContext*)data;
-    if (item_clicked)
-    {
-        switch (index)
-        {
-            case 0:
-            {
-                return true;
-            }
-            case 1:
-            {
-                return true;
-            }
-        }
-    }
-    return should_close;
 }
 
 internal void save_application_state(ApplicationContext* app)
@@ -1309,38 +1276,39 @@ internal void load_application_state(ApplicationContext* app)
     fclose(file);
 }
 
-internal void quick_access_save(DirectoryItemArray* array)
+internal void access_panel_save(AccessPanel* panel, const char* file_path)
 {
-    if (!array->size) return;
+    if (!panel->items.size) return;
 
     u32 buffer_size = 0;
-    u32* path_lengths = (u32*)calloc(array->size, sizeof(u32));
-    for (u32 i = 0; i < array->size; ++i)
+    u32* path_lengths = (u32*)calloc(panel->items.size, sizeof(u32));
+    for (u32 i = 0; i < panel->items.size; ++i)
     {
-        path_lengths[i] = (u32)strlen(array->data[i].path);
+        path_lengths[i] = (u32)strlen(panel->items.data[i].path);
         buffer_size += path_lengths[i];
         buffer_size++;
     }
 
     char* buffer = (char*)calloc(buffer_size, sizeof(char));
     u32 buffer_offset = 0;
-    for (u32 i = 0; i < array->size; ++i)
+    for (u32 i = 0; i < panel->items.size; ++i)
     {
-        memcpy(buffer + buffer_offset, array->data[i].path, path_lengths[i]);
+        memcpy(buffer + buffer_offset, panel->items.data[i].path,
+               path_lengths[i]);
         buffer_offset += path_lengths[i];
         buffer[buffer_offset++] = '\n';
     }
     buffer[--buffer_offset] = '\0';
 
-    file_write("saved/quick_access.txt", buffer, buffer_offset);
+    file_write(file_path, buffer, buffer_offset);
 
     free(path_lengths);
     free(buffer);
 }
 
-internal void quick_access_load(DirectoryItemArray* array)
+internal void access_panel_load(AccessPanel* panel, const char* file_path)
 {
-    FileAttrib file = file_read("saved/quick_access.txt");
+    FileAttrib file = file_read(file_path);
     if (!file.buffer)
     {
         return;
@@ -1364,11 +1332,51 @@ internal void quick_access_load(DirectoryItemArray* array)
                 .path = path,
                 .name = path + get_path_length(path, line.size),
             };
-            array_push(array, item);
+            array_push(&panel->items, item);
         }
         line.size = 0;
     }
     free(line.data);
+}
+
+internal void access_panel_initialize(AccessPanel* panel, const u32 window,
+                                      const char* load_file_path)
+{
+    panel->menu_item.window = window;
+    array_create(&panel->items, 10);
+    access_panel_load(panel, load_file_path);
+    panel->menu_item.show = true;
+    panel->menu_item.switch_on = true;
+    panel->menu_item.switch_x = 0.0f;
+}
+
+internal void access_panel_open(AccessPanel* panel, const char* title,
+                                const f32 list_item_height, RecentPanel* recent,
+                                DirectoryHistory* directory_history)
+{
+    if (panel->menu_item.show)
+    {
+        if (ui_window_begin(panel->menu_item.window, title, true, true))
+        {
+            V2 list_position = v2i(10.0f);
+            i32 selected_item = -1;
+            if (ui_window_add_folder_list(list_position, list_item_height,
+                                          &panel->items, NULL, &selected_item))
+            {
+                directory_open_folder(panel->items.data[selected_item].path,
+                                      directory_history);
+
+                recent_panel_add_item(recent,
+                                      panel->items.data[selected_item].path);
+            }
+
+            panel->menu_item.show = !ui_window_end();
+        }
+        if (!panel->menu_item.show)
+        {
+            panel->menu_item.switch_on = panel->menu_item.show;
+        }
+    }
 }
 
 internal void search_page_initialize(SearchPage* search_page)
@@ -1500,15 +1508,19 @@ u8* application_initialize(ApplicationContext* app)
     {
         array_push(&app->windows, ui_window_create());
     }
-    app->top_bar_window = app->windows.data[0];
-    app->bottom_bar_window = app->windows.data[1];
-    app->quick_access_window = app->windows.data[2];
-    app->search_result_window = app->windows.data[3];
-    app->preview_window = app->windows.data[4];
-    app->menu_window = app->windows.data[5];
-    app->windows_window = app->windows.data[6];
-    app->font_change_window = app->windows.data[7];
-    app->recent_window = app->windows.data[8];
+
+    u32 window_index = 0;
+    app->top_bar_window = app->windows.data[window_index++];
+    app->bottom_bar_window = app->windows.data[window_index++];
+    app->preview_window = app->windows.data[window_index++];
+    app->menu_window = app->windows.data[window_index++];
+    app->windows_window = app->windows.data[window_index++];
+    app->font_change_window = app->windows.data[window_index++];
+
+    app->search_result_window_item.window = app->windows.data[window_index++];
+    app->search_result_window_item.show = true;
+    app->search_result_window_item.switch_on = true;
+    app->search_result_window_item.switch_x = 0.0f;
 
     array_create(&app->free_window_ids, 10);
     array_create(&app->tab_windows, 20);
@@ -1568,6 +1580,7 @@ u8* application_initialize(ApplicationContext* app)
         [PASTE_OPTION_INDEX] = "Paste",
         [DELETE_OPTION_INDEX] = "Delete",
         [ADD_TO_QUICK_OPTION_INDEX] = "Add to quick",
+        [OPEN_IN_TERMINAL_OPTION_INDEX] = "Open in terminal",
         [PROPERTIES_OPTION_INDEX] = "Properties",
         [MORE_OPTION_INDEX] = "More",
     };
@@ -1581,18 +1594,19 @@ u8* application_initialize(ApplicationContext* app)
     array_push(&app->context_menu.options,
                string_copy_d(options[ADD_TO_QUICK_OPTION_INDEX]));
     array_push(&app->context_menu.options,
+               string_copy_d(options[OPEN_IN_TERMINAL_OPTION_INDEX]));
+    array_push(&app->context_menu.options,
                string_copy_d(options[PROPERTIES_OPTION_INDEX]));
     array_push(&app->context_menu.options,
                string_copy_d(options[MORE_OPTION_INDEX]));
 
-    array_create(&app->quick_access_folders, 10);
-    quick_access_load(&app->quick_access_folders);
-    app->show_quick_access = true;
-
-    array_create(&app->recent_folders, 10);
-    app->show_recent = true;
-
-    app->show_search_page = true;
+    access_panel_initialize(&app->quick_access,
+                            app->windows.data[window_index++],
+                            "saved/quick_access.txt");
+    access_panel_initialize(&app->recent.panel,
+                            app->windows.data[window_index++],
+                            "saved/recent.txt");
+    app->recent.total = 10;
 
     app->parent_directory_input = ui_input_buffer_create();
 
@@ -1641,7 +1655,8 @@ void application_uninitialize(ApplicationContext* app)
     render_destroy(&app->main_render.render);
     free(app->main_render.vertices.data);
 
-    quick_access_save(&app->quick_access_folders);
+    access_panel_save(&app->quick_access, "saved/quick_access.txt");
+    access_panel_save(&app->recent.panel, "saved/recent.txt");
 
     platform_uninit_drag_drop();
     threads_uninitialize(&app->thread_queue);
@@ -1694,7 +1709,7 @@ void application_begin_frame(ApplicationContext* app)
             window_id = app->tab_windows.data[app->current_tab_window_index++];
         }
         array_back(&app->tabs)->window_id = window_id;
-        open_window(app, window_id);
+        open_window(app->dimensions, window_id);
     }
 }
 
@@ -1875,35 +1890,316 @@ void search_page_search(SearchPage* page, DirectoryHistory* directory_history,
     }
 }
 
-internal b8 open_window_with_only_folders(
-    const u32 window, const char* title, const b8 should_open,
-    const f32 list_item_height, b8* show_switch, DirectoryItemArray* folders,
-    DirectoryItemArray* recent, DirectoryHistory* directory_history)
+internal i32 add_increment(const V2 position, const char* text,
+                           const V4 button_color, const f32 drop_down_width,
+                           const u32 value)
 {
-    b8 result = should_open;
-    if (should_open)
+    i32 result = -1;
+
+    const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
+    const V2 button1_dim = ui_window_get_button_dimensions(v2d(), "-", NULL);
+    const V2 button2_dim = ui_window_get_button_dimensions(v2d(), "+", NULL);
+
+    char buffer[20] = { 0 };
+    value_to_string(buffer, "%u", value);
+
+    const FontTTF* ui_font = ui_context_get_font();
+    const f32 x_advance =
+        text_x_advance(ui_font->chars, buffer, (u32)strlen(buffer), 1.0f);
+
+    const f32 x_position = drop_down_width - button1_dim.width -
+                           button2_dim.width - x_advance - (20.0f * 2.0f) -
+                           position.x;
+
+    V2 text_position = v2f(position.x, position.y + 2.0f);
+    ui_window_add_text(text_position, text, false);
+
+    ui_window_row_begin(20.0f);
+
+    if (ui_window_add_button(v2f(x_position, position.y), NULL, &button_color,
+                             "-"))
     {
-        if (ui_window_begin(window, title, true, true))
+        result = 0;
+    }
+    text_position.x = x_position;
+    ui_window_add_text(text_position, buffer, false);
+    if (ui_window_add_button(v2f(x_position, position.y), NULL, &button_color,
+                             "+"))
+    {
+        result = 1;
+    }
+
+    ui_window_row_end();
+    return result;
+}
+
+internal void application_open_menu_window(ApplicationContext* app,
+                                           const f32 drop_down_width,
+                                           const V4 button_color)
+{
+    if (ui_window_begin(app->menu_window, NULL, false, false))
+    {
+        const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
+
+        presist b8 animation_on_selected = true;
+        presist b8 dark_mode_selected = true;
+        presist b8 highlight_fucused_window_selected = true;
+
+        presist f32 dark_mode_x = 0.0f;
+        presist f32 hidden_files_x = 0.0f;
+        presist f32 focused_window_x = 0.0f;
+        presist f32 animation_x = 0.0f;
+
+        if (ui_window_set_overlay() && app->open_menu_window)
         {
-            V2 list_position = v2i(10.0f);
-            i32 selected_item = -1;
-            if (ui_window_add_folder_list(list_position, list_item_height,
-                                          folders, NULL, &selected_item))
-            {
-                directory_open_folder(folders->data[selected_item].path,
-                                      directory_history);
-
-                add_to_recent(recent, folders->data[selected_item].path);
-            }
-
-            result = !ui_window_end();
+            dark_mode_x = 0.0f;
+            hidden_files_x = 0.0f;
+            focused_window_x = 0.0f;
+            animation_x = 0.0f;
+            app->open_menu_window = false;
         }
-        if (!result)
+
+        AABB row = {
+            .min = v2i(10.0f),
+            .size = v2f(200.0f, 40.0f),
+        };
+
+        const V2 switch_size = ui_window_get_switch_size();
+
+        const f32 switch_x = drop_down_width - switch_size.width - row.min.x;
+
         {
-            *show_switch = false;
+            V2 text_position = v2f(row.min.x, row.min.y + 2.0f);
+            ui_window_add_text(text_position, "Font:", false);
+
+            const char* font_path = ui_context_get_font_path();
+            const u32 path_length =
+                get_path_length(font_path, (u32)strlen(font_path));
+
+            const V2 button_dim = ui_window_get_button_dimensions(
+                v2d(), font_path + path_length, NULL);
+
+            const f32 x_position =
+                drop_down_width - button_dim.width - row.min.x;
+
+            if (ui_window_add_button(v2f(x_position, row.min.y), NULL,
+                                     &button_color, font_path + path_length))
+            {
+                if (app->font_change_directory.parent)
+                {
+                    platform_reset_directory(&app->font_change_directory, true);
+                }
+                const char* font_directory_path = "C:\\Windows\\Fonts\\*";
+                app->font_change_directory = platform_get_directory(
+                    font_directory_path, (u32)strlen(font_directory_path));
+                DirectoryItemArray* files = &app->font_change_directory.files;
+                for (i32 i = 0; i < (i32)files->size; ++i)
+                {
+                    const char* extension = file_get_extension(
+                        files->data[i].name, (u32)strlen(files->data[i].name));
+                    if (!extension || strcmp(extension, "ttf"))
+                    {
+                        char* path_to_remove = files->data[i].path;
+                        for (u32 j = i; j < files->size - 1; ++j)
+                        {
+                            files->data[j] = files->data[j + 1];
+                        }
+                        free(path_to_remove);
+                        files->size--;
+                        --i;
+                    }
+                }
+                app->open_font_change_window = true;
+            }
+        }
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            i32 result =
+                add_increment(row.min, "Font size:", button_color,
+                              drop_down_width, (u32)ui_font_pixel_height);
+            if (result == 0)
+            {
+                ui_context_change_font_pixel_height(ui_font_pixel_height - 1);
+            }
+            else if (result == 1)
+            {
+                ui_context_change_font_pixel_height(ui_font_pixel_height + 1);
+            }
+        }
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            i32 result = add_increment(row.min, "Recent total:", button_color,
+                                       drop_down_width, app->recent.total);
+            if (result == 0)
+            {
+                app->recent.total = max(app->recent.total - 1, 2);
+            }
+            else if (result == 1)
+            {
+                app->recent.total = min(app->recent.total + 1, 40);
+            }
+        }
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            ui_window_add_text(row.min, "Animation on:", false);
+            ui_window_add_switch(v2f(switch_x, row.min.y),
+                                 &animation_on_selected, &animation_x);
+            ui_context_set_animation(animation_on_selected);
+        }
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            ui_window_add_text(row.min, "Highlight focused window:", false);
+            ui_window_add_switch(v2f(switch_x, row.min.y),
+                                 &highlight_fucused_window_selected,
+                                 &focused_window_x);
+            ui_context_set_highlight_focused_window(
+                highlight_fucused_window_selected);
+        }
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            ui_window_add_text(row.min, "Show hidden files:", false);
+            b8 before = app->show_hidden_files;
+            ui_window_add_switch(v2f(switch_x, row.min.y),
+                                 &app->show_hidden_files, &hidden_files_x);
+            platform_show_hidden_files(app->show_hidden_files);
+            if (before != app->show_hidden_files)
+            {
+                for (u32 i = 0; i < app->tabs.size; ++i)
+                {
+                    directory_reload(directory_current(
+                        &app->tabs.data[i].directory_history));
+                }
+            }
+        }
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            ui_window_add_text(row.min, "Dark mode:", false);
+            ui_window_add_switch(v2f(switch_x, row.min.y), &dark_mode_selected,
+                                 &dark_mode_x);
+            if (dark_mode_selected)
+            {
+                global_set_clear_color(v4ic(0.09f));
+                global_set_text_color(v4ic(1.0f));
+            }
+            else
+            {
+                global_set_clear_color(v4ic(0.8f));
+                global_set_text_color(v4ic(0.0f));
+            }
+        }
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            const char* text = "Reset to default";
+            const V2 button_dim =
+                ui_window_get_button_dimensions(v2d(), text, NULL);
+            const f32 x_position = middle(drop_down_width, button_dim.width);
+            if (ui_window_add_button(v2f(x_position, row.min.y), NULL,
+                                     &button_color, text))
+            {
+                ui_context_set_font_path("C:/Windows/Fonts/arial.ttf");
+                ui_context_change_font_pixel_height(16);
+
+                animation_x = 1.0f * animation_on_selected;
+                dark_mode_x = 1.0f * dark_mode_selected;
+                focused_window_x = 1.0f * highlight_fucused_window_selected;
+                hidden_files_x = 1.0f * app->show_hidden_files;
+
+                animation_on_selected = true;
+                dark_mode_selected = true;
+                highlight_fucused_window_selected = true;
+                app->show_hidden_files = true;
+
+                app->recent.total = 10;
+            }
+        }
+
+        ui_window_end();
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        UiWindow* top_bar_menu = ui_window_get(app->menu_window);
+        top_bar_menu->size.width = drop_down_width;
+        top_bar_menu->size.height = row.min.y;
+    }
+}
+
+internal void window_open_menu_item_add(WindowOpenMenuItem* item,
+                                        const V2 position,
+                                        const f32 switch_position_x,
+                                        const char* text, const V2 dimensions)
+{
+    ui_window_add_text(position, text, false);
+    b8 selected_before = item->switch_on;
+    ui_window_add_switch(v2f(switch_position_x, position.y), &item->switch_on,
+                         &item->switch_x);
+
+    if (item->switch_on)
+    {
+        if (!item->show)
+        {
+            open_window(dimensions, item->window);
+            item->show = true;
         }
     }
-    return result;
+    else if (selected_before != item->switch_on)
+    {
+        if (item->show)
+        {
+            ui_window_close(item->window);
+        }
+    }
+}
+
+internal void application_open_windows_window(ApplicationContext* app,
+                                              const f32 drop_down_width,
+                                              const V4 button_color)
+{
+    if (ui_window_begin(app->windows_window, NULL, false, false))
+    {
+        const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
+
+        if (ui_window_set_overlay() && app->windows_window)
+        {
+            app->quick_access.menu_item.switch_x = 0.0f;
+            app->recent.panel.menu_item.switch_x = 0.0f;
+            app->search_result_window_item.switch_x = 0.0f;
+            app->open_windows_window = false;
+        }
+
+        AABB row = {
+            .min = v2i(10.0f),
+            .size = v2f(200.0f, 40.0f),
+        };
+
+        const V2 switch_size = ui_window_get_switch_size();
+        const f32 switch_x = drop_down_width - switch_size.width - row.min.x;
+
+        window_open_menu_item_add(&app->quick_access.menu_item, row.min,
+                                  switch_x, "Quick access:", app->dimensions);
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+
+        window_open_menu_item_add(&app->recent.panel.menu_item, row.min,
+                                  switch_x, "Recent:", app->dimensions);
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+
+        window_open_menu_item_add(&app->search_result_window_item, row.min,
+                                  switch_x, "Search result:", app->dimensions);
+
+        ui_window_end();
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        UiWindow* top_bar_windows = ui_window_get(app->windows_window);
+        top_bar_windows->size.width = drop_down_width;
+        top_bar_windows->size.height = row.min.y;
+    }
 }
 
 void application_run()
@@ -2048,7 +2344,7 @@ void application_run()
         {
             MainDropDownSelectionData data = {
                 .window = app.window,
-                .quick_access = &app.quick_access_folders,
+                .quick_access = &app.quick_access.items,
                 .directory = directory_current(&tab->directory_history),
                 .selected_paths =
                     &tab->directory_list.selected_item_values.paths,
@@ -2097,9 +2393,6 @@ void application_run()
         ui_context_begin(app.dimensions, &dock_space, app.delta_time,
                          check_collision);
         {
-            presist b8 show_quick_access_switch = true;
-            presist b8 show_recent_switch = true;
-            presist b8 show_search_result_switch = true;
 
             const f32 drop_down_width = 350.0f;
 
@@ -2109,329 +2402,16 @@ void application_run()
 
             const V4 button_color =
                 v4a(v4_s_multi(global_get_clear_color(), 3.0f), 1.0f);
-            UiWindow* top_bar_menu = ui_window_get(app.menu_window);
-            top_bar_menu->back_ground_alpha = 0.95f;
+
             if (app.open_menu_window)
             {
-                if (ui_window_begin(app.menu_window, NULL, false, false))
-                {
-                    presist b8 animation_on_selected = true;
-                    presist b8 dark_mode_selected = true;
-                    presist b8 highlight_fucused_window_selected = true;
-
-                    presist f32 dark_mode_x = 0.0f;
-                    presist f32 hidden_files_x = 0.0f;
-                    presist f32 focused_window_x = 0.0f;
-                    presist f32 animation_x = 0.0f;
-                    if (ui_window_set_overlay() && app.open_menu_window)
-                    {
-                        dark_mode_x = 0.0f;
-                        hidden_files_x = 0.0f;
-                        focused_window_x = 0.0f;
-                        animation_x = 0.0f;
-                        app.open_menu_window = false;
-                    }
-
-                    AABB row = {
-                        .min = v2i(10.0f),
-                        .size = v2f(200.0f, 40.0f),
-                    };
-
-                    const V2 switch_size = ui_window_get_switch_size();
-
-                    const f32 switch_x =
-                        drop_down_width - switch_size.width - row.min.x;
-
-                    {
-                        V2 text_position = v2f(row.min.x, row.min.y + 2.0f);
-                        ui_window_add_text(text_position, "Font:", false);
-
-                        const char* font_path = ui_context_get_font_path();
-                        const u32 path_length =
-                            get_path_length(font_path, (u32)strlen(font_path));
-
-                        const V2 button_dim = ui_window_get_button_dimensions(
-                            v2d(), font_path + path_length, NULL);
-
-                        const f32 x_position =
-                            drop_down_width - button_dim.width - row.min.x;
-
-                        if (ui_window_add_button(v2f(x_position, row.min.y),
-                                                 NULL, &button_color,
-                                                 font_path + path_length))
-                        {
-                            if (app.font_change_directory.parent)
-                            {
-                                platform_reset_directory(
-                                    &app.font_change_directory, true);
-                            }
-                            const char* font_directory_path =
-                                "C:\\Windows\\Fonts\\*";
-                            app.font_change_directory = platform_get_directory(
-                                font_directory_path,
-                                (u32)strlen(font_directory_path));
-                            DirectoryItemArray* files =
-                                &app.font_change_directory.files;
-                            for (i32 i = 0; i < (i32)files->size; ++i)
-                            {
-                                const char* extension = file_get_extension(
-                                    files->data[i].name,
-                                    (u32)strlen(files->data[i].name));
-                                if (!extension || strcmp(extension, "ttf"))
-                                {
-                                    char* path_to_remove = files->data[i].path;
-                                    for (u32 j = i; j < files->size - 1; ++j)
-                                    {
-                                        files->data[j] = files->data[j + 1];
-                                    }
-                                    free(path_to_remove);
-                                    files->size--;
-                                    --i;
-                                }
-                            }
-                            app.open_font_change_window = true;
-                        }
-                    }
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    {
-                        const V2 button1_dim =
-                            ui_window_get_button_dimensions(v2d(), "-", NULL);
-
-                        const V2 button2_dim =
-                            ui_window_get_button_dimensions(v2d(), "+", NULL);
-
-                        char buffer[20] = { 0 };
-                        value_to_string(buffer, "%u",
-                                        (u32)ui_font_pixel_height);
-
-                        const f32 x_advance = text_x_advance(
-                            app.font.chars, buffer, (u32)strlen(buffer), 1.0f);
-
-                        const f32 x_position = drop_down_width -
-                                               button1_dim.width -
-                                               button2_dim.width - x_advance -
-                                               (20.0f * 2.0f) - row.min.x;
-
-                        V2 text_position = v2f(row.min.x, row.min.y + 2.0f);
-                        ui_window_add_text(text_position, "Font size: ", false);
-
-                        ui_window_row_begin(20.0f);
-
-                        if (ui_window_add_button(v2f(x_position, row.min.y),
-                                                 NULL, &button_color, "-"))
-                        {
-                            ui_context_change_font_pixel_height(
-                                ui_font_pixel_height - 1);
-                        }
-                        text_position.x = x_position;
-                        ui_window_add_text(text_position, buffer, false);
-                        if (ui_window_add_button(v2f(x_position, row.min.y),
-                                                 NULL, &button_color, "+"))
-                        {
-                            ui_context_change_font_pixel_height(
-                                ui_font_pixel_height + 1);
-                        }
-
-                        ui_window_row_end();
-                    }
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    {
-                        ui_window_add_text(row.min, "Animation on:", false);
-                        ui_window_add_switch(v2f(switch_x, row.min.y),
-                                             &animation_on_selected,
-                                             &animation_x);
-                        ui_context_set_animation(animation_on_selected);
-                    }
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    {
-                        ui_window_add_text(row.min,
-                                           "Highlight focused window:", false);
-                        ui_window_add_switch(v2f(switch_x, row.min.y),
-                                             &highlight_fucused_window_selected,
-                                             &focused_window_x);
-                        ui_context_set_highlight_focused_window(
-                            highlight_fucused_window_selected);
-                    }
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    {
-                        ui_window_add_text(row.min,
-                                           "Show hidden files:", false);
-                        b8 before = app.show_hidden_files;
-                        ui_window_add_switch(v2f(switch_x, row.min.y),
-                                             &app.show_hidden_files,
-                                             &hidden_files_x);
-                        platform_show_hidden_files(app.show_hidden_files);
-                        if (before != app.show_hidden_files)
-                        {
-                            for (u32 i = 0; i < app.tabs.size; ++i)
-                            {
-                                directory_reload(directory_current(
-                                    &app.tabs.data[i].directory_history));
-                            }
-                        }
-                    }
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    {
-                        ui_window_add_text(row.min, "Dark mode:", false);
-                        ui_window_add_switch(v2f(switch_x, row.min.y),
-                                             &dark_mode_selected, &dark_mode_x);
-                        if (dark_mode_selected)
-                        {
-                            global_set_clear_color(v4ic(0.09f));
-                            global_set_text_color(v4ic(1.0f));
-                        }
-                        else
-                        {
-                            global_set_clear_color(v4ic(0.8f));
-                            global_set_text_color(v4ic(0.0f));
-                        }
-                    }
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    {
-                        const char* text = "Reset to default";
-                        const V2 button_dim =
-                            ui_window_get_button_dimensions(v2d(), text, NULL);
-                        const f32 x_position =
-                            middle(drop_down_width, button_dim.width);
-                        if (ui_window_add_button(v2f(x_position, row.min.y),
-                                                 NULL, &button_color, text))
-                        {
-                            ui_context_set_font_path(
-                                "C:/Windows/Fonts/arial.ttf");
-                            ui_context_change_font_pixel_height(16);
-
-                            animation_x = 1.0f * animation_on_selected;
-                            dark_mode_x = 1.0f * dark_mode_selected;
-                            focused_window_x =
-                                1.0f * highlight_fucused_window_selected;
-                            hidden_files_x = 1.0f * app.show_hidden_files;
-
-                            animation_on_selected = true;
-                            dark_mode_selected = true;
-                            highlight_fucused_window_selected = true;
-                            app.show_hidden_files = true;
-                        }
-                    }
-
-                    ui_window_end();
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    top_bar_menu->size.width = drop_down_width;
-                    top_bar_menu->size.height = row.min.y;
-                }
+                application_open_menu_window(&app, drop_down_width,
+                                             button_color);
             }
-
-            UiWindow* top_bar_windows = ui_window_get(app.windows_window);
-            top_bar_windows->back_ground_alpha = 0.95f;
             if (app.open_windows_window)
             {
-                if (ui_window_begin(app.windows_window, NULL, false, false))
-                {
-                    presist f32 quick_access_x = 0.0f;
-                    presist f32 recent_x = 0.0f;
-                    presist f32 search_result_x = 0.0f;
-
-                    if (ui_window_set_overlay() && app.windows_window)
-                    {
-                        quick_access_x = 0.0f;
-                        recent_x = 0.0f;
-                        search_result_x = 0.0f;
-                        app.open_windows_window = false;
-                    }
-
-                    AABB row = {
-                        .min = v2i(10.0f),
-                        .size = v2f(200.0f, 40.0f),
-                    };
-
-                    const V2 switch_size = ui_window_get_switch_size();
-                    const f32 switch_x =
-                        drop_down_width - switch_size.width - row.min.x;
-
-                    {
-                        ui_window_add_text(row.min, "Quick access:", false);
-                        b8 selected_before = show_quick_access_switch;
-                        ui_window_add_switch(v2f(switch_x, row.min.y),
-                                             &show_quick_access_switch,
-                                             &quick_access_x);
-
-                        if (show_quick_access_switch)
-                        {
-                            if (!app.show_quick_access)
-                            {
-                                open_window(&app, app.quick_access_window);
-                                app.show_quick_access = true;
-                            }
-                        }
-                        else if (selected_before != show_quick_access_switch)
-                        {
-                            if (app.show_quick_access)
-                            {
-                                ui_window_close(app.quick_access_window);
-                            }
-                        }
-                    }
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    {
-                        ui_window_add_text(row.min, "Recent:", false);
-                        b8 selected_before = show_recent_switch;
-                        ui_window_add_switch(v2f(switch_x, row.min.y),
-                                             &show_recent_switch, &recent_x);
-
-                        if (show_recent_switch)
-                        {
-                            if (!app.show_recent)
-                            {
-                                open_window(&app, app.recent_window);
-                                app.show_recent = true;
-                            }
-                        }
-                        else if (selected_before != show_recent_switch)
-                        {
-                            if (app.show_recent)
-                            {
-                                ui_window_close(app.recent_window);
-                            }
-                        }
-                    }
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    {
-                        ui_window_add_text(row.min, "Search result:", false);
-                        b8 selected_before = show_search_result_switch;
-                        ui_window_add_switch(v2f(switch_x, row.min.y),
-                                             &show_search_result_switch,
-                                             &search_result_x);
-
-                        if (show_search_result_switch)
-                        {
-                            if (!app.show_search_page)
-                            {
-                                open_window(&app, app.search_result_window);
-                                app.show_search_page = true;
-                            }
-                        }
-                        else if (selected_before != show_search_result_switch)
-                        {
-                            if (app.show_search_page)
-                            {
-                                ui_window_close(app.search_result_window);
-                            }
-                        }
-                    }
-                    ui_window_end();
-
-                    row.min.y += ui_font_pixel_height + 20.0f;
-                    top_bar_windows->size.width = drop_down_width;
-                    top_bar_windows->size.height = row.min.y;
-                }
+                application_open_windows_window(&app, drop_down_width,
+                                                button_color);
             }
 
             if (app.open_font_change_window)
@@ -2485,18 +2465,19 @@ void application_run()
                     ui_window_add_menu_bar(&menu_values, &drop_down_position);
                 if (index_clicked == 0)
                 {
+                    UiWindow* top_bar_menu = ui_window_get(app.menu_window);
                     top_bar_menu->position = drop_down_position;
-                    top_bar_menu->top_color.a = 0.95f;
-                    top_bar_menu->bottom_color.a = 0.95f;
+                    top_bar_menu->back_ground_alpha = 0.95f;
 
                     app.open_windows_window = false;
                     app.open_menu_window ^= true;
                 }
                 else if (index_clicked == 1)
                 {
+                    UiWindow* top_bar_windows =
+                        ui_window_get(app.windows_window);
                     top_bar_windows->position = drop_down_position;
-                    top_bar_windows->top_color.a = 0.95f;
-                    top_bar_windows->bottom_color.a = 0.95f;
+                    top_bar_windows->back_ground_alpha = 0.95f;
 
                     app.open_menu_window = false;
                     app.open_windows_window ^= true;
@@ -2571,7 +2552,7 @@ void application_run()
                                        &app.suggestion_data);
 
                     if (app.suggestion_data.change_directory ||
-                        event_is_key_clicked(FTIC_KEY_ENTER))
+                        event_is_key_pressed_once(FTIC_KEY_ENTER))
                     {
                         char* last_char =
                             array_back(&app.parent_directory_input.buffer);
@@ -2628,11 +2609,12 @@ void application_run()
                     app.search_page
                         .running_callbacks[app.search_page.last_running_id] =
                         false;
-                    if (!app.show_search_page)
+                    if (!app.search_result_window_item.show)
                     {
-                        open_window(&app, app.search_result_window);
-                        app.show_search_page = true;
-                        show_search_result_switch = true;
+                        open_window(app.dimensions,
+                                    app.search_result_window_item.window);
+                        app.search_result_window_item.show = true;
+                        app.search_result_window_item.switch_on = true;
                     }
                 }
                 if (app.search_page
@@ -2711,25 +2693,21 @@ void application_run()
                 ui_window_end();
             }
 
-            app.show_quick_access = open_window_with_only_folders(
-                app.quick_access_window, "Quick access", app.show_quick_access,
-                list_item_height, &show_quick_access_switch,
-                &app.quick_access_folders, &app.recent_folders,
-                &tab->directory_history);
+            access_panel_open(&app.quick_access, "Quick access",
+                              list_item_height, &app.recent,
+                              &tab->directory_history);
 
-            app.show_recent = open_window_with_only_folders(
-                app.recent_window, "Recent", app.show_recent, list_item_height,
-                &show_recent_switch, &app.recent_folders, &app.recent_folders,
-                &tab->directory_history);
+            access_panel_open(&app.recent.panel, "Recent", list_item_height,
+                              &app.recent, &tab->directory_history);
 
-            if (app.show_search_page)
+            if (app.search_result_window_item.show)
             {
-                app.show_search_page = !show_search_result_window(
-                    &app.search_page, app.search_result_window,
+                app.search_result_window_item.show = !show_search_result_window(
+                    &app.search_page, app.search_result_window_item.window,
                     list_item_height, &tab->directory_history);
-                if (!app.show_search_page)
+                if (!app.search_result_window_item.show)
                 {
-                    show_search_result_switch = false;
+                    app.search_result_window_item.switch_on = false;
                 }
             }
 
@@ -2829,7 +2807,7 @@ void application_run()
                     i == app.tab_index ? 1.0f : 0.7f;
 
                 if (show_directory_window(window_id, list_item_height,
-                                          check_collision, &app.recent_folders,
+                                          check_collision, &app.recent,
                                           &app.thread_queue.task_queue,
                                           app.tabs.data + i))
                 {

@@ -14,8 +14,9 @@
 #define PASTE_OPTION_INDEX 1
 #define DELETE_OPTION_INDEX 2
 #define ADD_TO_QUICK_OPTION_INDEX 3
-#define PROPERTIES_OPTION_INDEX 4
-#define MORE_OPTION_INDEX 5
+#define OPEN_IN_TERMINAL_OPTION_INDEX 4
+#define PROPERTIES_OPTION_INDEX 5
+#define MORE_OPTION_INDEX 6
 
 typedef struct SafeFileArray
 {
@@ -91,6 +92,26 @@ typedef struct DropDownMenu2
                                  b8 item_clicked, V4* text_color, void* data);
 } DropDownMenu2;
 
+typedef struct WindowOpenMenuItem
+{
+    u32 window;
+    f32 switch_x;
+
+    b8 switch_on;
+    b8 show;
+} WindowOpenMenuItem;
+
+typedef struct AccessPanel
+{
+    DirectoryItemArray items;
+    WindowOpenMenuItem menu_item;
+} AccessPanel;
+
+typedef struct RecentPanel {
+    AccessPanel panel;
+    u32 total;
+}RecentPanel;
+
 typedef struct ApplicationContext
 {
     FTicWindow* window;
@@ -114,7 +135,7 @@ typedef struct ApplicationContext
     SearchPage search_page;
     RenderingProperties main_render;
     u32 main_index_count;
-    b8 show_search_page;
+    WindowOpenMenuItem search_result_window_item;
 
     Render render_3d;
     u32 index_count_3d;
@@ -126,13 +147,10 @@ typedef struct ApplicationContext
 
     u32 top_bar_window;
     u32 bottom_bar_window;
-    u32 quick_access_window;
-    u32 search_result_window;
     u32 preview_window;
     u32 menu_window;
     u32 windows_window;
     u32 font_change_window;
-    u32 recent_window;
 
     Directory font_change_directory;
 
@@ -143,11 +161,8 @@ typedef struct ApplicationContext
     DropDownMenu2 context_menu;
     b8 context_menu_open;
 
-    DirectoryItemArray quick_access_folders;
-    b8 show_quick_access;
-
-    DirectoryItemArray recent_folders;
-    b8 show_recent;
+    AccessPanel quick_access;
+    RecentPanel recent;
 
     InputBuffer parent_directory_input;
     DropDownMenu2 suggestions;
@@ -166,4 +181,5 @@ f64 application_get_last_mouse_move_time(const ApplicationContext* appliction);
 
 void search_page_clear_result(SearchPage* page);
 b8 search_page_has_result(const SearchPage* search_page);
-void search_page_search(SearchPage* page, DirectoryHistory* directory_history, ThreadTaskQueue* thread_task_queue);
+void search_page_search(SearchPage* page, DirectoryHistory* directory_history,
+                        ThreadTaskQueue* thread_task_queue);

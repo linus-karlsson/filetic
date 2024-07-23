@@ -16,46 +16,6 @@
 
 global u32 random_seed = 0;
 
-#define icon_1_co(width, height)                                               \
-    {                                                                          \
-        .x = 0.0f / width,                                                     \
-        .y = 0.0f / height,                                                    \
-        .z = 128.0f / width,                                                   \
-        .w = 128.0f / height,                                                  \
-    };
-
-global const V4 file_icon_co = icon_1_co(512.0f, 128.0f);
-global const V4 arrow_back_icon_co = icon_1_co(96.0f, 32.0f);
-
-#define icon_2_co(width, height)                                               \
-    {                                                                          \
-        .x = 128.0f / width,                                                   \
-        .y = 0.0f / height,                                                    \
-        .z = 256.0f / width,                                                   \
-        .w = 128.0f / height,                                                  \
-    };
-global const V4 folder_icon_co = icon_2_co(512.0f, 128.0f);
-global const V4 arrow_up_icon_co = icon_2_co(96.0f, 32.0f);
-
-#define icon_3_co(width, height)                                               \
-    {                                                                          \
-        .x = 256.0f / width,                                                   \
-        .y = 0.0f / height,                                                    \
-        .z = 384.0f / width,                                                   \
-        .w = 128.0f / height,                                                  \
-    };
-global const V4 pdf_icon_co = icon_3_co(512.0f, 128.0f);
-global const V4 arrow_right_icon_co = icon_3_co(96.0f, 32.0f);
-
-#define icon_4_co(width, height)                                               \
-    {                                                                          \
-        .x = 384.0f / width,                                                   \
-        .y = 0.0f / height,                                                    \
-        .z = 512.0f / width,                                                   \
-        .w = 128.0f / height,                                                  \
-    };
-global const V4 png_icon_co = icon_4_co(512.0f, 128.0f);
-
 #define MAX_PATH 260
 
 typedef struct UiWindowArray

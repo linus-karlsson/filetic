@@ -214,6 +214,35 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
     return result;
 }
 
+i32 platform_time_compare(const PlatformTime* first, const PlatformTime* second)
+{
+    if (first->year == second->year)
+    {
+        if (first->month == second->month)
+        {
+            if (first->day == second->day)
+            {
+                if (first->hour == second->hour)
+                {
+                    if (first->minute == second->minute)
+                    {
+                        if (first->second == second->second)
+                        {
+                            return first->milliseconds - second->milliseconds;
+                        }
+                        return first->second - second->second;
+                    }
+                    return first->minute - second->minute;
+                }
+                return first->hour - second->hour;
+            }
+            return first->day - second->day;
+        }
+        return first->month - second->month;
+    }
+    return first->year - second->year;
+}
+
 void platform_init(const char* title, u16 width, u16 height,
                    Platform** platform)
 {
@@ -588,7 +617,7 @@ Directory platform_get_directory(const char* directory_path,
                             (u32)strlen(ffd.cFileName), 0, 2, NULL);
 
             u64 last_write_time =
-                (ffd.ftLastWriteTime.dwHighDateTime * (MAXDWORD + 1)) +
+                ((u64)ffd.ftLastWriteTime.dwHighDateTime << 32) |
                 ffd.ftLastWriteTime.dwLowDateTime;
 
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
@@ -1488,5 +1517,40 @@ PlatformTime platform_time_from_u64(u64 time)
 
     PlatformTime result = { 0 };
     FileTimeToSystemTime(&file_time, (SYSTEMTIME*)&result);
+    SYSTEMTIME sys_time;
+    FileTimeToSystemTime(&file_time, &sys_time);
     return result;
+}
+
+void platform_open_terminal(const char* path)
+{
+    char buffer[1024];
+    value_to_string(buffer, "wt.exe -d \"%s\"", path);
+
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    ZeroMemory(&pi, sizeof(pi));
+
+    if (CreateProcessA(NULL,   // No module name (use command line)
+                       buffer, // Command line
+                       NULL,   // Process handle not inheritable
+                       NULL,   // Thread handle not inheritable
+                       FALSE,  // Set handle inheritance to FALSE
+                       0,      // No creation flags
+                       NULL,   // Use parent's environment block
+                       NULL,   // Use parent's starting directory
+                       &si,    // Pointer to STARTUPINFO structure
+                       &pi)    // Pointer to PROCESS_INFORMATION structure
+    )
+    {
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
+    else
+    {
+        log_last_error();
+    }
 }

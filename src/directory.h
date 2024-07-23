@@ -67,6 +67,8 @@ void directory_reload(DirectoryPage* directory_page);
 void directory_sort(DirectoryPage* directory_page);
 void directory_sort_by_name(DirectoryItemArray* array);
 void directory_sort_by_size(DirectoryItemArray* array);
+void directory_sort_by_date(DirectoryItemArray* array);
+void directory_merge_sort_by_date(DirectoryItemArray* array);
 void directory_flip_array(DirectoryItemArray* array);
 b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history);
 void directory_open_folder(char* folder_path, DirectoryHistory* directory_history);
