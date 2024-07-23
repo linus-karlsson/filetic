@@ -13,9 +13,9 @@ void main()
     int index = int(fTexIndex);
 
     const float blurAmount = 0.0028;
-    const int samples = 30; 
+    const int samples = 30;
 
-    vec4 colorSum = vec4(0.0);
+    vec3 colorSum = vec3(0.0);
     float weightSum = 0.0;
 
     for (int x = -samples; x <= samples; ++x)
@@ -25,11 +25,12 @@ void main()
             float weight =
                 max(0.0, 1.0 - sqrt(float(x * x + y * y)) / float(samples));
             vec2 offset = vec2(float(x) * blurAmount, float(y) * blurAmount);
-            colorSum += texture(textures[index], fTexCoord + offset) * weight;
+            colorSum +=
+                texture(textures[index], fTexCoord + offset).rgb * weight;
             weightSum += weight;
         }
     }
 
-    finalColor = (colorSum / weightSum) * fColor;
+    finalColor = vec4((colorSum / weightSum) * fColor.rgb, 1.0);
 }
 

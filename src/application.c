@@ -2427,7 +2427,8 @@ void application_run()
                         middle(app.dimensions.height,
                                font_change_window->size.height));
                 if (ui_window_begin(app.font_change_window, NULL,
-                                    UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+                                    UI_WINDOW_OVERLAY |
+                                        UI_WINDOW_FROSTED_GLASS))
                 {
                     V2 list_position = v2f(10.0f, 10.0f);
                     i32 selected_item = -1;
@@ -2726,12 +2727,13 @@ void application_run()
                     preview->top_color = global_get_clear_color();
                     preview->bottom_color = global_get_clear_color();
 
-                    if (ui_window_begin(app.preview_window, NULL, UI_WINDOW_OVERLAY))
+                    if (ui_window_begin(app.preview_window, NULL,
+                                        UI_WINDOW_OVERLAY))
                     {
                         ui_window_add_image(v2d(), image_dimensions,
                                             preview_textures.data[0]);
 
-                        if(ui_window_end()) preview_index = -1;
+                        if (ui_window_end()) preview_index = -1;
                     }
                 }
                 else if (preview_index == 1)
@@ -2763,11 +2765,12 @@ void application_run()
                     preview->top_color = v4ic(0.0f);
                     preview->bottom_color = v4ic(0.0f);
 
-                    if (ui_window_begin(app.preview_window, NULL, UI_WINDOW_OVERLAY))
+                    if (ui_window_begin(app.preview_window, NULL,
+                                        UI_WINDOW_OVERLAY))
                     {
                         ui_window_add_text_colored(v2f(10.0f, 10.0f),
                                                    &preview_file_colored, true);
-                        if(ui_window_end())preview_index = -1;
+                        if (ui_window_end()) preview_index = -1;
                     }
                 }
             }
@@ -2794,10 +2797,8 @@ void application_run()
                     app.tab_index = i;
                 }
 
-                /*
                 ui_window_get(window_id)->alpha =
                     i == app.tab_index ? 1.0f : 0.7f;
-                    */
 
                 if (show_directory_window(window_id, list_item_height,
                                           check_collision, &app.recent,
