@@ -72,9 +72,9 @@ void rendering_properties_check_and_grow_index_buffer(
     }
 }
 
-void render_begin_draw(const Render* render, const MVP* mvp)
+void render_begin_draw(const Render* render, const u32 shader, const MVP* mvp)
 {
-    shader_bind(render->shader_properties.shader);
+    shader_bind(shader);
     shader_set_mvp(&render->shader_properties, mvp);
 
     int* textures = (int*)calloc(render->textures.size, sizeof(int));
@@ -83,7 +83,7 @@ void render_begin_draw(const Render* render, const MVP* mvp)
         textures[i] = (int)i;
     }
     int location =
-        glGetUniformLocation(render->shader_properties.shader, "textures");
+        glGetUniformLocation(shader, "textures");
     ftic_assert(location != -1);
     glUniform1iv(location, render->textures.size, textures);
 

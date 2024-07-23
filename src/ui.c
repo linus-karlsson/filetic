@@ -97,6 +97,7 @@ typedef struct UiContext
 
     RenderingProperties render;
     u32 default_textures_offset;
+    u32 frosted_shader;
 
     u32 extra_index_offset;
     u32 extra_index_count;
@@ -144,6 +145,8 @@ typedef struct UiContext
     b8 highlight_fucused_window_off;
 
     b8 non_docked_window_hover;
+
+    b8 overlay_exists;
 } UiContext;
 
 typedef struct UU32Array
@@ -1150,8 +1153,14 @@ void ui_context_create()
 
     VertexBufferLayout vertex_buffer_layout = default_vertex_buffer_layout();
 
-    u32 shader = shader_create("./res/shaders/vertex.glsl",
-                               "./res/shaders/fragment.glsl");
+    u32 shader =
+        shader_create("res/shaders/vertex.glsl", "res/shaders/fragment.glsl");
+
+    ui_context.frosted_shader = shader_create("res/shaders/vertex.glsl",
+                                              "res/shaders/fragment_blur.glsl");
+
+    ftic_assert(shader);
+    ftic_assert(ui_context.frosted_shader);
 
     char* font_path = "C:/Windows/Fonts/arial.ttf";
     memset(ui_context.font_path, 0, sizeof(ui_context.font_path));
@@ -1409,6 +1418,8 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
     ui_context.row_current = 0;
     ui_context.row_padding = 0.0f;
 
+    ui_context.overlay_exists = false;
+
     for (u32 i = 0; i < ui_context.window_hover_clicked_indices.size; ++i)
     {
         ui_context.window_hover_clicked_indices.data[i] =
@@ -1426,6 +1437,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space,
         window->rendering_index_count = 0;
         window->rendering_index_offset = 0;
         window->area_hit = window->any_holding;
+        window->overlay = false;
         ui_context.any_window_hold |= window->any_holding;
         ui_context.any_window_top_bar_hold |= window->top_bar_hold;
         if (window->top_bar_hold)
@@ -1997,13 +2009,52 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
     return tab_change;
 }
 
+internal void add_frosted_background(V2 position, const V2 size,
+                                     const u32 background_offset,
+                                     const u32 index_offset,
+                                     const AABB* scissor,
+                                     const u32 frosted_texture_index)
+{
+    position.y = ui_context.dimensions.y - (position.y + size.height);
+
+    V2 texture_coordinates[4] = {
+        v2f(position.x / ui_context.dimensions.width,
+            (position.y + size.height) / ui_context.dimensions.height),
+        v2f(position.x / ui_context.dimensions.width,
+            position.y / ui_context.dimensions.height),
+        v2f((position.x + size.width) / ui_context.dimensions.width,
+            position.y / ui_context.dimensions.height),
+        v2f((position.x + size.width) / ui_context.dimensions.width,
+            (position.y + size.height) / ui_context.dimensions.height),
+    };
+
+    for (u32 i = 0; i < 4; ++i)
+    {
+        Vertex* v = ui_context.render.vertices.data + background_offset + i;
+        v->color = v4ic(0.6f);
+        v->texture_index = (f32)frosted_texture_index;
+        v->texture_coordinates = texture_coordinates[i];
+    }
+    buffer_set_sub_data(ui_context.render.render.vertex_buffer_id,
+                        GL_ARRAY_BUFFER, background_offset, sizeof(Vertex) * 4,
+                        ui_context.render.vertices.data);
+
+    render_begin_draw(&ui_context.render.render, ui_context.frosted_shader,
+                      &ui_context.mvp);
+    render_draw(index_offset, 6, scissor);
+    render_end_draw(&ui_context.render.render);
+}
+
 internal void render_ui(const DockNodePtrArray* dock_spaces,
-                        const UU32Array* dock_spaces_index_offsets_and_counts)
+                        const UU32Array* dock_spaces_index_offsets_and_counts,
+                        const u32 frosted_texture_index, const b8 frame_buffer)
 {
     const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
     AABB whole_screen_scissor = { .size = ui_context.dimensions };
 
-    render_begin_draw(&ui_context.render.render, &ui_context.mvp);
+    render_begin_draw(&ui_context.render.render,
+                      ui_context.render.render.shader_properties.shader,
+                      &ui_context.mvp);
     for (u32 i = 0; i < dock_spaces->size; ++i)
     {
         DockNode* node = dock_spaces->data[i];
@@ -2020,6 +2071,28 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
             scissor.size.height -= (window->top_bar * top_bar_height);
             scissor.size.height = clampf32_low(scissor.size.height, 0.0f);
         }
+        if (window->overlay)
+        {
+            if (frame_buffer)
+            {
+                continue;
+            }
+            else if (frosted_texture_index)
+            {
+                render_end_draw(&ui_context.render.render);
+                add_frosted_background(window->position, window->size,
+                                       window->offset_to_background,
+                                       window->rendering_index_offset, &scissor,
+                                       frosted_texture_index);
+                window->rendering_index_offset += 6;
+                window->rendering_index_count -= 6;
+                render_begin_draw(
+                    &ui_context.render.render,
+                    ui_context.render.render.shader_properties.shader,
+                    &ui_context.mvp);
+            }
+        }
+
         render_draw(window->rendering_index_offset,
                     window->rendering_index_count, &scissor);
 
@@ -2144,7 +2217,56 @@ void ui_context_end()
                         sizeof(Vertex) * ui_context.render.vertices.size,
                         ui_context.render.vertices.data);
 
-    render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts);
+    u32 fbo = 0;
+    u32 fbo_texture = 0;
+    u32 texture_index = 0;
+    if (ui_context.overlay_exists)
+    {
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+        glGenTextures(1, &fbo_texture);
+        glBindTexture(GL_TEXTURE_2D, fbo_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+                     (GLsizei)ui_context.dimensions.width,
+                     (GLsizei)ui_context.dimensions.height, 0, GL_RGBA,
+                     GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, fbo_texture, 0);
+
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
+        {
+            render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts, 0,
+                      true);
+        }
+        else
+        {
+            texture_delete(fbo_texture);
+            fbo_texture = 0;
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        if (fbo_texture)
+        {
+            texture_index = ui_context.render.render.textures.size;
+            array_push(&ui_context.render.render.textures, fbo_texture);
+        }
+    }
+
+    render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts,
+              texture_index, false);
+
+    if (ui_context.overlay_exists)
+    {
+        if (fbo_texture)
+        {
+            texture_delete(fbo_texture);
+        }
+        glDeleteFramebuffers(1, &fbo);
+    }
 
     if (!ui_context.any_window_hold && ui_context.dock_resize)
     {
@@ -2483,12 +2605,12 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
     if (title)
     {
         const u32 title_length = (u32)strlen(title);
-        if(!window->title.data)
+        if (!window->title.data)
         {
             array_create(&window->title, (u32)strlen(title));
         }
         window->title.size = 0;
-        for(u32 i = 0; i < title_length; ++i)
+        for (u32 i = 0; i < title_length; ++i)
         {
             array_push(&window->title, title[i]);
         }
@@ -2528,6 +2650,7 @@ b8 ui_window_begin(u32 window_id, const char* title, b8 top_bar, b8 resizeable)
 
     if (window->hide) return false;
 
+    window->offset_to_background = ui_context.render.vertices.size;
     array_push(aabbs,
                quad_gradiant_t_b(&ui_context.render.vertices, window->position,
                                  window->size, window->top_color,
@@ -3936,11 +4059,17 @@ void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text,
     }
 }
 
-b8 ui_window_set_overlay()
+b8 ui_window_set_overlay(b8 frosted_background)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
+
+    if (frosted_background)
+    {
+        ui_context.overlay_exists = true;
+        window->overlay = true;
+    }
 
     // TODO
     for (i32 i = ((i32)ui_context.last_frame_windows.size) - 1; i >= 0; --i)

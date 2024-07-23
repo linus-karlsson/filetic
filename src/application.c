@@ -1950,7 +1950,7 @@ internal void application_open_menu_window(ApplicationContext* app,
         presist f32 focused_window_x = 0.0f;
         presist f32 animation_x = 0.0f;
 
-        if (ui_window_set_overlay() && app->open_menu_window)
+        if (ui_window_set_overlay(true) && app->open_menu_window)
         {
             dark_mode_x = 0.0f;
             hidden_files_x = 0.0f;
@@ -2164,7 +2164,7 @@ internal void application_open_windows_window(ApplicationContext* app,
     {
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
-        if (ui_window_set_overlay() && app->windows_window)
+        if (ui_window_set_overlay(true) && app->windows_window)
         {
             app->quick_access.menu_item.switch_x = 0.0f;
             app->recent.panel.menu_item.switch_x = 0.0f;
@@ -2427,7 +2427,7 @@ void application_run()
                                font_change_window->size.height));
                 if (ui_window_begin(app.font_change_window, NULL, false, false))
                 {
-                    if (ui_window_set_overlay())
+                    if (ui_window_set_overlay(false))
                     {
                         app.open_font_change_window = false;
                     }
@@ -2732,7 +2732,7 @@ void application_run()
 
                     if (ui_window_begin(app.preview_window, NULL, false, false))
                     {
-                        if (ui_window_set_overlay()) preview_index = -1;
+                        if (ui_window_set_overlay(false)) preview_index = -1;
                         ui_window_add_image(v2d(), image_dimensions,
                                             preview_textures.data[0]);
 
@@ -2770,7 +2770,7 @@ void application_run()
 
                     if (ui_window_begin(app.preview_window, NULL, false, false))
                     {
-                        if (ui_window_set_overlay()) preview_index = -1;
+                        if (ui_window_set_overlay(false)) preview_index = -1;
                         ui_window_add_text_colored(v2f(10.0f, 10.0f),
                                                    &preview_file_colored, true);
                         // ui_window_add_text(v2f(10.0f, 10.0f),
@@ -2885,7 +2885,9 @@ void application_run()
 
         AABB whole_screen_scissor = { .size = app.dimensions };
 
-        render_begin_draw(&app.main_render.render, &app.mvp);
+        render_begin_draw(&app.main_render.render,
+                          app.main_render.render.shader_properties.shader,
+                          &app.mvp);
         render_draw(0, app.main_index_count, &whole_screen_scissor);
         render_end_draw(&app.main_render.render);
 
@@ -2909,7 +2911,8 @@ void application_run()
             mvp.model.data[0][2] = -preview_camera.orientation.z;
 
             glEnable(GL_DEPTH_TEST);
-            render_begin_draw(&app.render_3d, &mvp);
+            render_begin_draw(&app.render_3d,
+                              app.render_3d.shader_properties.shader, &mvp);
             render_draw(0, app.index_count_3d, &preview_camera.view_port);
             render_end_draw(&app.render_3d);
             glDisable(GL_DEPTH_TEST);

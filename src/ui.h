@@ -117,27 +117,27 @@ typedef struct UiWindow
     f32 current_scroll_offset_width;
     ScrollBar scroll_bar_width;
 
+    u32 offset_to_background;
+
     DockNode* dock_node;
 
     f32 alpha;
     f32 back_ground_alpha;
-
-    b8 docked;
-    b8 hide;
-
-    b8 area_hit;
-    b8 top_bar;
-    b8 top_bar_pressed;
-    b8 release_from_dock_space;
-    b8 top_bar_hold;
-
     u8 resize_dragging;
-    b8 resizeable;
 
-    b8 any_holding;
-    b8 size_animation_on;
-    b8 position_animation_on;
-    b8 closing;
+    b8 docked : 1;
+    b8 hide : 1;
+    b8 area_hit : 1;
+    b8 top_bar : 1;
+    b8 top_bar_pressed : 1;
+    b8 release_from_dock_space : 1;
+    b8 top_bar_hold : 1;
+    b8 resizeable : 1;
+    b8 any_holding : 1;
+    b8 size_animation_on : 1;
+    b8 position_animation_on : 1;
+    b8 closing : 1;
+    b8 overlay : 1;
 } UiWindow;
 
 #define DOCK_SIDE_RIGHT 0
@@ -245,7 +245,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
 void ui_window_add_text(V2 position, const char* text, b8 scrolling);
 void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text, b8 scrolling);
-b8 ui_window_set_overlay();
+b8 ui_window_set_overlay(b8 frosted_background);
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image);
 i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item);
 void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index);
