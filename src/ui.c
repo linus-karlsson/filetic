@@ -2734,14 +2734,16 @@ b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
 
     if (window->hide) return false;
 
-    if (!window->frosted_background)
+    if (window->frosted_background)
     {
-        array_push(aabbs, quad_gradiant_t_b(&ui_context.render.vertices,
-                                            window->position, window->size,
-                                            window->top_color,
-                                            window->bottom_color, 0.0f));
-        window->rendering_index_count += 6;
+        window->top_color.a = 0.75f;
+        window->bottom_color.a = 0.75f;
     }
+    array_push(aabbs,
+               quad_gradiant_t_b(&ui_context.render.vertices, window->position,
+                                 window->size, window->top_color,
+                                 window->bottom_color, 0.0f));
+    window->rendering_index_count += 6;
 
     return true;
 }

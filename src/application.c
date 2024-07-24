@@ -2464,7 +2464,6 @@ void application_run()
                 {
                     UiWindow* top_bar_menu = ui_window_get(app.menu_window);
                     top_bar_menu->position = drop_down_position;
-                    top_bar_menu->back_ground_alpha = 0.95f;
 
                     app.open_windows_window = false;
                     app.open_menu_window = true;
@@ -2474,7 +2473,6 @@ void application_run()
                     UiWindow* top_bar_windows =
                         ui_window_get(app.windows_window);
                     top_bar_windows->position = drop_down_position;
-                    top_bar_windows->back_ground_alpha = 0.95f;
 
                     app.open_menu_window = false;
                     app.open_windows_window = true;
