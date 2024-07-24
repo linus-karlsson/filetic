@@ -2084,7 +2084,7 @@ internal void add_frosted_background(V2 position, const V2 size,
             (position.y + size.height) / ui_context.dimensions.height);
 
     set_up_verticies(&ui_context.frosted_render.vertices, saved_position, size,
-                     v4ic(0.6f), (f32)frosted_texture_index,
+                     v4ic(0.7f), (f32)frosted_texture_index,
                      texture_coordinates);
 }
 
