@@ -17,6 +17,7 @@
 #define OPEN_IN_TERMINAL_OPTION_INDEX 4
 #define PROPERTIES_OPTION_INDEX 5
 #define MORE_OPTION_INDEX 6
+#define CONTEXT_ITEM_COUNT 7
 
 typedef struct SafeFileArray
 {
@@ -151,12 +152,16 @@ typedef struct ApplicationContext
     u32 menu_window;
     u32 windows_window;
     u32 font_change_window;
+    u32 context_menu_window;
+
+    f32 context_menu_x;
 
     Directory font_change_directory;
 
     b8 open_font_change_window;
     b8 open_menu_window;
     b8 open_windows_window;
+    b8 open_context_menu_window;
 
     DropDownMenu2 context_menu;
     b8 context_menu_open;

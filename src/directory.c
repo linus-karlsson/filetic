@@ -9,6 +9,7 @@ DirectoryPage* directory_current(DirectoryHistory* history)
     return history->history.data + history->current_index;
 }
 
+
 void load_thumpnails(void* data)
 {
     LoadThumpnailData* arguments = (LoadThumpnailData*)data;

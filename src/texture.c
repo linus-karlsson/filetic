@@ -11,24 +11,30 @@ void texture_load(const char* file_path, TextureProperties* texture_properties)
         &texture_properties->channels, 4);
     texture_properties->channels = 4;
 }
-void texture_resize(TextureProperties* texture_properties, int box_width,
-                    int box_height)
-{
-    const f32 aspect_ratio =
-        (f32)texture_properties->width / texture_properties->height;
-    int new_width = box_width;
-    int new_height = box_height;
 
-    if (texture_properties->width < texture_properties->height)
+void texture_scale_down(i32 width, i32 height, i32* new_width, i32* new_height)
+{
+    const f32 aspect_ratio = (f32)width / height;
+    if (width < height)
     {
-        new_width = (int)(box_height * aspect_ratio);
+        *new_width = (int)((*new_height) * aspect_ratio);
     }
     else
     {
-        new_height = (int)(box_width / aspect_ratio);
+        *new_height = (int)((*new_width) / aspect_ratio);
     }
+}
+
+void texture_resize(TextureProperties* texture_properties, int box_width,
+                    int box_height)
+{
 
     TextureProperties result = { 0 };
+
+    i32 new_width = box_width;
+    i32 new_height = box_height;
+    texture_scale_down(texture_properties->width, texture_properties->height,
+                       &new_width, &new_height);
 
     result.bytes =
         (u8*)malloc(new_width * new_height * texture_properties->channels);
@@ -47,7 +53,7 @@ void texture_resize(TextureProperties* texture_properties, int box_width,
 }
 
 u32 texture_create(const TextureProperties* texture_properties,
-                   int internal_format, u32 format)
+                   int internal_format, u32 format, int param)
 {
     uint32_t texture;
     glCreateTextures(GL_TEXTURE_2D, 1, &texture);
@@ -56,8 +62,8 @@ u32 texture_create(const TextureProperties* texture_properties,
                  texture_properties->height, 0, format, GL_UNSIGNED_BYTE,
                  texture_properties->bytes);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, param);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, param);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 

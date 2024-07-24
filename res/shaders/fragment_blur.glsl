@@ -7,14 +7,12 @@ layout(location = 2) in flat float fTexIndex;
 layout(location = 0) out vec4 finalColor;
 
 uniform sampler2D textures[50];
+uniform float blurAmount;
+uniform int samples;
 
 void main()
 {
     int index = int(fTexIndex);
-
-    const float blurAmount = 0.0016;
-    const int samples = 15;
-
     vec3 colorSum = vec3(0.0);
     float weightSum = 0.0;
 

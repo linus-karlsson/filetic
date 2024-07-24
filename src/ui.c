@@ -95,6 +95,10 @@ typedef struct UiContext
     U32Array current_frame_overlay_windows;
 
     RenderingProperties frosted_render;
+    f32 frosted_blur_amount;
+    i32 frosted_samples;
+    i32 frosted_blur_amount_location;
+    i32 frosted_samples_location;
 
     UiWindowArray windows;
     AABBArrayArray window_aabbs;
@@ -159,6 +163,18 @@ typedef struct UU32Array
 } UU32Array;
 
 global UiContext ui_context = { 0 };
+global f32 ui_big_icon_size = 84.0f;
+
+f32 ui_get_big_icon_size()
+{
+    return ui_big_icon_size;
+}
+void ui_set_big_icon_size(f32 new_size)
+{
+    ui_big_icon_size = new_size;
+    ui_big_icon_size = clampf32_high(ui_big_icon_size, 128.0f);
+    ui_big_icon_size = clampf32_low(ui_big_icon_size, 64.0f);
+}
 
 internal f32 set_scroll_offset(const f32 total_height, const f32 area_y,
                                f32 offset)
@@ -1100,7 +1116,8 @@ internal u32 load_font_texture(const f32 pixel_height)
         .height = height_atlas,
         .bytes = font_bitmap,
     };
-    u32 font_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    u32 font_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_NEAREST);
     free(texture_properties.bytes);
 
     return font_texture;
@@ -1191,23 +1208,14 @@ void ui_context_create()
     u32 file_cpp_icon_texture = load_icon("res/icons/cpp.png");
     u32 file_c_icon_texture = load_icon("res/icons/c.png");
 
-    u32 folder_icon_big_texture =
-        load_icon_and_resize("res/icons/folderbig.png", (i32)UI_BIG_ICON_SIZE,
-                             (i32)UI_BIG_ICON_SIZE);
-    u32 file_icon_big_texture = load_icon_and_resize(
-        "res/icons/filebig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
-    u32 file_png_icon_big_texture = load_icon_and_resize(
-        "res/icons/pngbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
-    u32 file_jpg_icon_big_texture = load_icon_and_resize(
-        "res/icons/jpgbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
-    u32 file_pdf_icon_big_texture = load_icon_and_resize(
-        "res/icons/pdfbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
-    u32 file_java_icon_big_texture = load_icon_and_resize(
-        "res/icons/javabig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
-    u32 file_cpp_icon_big_texture = load_icon_and_resize(
-        "res/icons/cppbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
-    u32 file_c_icon_big_texture = load_icon_and_resize(
-        "res/icons/cbig.png", (i32)UI_BIG_ICON_SIZE, (i32)UI_BIG_ICON_SIZE);
+    u32 folder_icon_big_texture = load_icon("res/icons/folderbig.png");
+    u32 file_icon_big_texture = load_icon("res/icons/filebig.png");
+    u32 file_png_icon_big_texture = load_icon("res/icons/pngbig.png");
+    u32 file_jpg_icon_big_texture = load_icon("res/icons/jpgbig.png");
+    u32 file_pdf_icon_big_texture = load_icon("res/icons/pdfbig.png");
+    u32 file_java_icon_big_texture = load_icon("res/icons/javabig.png");
+    u32 file_cpp_icon_big_texture = load_icon("res/icons/cppbig.png");
+    u32 file_c_icon_big_texture = load_icon("res/icons/cbig.png");
 
     U32Array textures = { 0 };
     array_create(&textures, 22);
@@ -1260,6 +1268,16 @@ void ui_context_create()
     ui_context.default_textures_offset = textures.size;
 
     {
+        ui_context.frosted_blur_amount = 0.0013f;
+        ui_context.frosted_samples = 12;
+
+        ui_context.frosted_blur_amount_location =
+            glGetUniformLocation(frosted_shader, "blurAmount");
+        ftic_assert(ui_context.frosted_blur_amount_location != -1);
+        ui_context.frosted_samples_location =
+            glGetUniformLocation(frosted_shader, "samples");
+        ftic_assert(ui_context.frosted_samples_location != -1);
+
         U32Array frosted_textures = { 0 };
         array_create(&frosted_textures, 2);
 
@@ -2084,7 +2102,7 @@ internal void add_frosted_background(V2 position, const V2 size,
             (position.y + size.height) / ui_context.dimensions.height);
 
     set_up_verticies(&ui_context.frosted_render.vertices, saved_position, size,
-                     v4ic(0.7f), (f32)frosted_texture_index,
+                     v4ic(1.0f), (f32)frosted_texture_index,
                      texture_coordinates);
 }
 
@@ -2153,10 +2171,10 @@ internal void render_overlay_ui(const u32 index_offset, const u32 index_count)
 
         if (window->frosted_background)
         {
-            render_begin_draw(
-                &ui_context.frosted_render.render,
-                ui_context.frosted_render.render.shader_properties.shader,
-                &ui_context.mvp);
+            const u32 shader =
+                ui_context.frosted_render.render.shader_properties.shader;
+            render_begin_draw(&ui_context.frosted_render.render, shader,
+                              &ui_context.mvp);
             render_draw(j++ * 6, 6, &whole_screen_scissor);
             render_end_draw(&ui_context.frosted_render.render);
 
@@ -2253,6 +2271,8 @@ void ui_context_end()
         UiWindow* window =
             ui_window_get(ui_context.last_frame_overlay_windows.data[i]);
 
+        // const f32 roundness = 15.0f / max(window->size.height, 1.0f);
+
         overlay_index_count = 0;
         quad_border(&ui_context.render.vertices, &overlay_index_count,
                     window->position, window->size,
@@ -2329,6 +2349,34 @@ void ui_context_end()
 
     if (ui_context.last_frame_overlay_windows.size)
     {
+#if 0
+        if (event_is_key_pressed_once(FTIC_KEY_I))
+        {
+            ui_context.frosted_blur_amount += 0.0001f;
+            log_f32("BlurAmount: ", ui_context.frosted_blur_amount);
+        }
+        if (event_is_key_pressed_once(FTIC_KEY_U))
+        {
+            ui_context.frosted_blur_amount -= 0.0001f;
+            log_f32("BlurAmount: ", ui_context.frosted_blur_amount);
+        }
+        if (event_is_key_pressed_once(FTIC_KEY_J))
+        {
+            ui_context.frosted_samples += 1;
+            log_u64("Samples: ", (u64)ui_context.frosted_samples);
+        }
+        if (event_is_key_pressed_once(FTIC_KEY_K))
+        {
+            ui_context.frosted_samples -= 1;
+            log_u64("Samples: ", (u64)ui_context.frosted_samples);
+        }
+#endif
+        shader_bind(ui_context.frosted_render.render.shader_properties.shader);
+        glUniform1f(ui_context.frosted_blur_amount_location,
+                    ui_context.frosted_blur_amount);
+        glUniform1i(ui_context.frosted_samples_location,
+                    ui_context.frosted_samples);
+        shader_unbind();
         render_overlay_ui(overlay_index_offset, overlay_index_count);
     }
 
@@ -2736,8 +2784,8 @@ b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
 
     if (window->frosted_background)
     {
-        window->top_color.a = 0.75f;
-        window->bottom_color.a = 0.75f;
+        window->top_color.a = 0.8f;
+        window->bottom_color.a = 0.8f;
     }
     array_push(aabbs,
                quad_gradiant_t_b(&ui_context.render.vertices, window->position,
@@ -3435,11 +3483,15 @@ internal b8 check_directory_item_collision(V2 starting_position,
             }
             else if (!ctrl_pressed)
             {
-                directory_clear_selected_items(&list->selected_item_values);
-                char* path = string_copy(item->path, path_length, 2);
-                hash_table_insert_guid(
-                    &list->selected_item_values.selected_items, item->id, path);
-                array_push(&list->selected_item_values.paths, path);
+                if (!mouse_button_clicked_right)
+                {
+                    directory_clear_selected_items(&list->selected_item_values);
+                    char* path = string_copy(item->path, path_length, 2);
+                    hash_table_insert_guid(
+                        &list->selected_item_values.selected_items, item->id,
+                        path);
+                    array_push(&list->selected_item_values.paths, path);
+                }
             }
             else
             {
@@ -3704,12 +3756,17 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
         window->rendering_index_count += 6;
     }
 
-    V2 icon_size = v2i(UI_BIG_ICON_SIZE);
+    V2 icon_size = v2i(ui_big_icon_size);
     if (item->texture_id)
     {
         icon_index = (f32)ui_context.render.render.textures.size;
         array_push(&ui_context.render.render.textures, item->texture_id);
-        icon_size = v2f((f32)item->texture_width, (f32)item->texture_height);
+        i32 new_width = (i32)icon_size.width;
+        i32 new_height = (i32)icon_size.height;
+        texture_scale_down(item->texture_width, item->texture_height,
+                           &new_width, &new_height);
+        icon_size.width = (f32)new_width;
+        icon_size.height = (f32)new_height;
     }
     else
     {
@@ -3723,7 +3780,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
             thump_nail_data->file_id = guid_copy(&item->id);
             thump_nail_data->array = textures;
             thump_nail_data->file_path = item->path;
-            thump_nail_data->size = (i32)UI_BIG_ICON_SIZE;
+            thump_nail_data->size = 128;
             ThreadTask task = {
                 .data = thump_nail_data,
                 .task_callback = load_thumpnails,
@@ -3737,7 +3794,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
         &ui_context.render.vertices,
         v2f(starting_position.x +
                 middle(item_dimensions.width, icon_size.width),
-            starting_position.y + 3.0f + (UI_BIG_ICON_SIZE - icon_size.height)),
+            starting_position.y + 3.0f + (ui_big_icon_size - icon_size.height)),
         icon_size, v4a(v4i(1.0f), window->alpha), icon_index);
     window->rendering_index_count += 6;
 
@@ -3860,7 +3917,6 @@ internal void display_grid_item(const V2 position, const i32 index,
 II32 ui_window_add_directory_item_grid(V2 position,
                                        const DirectoryItemArray* folders,
                                        const DirectoryItemArray* files,
-                                       const f32 item_height,
                                        ThreadTaskQueue* task_queue,
                                        SafeIdTexturePropertiesArray* textures,
                                        List* list)
@@ -3874,7 +3930,7 @@ II32 ui_window_add_directory_item_grid(V2 position,
     position.y += window->current_scroll_offset;
     position.x += window->current_scroll_offset_width;
 
-    V2 item_dimensions = v2i(item_height);
+    V2 item_dimensions = v2i(ui_big_icon_size);
     item_dimensions.height += (ui_context.font.pixel_height + 5.0f);
 
     const u32 item_count = folders->size + files->size;
@@ -3925,8 +3981,9 @@ II32 ui_window_add_directory_item_grid(V2 position,
     relative_position.y +=
         (item_dimensions.height + grid_padding) * (last_row > 0);
 
-    window->total_height = max(
-        window->total_height, relative_position.y + item_height + grid_padding);
+    window->total_height =
+        max(window->total_height,
+            relative_position.y + ui_big_icon_size + grid_padding);
 
     return hit_index;
 }
@@ -4056,7 +4113,7 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
            event_is_key_clicked(FTIC_KEY_ESCAPE);
 }
 
-void ui_window_add_text(V2 position, const char* text, b8 scrolling)
+void ui_window_add_text_c(V2 position, V4 color, const char* text, b8 scrolling)
 {
     const u32 window_index =
         ui_context.id_to_index.data[ui_context.current_window_id];
@@ -4082,10 +4139,10 @@ void ui_window_add_text(V2 position, const char* text, b8 scrolling)
 
     u32 new_lines = 0;
     f32 x_advance = 0.0f;
-    window->rendering_index_count +=
-        text_generation(ui_context.font.chars, text, UI_FONT_TEXTURE, position,
-                        1.0f, ui_context.font.line_height, &new_lines,
-                        &x_advance, NULL, &ui_context.render.vertices);
+    window->rendering_index_count += text_generation_color(
+        ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f,
+        ui_context.font.line_height, color, &new_lines, &x_advance, NULL,
+        &ui_context.render.vertices);
 
     if (ui_context.column || ui_context.row)
     {
@@ -4110,6 +4167,11 @@ void ui_window_add_text(V2 position, const char* text, b8 scrolling)
         window->total_width =
             max(window->total_width, relative_position.x + x_advance + 20.0f);
     }
+}
+
+void ui_window_add_text(V2 position, const char* text, b8 scrolling)
+{
+    ui_window_add_text_c(position, v4ic(1.0f), text, scrolling);
 }
 
 void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text,
@@ -4244,11 +4306,11 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color,
     }
 
     b8 collided = hover_clicked_index.index == (i32)aabbs->size;
-    const V4 col = v4a(v4_s_multi(global_get_clear_color(), 1.2f), 1.0f);
+    const V4 col = v4a(v4_s_multi(global_get_clear_color(), 1.5f), 1.0f);
     V4 button_color = color ? *color : col;
     if (collided && event_get_mouse_button_event()->action != FTIC_PRESS)
     {
-        button_color = v4_s_multi(button_color, 1.2f);
+        button_color = v4_s_multi(button_color, 1.5f);
         button_color.a = 1.0f;
         if (!color)
         {
@@ -4456,4 +4518,67 @@ void ui_window_close(u32 window_id)
 
         window->release_from_dock_space = false;
     }
+}
+
+f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value,
+                         const f32 max_value, f32 value, b8* pressed)
+{
+    const u32 window_index =
+        ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+    HoverClickedIndex hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data[window_index];
+
+    v2_add_equal(&position, window->first_item_position);
+
+    b8 hit = hover_clicked_index.index == (i32)aabbs->size;
+
+    V4 color = global_get_bright_color();
+    if (hit || *pressed)
+    {
+        color = v4a(v4_s_multi(color, 1.4f), 1.0f);
+    }
+    quad(&ui_context.render.vertices, position, size, color, 0.0f);
+    window->rendering_index_count += 6;
+
+    const V2 slider_size = v2f(15.0f, size.height + 20.0f);
+
+    if (hit && hover_clicked_index.pressed)
+    {
+        *pressed = true;
+    }
+    if (event_get_mouse_button_event()->action == FTIC_RELEASE)
+    {
+        *pressed = false;
+    }
+
+    V2 slider_position = position;
+    slider_position.y -= 10.0f;
+
+    const f32 start_x = position.x;
+    const f32 end_x = position.x + (size.width - slider_size.width);
+
+    if (*pressed)
+    {
+        f32 position_x =
+            event_get_mouse_position().x - (slider_size.width * 0.5f);
+        position_x = clampf32_low(position_x, start_x);
+        position_x = clampf32_high(position_x, end_x);
+
+        const f32 p = (position_x - start_x) / (end_x - start_x);
+        value = lerp_f32(min_value, max_value, p);
+    }
+
+    value = clampf32_low(value, min_value);
+    value = clampf32_high(value, max_value);
+
+    const f32 p = (value - min_value) / (max_value - min_value);
+    slider_position.x = lerp_f32(start_x, end_x, p);
+
+    array_push(aabbs, quad(&ui_context.render.vertices, slider_position,
+                           slider_size, global_get_secondary_color(), 0.0f));
+    window->rendering_index_count += 6;
+
+    return value;
 }

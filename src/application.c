@@ -146,7 +146,8 @@ internal b8 load_preview_image(const char* path, V2* image_dimensions,
             v2f((f32)texture_properties.width, (f32)texture_properties.height);
 
         ftic_assert(texture_properties.bytes);
-        u32 texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+        u32 texture =
+            texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
         array_push(textures, texture);
         free(texture_properties.bytes);
         result = true;
@@ -370,8 +371,20 @@ internal char* get_parent_directory_name(DirectoryPage* current)
                            (u32)strlen(current->directory.parent));
 }
 
+internal void tab_clear_selected(DirectoryTab* tab)
+{
+    if (tab->directory_list.selected_item_values.last_selected)
+    {
+        free(tab->directory_list.selected_item_values.last_selected);
+        tab->directory_list.selected_item_values.last_selected = NULL;
+    }
+    directory_clear_selected_items(&tab->directory_list.selected_item_values);
+}
+
 internal b8 show_directory_window(const u32 window, const f32 list_item_height,
-                                  const b8 check_collision, RecentPanel* recent,
+                                  const b8 check_collision,
+                                  const b8 context_menu_open,
+                                  RecentPanel* recent,
                                   ThreadTaskQueue* task_queue,
                                   DirectoryTab* tab)
 {
@@ -396,8 +409,8 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
             {
                 texture_delete(item->texture_id);
             }
-            item->texture_id =
-                texture_create(&texture->texture_properties, GL_RGBA8, GL_RGBA);
+            item->texture_id = texture_create(&texture->texture_properties,
+                                              GL_RGBA8, GL_RGBA, GL_LINEAR);
             item->texture_width = texture->texture_properties.width;
             item->texture_height = texture->texture_properties.height;
             item->reload_thumbnail = false;
@@ -428,8 +441,8 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
         {
             II32 result = ui_window_add_directory_item_grid(
                 v2f(0.0f, list_position.y), &current->directory.sub_directories,
-                &current->directory.files, UI_BIG_ICON_SIZE, task_queue,
-                &tab->textures, &tab->directory_list);
+                &current->directory.files, task_queue, &tab->textures,
+                &tab->directory_list);
 
             if (result.first > -1)
             {
@@ -491,17 +504,11 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
         if (!tab->directory_list.item_selected &&
             !tab->directory_list.input.active)
         {
-            if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+            if ((!context_menu_open &&
+                 event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT)) ||
+                event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT))
             {
-                if (tab->directory_list.selected_item_values.last_selected)
-                {
-                    free(
-                        tab->directory_list.selected_item_values.last_selected);
-                    tab->directory_list.selected_item_values.last_selected =
-                        NULL;
-                }
-                directory_clear_selected_items(
-                    &tab->directory_list.selected_item_values);
+                tab_clear_selected(tab);
             }
         }
         V4 color = global_get_clear_color();
@@ -1394,7 +1401,8 @@ internal void search_page_initialize(SearchPage* search_page)
 internal void main_render_initialize(RenderingProperties* main_render,
                                      TextureProperties* texture_properties)
 {
-    u32 font_texture = texture_create(texture_properties, GL_RGBA8, GL_RGBA);
+    u32 font_texture =
+        texture_create(texture_properties, GL_RGBA8, GL_RGBA, GL_NEAREST);
     free(texture_properties->bytes);
 
     VertexBufferLayout vertex_buffer_layout = default_vertex_buffer_layout();
@@ -1610,6 +1618,8 @@ u8* application_initialize(ApplicationContext* app)
                             app->windows.data[window_index++],
                             "saved/recent.txt");
     app->recent.total = 10;
+
+    app->context_menu_window = app->windows.data[window_index++];
 
     app->parent_directory_input = ui_input_buffer_create();
 
@@ -2115,7 +2125,8 @@ internal void application_open_menu_window(ApplicationContext* app,
             }
         }
 
-        if (ui_window_end() && app->open_menu_window)
+        if (ui_window_end() && !app->open_font_change_window &&
+            app->open_menu_window)
         {
             dark_mode_x = 0.0f;
             hidden_files_x = 0.0f;
@@ -2200,6 +2211,83 @@ internal void application_open_windows_window(ApplicationContext* app,
         UiWindow* top_bar_windows = ui_window_get(app->windows_window);
         top_bar_windows->size.width = drop_down_width;
         top_bar_windows->size.height = row.min.y;
+    }
+}
+
+internal void application_open_context_menu_window(ApplicationContext* app,
+                                                   DirectoryTab* current_tab)
+{
+    if (ui_window_begin(app->context_menu_window, NULL,
+                        UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+    {
+        const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
+
+        const char* options[] = {
+            [COPY_OPTION_INDEX] = "Copy",
+            [PASTE_OPTION_INDEX] = "Paste",
+            [DELETE_OPTION_INDEX] = "Delete",
+            [ADD_TO_QUICK_OPTION_INDEX] = "Add to quick",
+            [OPEN_IN_TERMINAL_OPTION_INDEX] = "Open in terminal",
+            [PROPERTIES_OPTION_INDEX] = "Properties",
+            [MORE_OPTION_INDEX] = "More",
+        };
+        V2 position = v2i(0.0f);
+        V2 item_size = v2f(250.0f, 24.0f + ui_font_pixel_height);
+        const f32 item_text_padding = 5.0f;
+        for (u32 i = 0; i < CONTEXT_ITEM_COUNT; ++i)
+        {
+            V4 text_color = v4ic(1.0f);
+            b8 clicked = ui_window_add_button(position, &item_size, NULL, NULL);
+
+            MainDropDownSelectionData data = {
+                .window = app->window,
+                .quick_access = &app->quick_access.items,
+                .directory = directory_current(&current_tab->directory_history),
+                .selected_paths =
+                    &current_tab->directory_list.selected_item_values.paths,
+            };
+            if (main_drop_down_selection(i, clicked, false, clicked,
+                                         &text_color, &data))
+            {
+                tab_clear_selected(current_tab);
+                app->open_context_menu_window = false;
+            }
+
+            if (i < 3)
+            {
+                V2 icon_position = position;
+                icon_position.x += item_text_padding;
+                icon_position.y += middle(item_size.height, 24.0f);
+                ui_window_add_image(
+                    icon_position, v2i(24.0f),
+                    app->main_render.render.textures.data[2 + i]);
+            }
+
+            V2 item_text_position = position;
+            item_text_position.x += item_text_padding;
+            item_text_position.x += 32.0f;
+            item_text_position.y +=
+                middle(item_size.height, ui_font_pixel_height) - 2.0f;
+
+            ui_window_add_text_c(item_text_position, text_color, options[i],
+                                 false);
+
+            position.y += item_size.height;
+        }
+
+        const f32 end_height = CONTEXT_ITEM_COUNT * item_size.height;
+        UiWindow* window = ui_window_get(app->context_menu_window);
+        window->size.height = ease_out_cubic(app->context_menu_x) * end_height;
+        window->size.width = item_size.width;
+
+        app->context_menu_x += (f32)(app->delta_time * 8.0);
+        app->context_menu_x = clampf32_high(app->context_menu_x, 1.0f);
+
+        if (ui_window_end())
+        {
+            app->context_menu_x = 0.0f;
+            app->open_context_menu_window = false;
+        }
     }
 }
 
@@ -2377,14 +2465,52 @@ void application_run()
                     .path;
         }
 #else
-        look_for_dropped_files(directory_current(&tab->directory_history),
-                               directory_to_drop_in);
 
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
+        if (preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
+            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
+        {
+#if 0
+            if (tab->directory_list.selected_item_values.paths.size)
+            {
+#if 0
+                platform_context_menu_create(
+                    &menu,
+                    tab->directory_list.selected_item_values.paths.data[0]);
+#else
+                platform_open_context(
+                    app.window,
+                    tab->directory_list.selected_item_values.paths.data[0]);
+#endif
+            }
+            else
+#endif
+            {
+                // app.context_menu_open = true;
+                app.open_context_menu_window = true;
+                app.context_menu.position = app.mouse_position;
+                app.context_menu.position.x += 18.0f;
+                app.context_menu.x = 0.0f;
+                UiWindow* window = ui_window_get(app.context_menu_window);
+                V2 item_size = v2f(250.0f, 24.0f + ui_font_pixel_height);
+                const f32 end_height = CONTEXT_ITEM_COUNT * item_size.height;
+
+                window->position = app.mouse_position;
+                window->position.y =
+                    min(app.dimensions.height - end_height - 10.0f,
+                        window->position.y);
+                window->position.x =
+                    min(app.dimensions.width - item_size.width - 10.0f,
+                        window->position.x);
+            }
+        }
+        look_for_dropped_files(directory_current(&tab->directory_history),
+                               directory_to_drop_in);
+
         const f32 top_bar_height = 24.0f + ui_font_pixel_height;
         const f32 top_bar_menu_height = 10.0f + ui_font_pixel_height;
-        const f32 bottom_bar_height = 10.0f + ui_font_pixel_height;
+        const f32 bottom_bar_height = 15.0f + ui_font_pixel_height;
         const f32 list_item_height = 16.0f + ui_font_pixel_height;
 
         AABB dock_space = { .min = v2f(0.0f,
@@ -2394,7 +2520,6 @@ void application_run()
         ui_context_begin(app.dimensions, &dock_space, app.delta_time,
                          check_collision);
         {
-
             const f32 drop_down_width = 350.0f;
 
             const DirectoryTab* current_tab = tab;
@@ -2662,11 +2787,21 @@ void application_run()
                           current->directory.files.size);
                 ui_window_add_text(v2f(10.0f, 1.0f), buffer, false);
 
-                ui_window_row_begin(0.0f);
-
-                V2 list_grid_icon_position = v2f(
+                const V2 list_grid_icon_position = v2f(
                     bottom_bar->size.width - (2.0f * bottom_bar_height + 5.0f),
                     0);
+
+                const V2 slider_position =
+                    v2f(list_grid_icon_position.x - 100.0f,
+                        list_grid_icon_position.y +
+                            middle(bottom_bar_height, 5.0f));
+
+                static b8 pressed = false;
+                ui_set_big_icon_size(ui_window_add_slider(
+                    slider_position, v2f(90.0f, 5.0f), 64.0f, 128.0f,
+                    ui_get_big_icon_size(), &pressed));
+
+                ui_window_row_begin(0.0f);
 
                 if (ui_window_add_icon_button(
                         list_grid_icon_position, v2i(bottom_bar_height),
@@ -2798,10 +2933,10 @@ void application_run()
                 ui_window_get(window_id)->alpha =
                     i == app.tab_index ? 1.0f : 0.7f;
 
-                if (show_directory_window(window_id, list_item_height,
-                                          check_collision, &app.recent,
-                                          &app.thread_queue.task_queue,
-                                          app.tabs.data + i))
+                if (show_directory_window(
+                        window_id, list_item_height, check_collision,
+                        app.open_context_menu_window, &app.recent,
+                        &app.thread_queue.task_queue, app.tabs.data + i))
                 {
                     DirectoryTab tab_to_remove = app.tabs.data[i];
                     for (u32 j = i; j < app.tabs.size - 1; ++j)
@@ -2837,34 +2972,13 @@ void application_run()
                     ui_window_get(app.tabs.data[i].window_id)
                         ->end_scroll_offset;
             }
+
+            if (app.open_context_menu_window)
+            {
+                application_open_context_menu_window(&app, tab);
+            }
         }
         ui_context_end();
-
-        if (preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
-            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
-        {
-#if 0
-            if (tab->directory_list.selected_item_values.paths.size)
-            {
-#if 0
-                platform_context_menu_create(
-                    &menu,
-                    tab->directory_list.selected_item_values.paths.data[0]);
-#else
-                platform_open_context(
-                    app.window,
-                    tab->directory_list.selected_item_values.paths.data[0]);
-#endif
-            }
-            else
-#endif
-            {
-                app.context_menu_open = true;
-                app.context_menu.position = app.mouse_position;
-                app.context_menu.position.x += 18.0f;
-                app.context_menu.x = 0.0f;
-            }
-        }
 
         rendering_properties_check_and_grow_vertex_buffer(&app.main_render);
         rendering_properties_check_and_grow_index_buffer(&app.main_render,

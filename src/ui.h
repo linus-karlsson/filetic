@@ -34,8 +34,6 @@
 #define UI_FILE_CPP_ICON_BIG_TEXTURE 20.0f
 #define UI_FILE_C_ICON_BIG_TEXTURE 21.0f
 
-#define UI_BIG_ICON_SIZE 84.0f
-
 typedef struct ScrollBar
 {
     f32 mouse_pointer_offset;
@@ -212,6 +210,9 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
 void ui_context_end();
 void ui_context_destroy();
 
+f32 ui_get_big_icon_size();
+void ui_set_big_icon_size(f32 new_size);
+
 const FontTTF* ui_context_get_font();
 f32 ui_context_get_font_pixel_height();
 void ui_context_change_font_pixel_height(const f32 pixel_height);
@@ -245,10 +246,11 @@ V2 ui_window_get_button_dimensions(V2 dimensions, const char* text, f32* x_advan
 b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text);
 b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index);
 b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index);
-II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, const f32 item_height, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, List* list);
+II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, List* list);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
 void ui_window_add_text(V2 position, const char* text, b8 scrolling);
+void ui_window_add_text_c(V2 position, V4 color, const char* text, b8 scrolling);
 void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text, b8 scrolling);
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image);
 i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item);
@@ -257,3 +259,4 @@ V2 ui_window_get_switch_size();
 void ui_window_add_switch(V2 position, b8* selected, f32* x);
 
 b8 ui_window_add_drop_down(V2 position, b8* open);
+f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 max_value, f32 value, b8* pressed);

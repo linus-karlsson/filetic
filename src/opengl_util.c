@@ -3,9 +3,8 @@
 #include <glad/glad.h>
 #include <math.h>
 
-AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size,
-                               V4 color, f32 texture_index,
-                               TextureCoordinates texture_coordinates)
+AABB set_up_verticies(VertexArray* vertex_array, V2 position, V2 size, V4 color,
+                      f32 texture_index, TextureCoordinates texture_coordinates)
 {
     position = v2f(round_f32(position.x), round_f32(position.y));
     size = v2f(round_f32(size.x), round_f32(size.y));
@@ -319,7 +318,7 @@ u32 create_default_texture()
         .height = 1,
         .bytes = pixels,
     };
-    return texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    return texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
 }
 
 TextureProperties load_icon_as_white_(const char* file_path)
@@ -340,7 +339,8 @@ TextureProperties load_icon_as_white_(const char* file_path)
 u32 load_icon_as_white(const char* file_path)
 {
     TextureProperties texture_properties = load_icon_as_white_(file_path);
-    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    u32 icon_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
     free(texture_properties.bytes);
     return icon_texture;
 }
@@ -349,7 +349,8 @@ u32 load_icon_as_white_resize(const char* file_path, i32 width, i32 height)
 {
     TextureProperties texture_properties = load_icon_as_white_(file_path);
     texture_resize(&texture_properties, width, height);
-    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    u32 icon_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
     free(texture_properties.bytes);
     return icon_texture;
 }
@@ -359,7 +360,7 @@ u32 load_icon_and_resize(const char* file_path, i32 width, i32 height)
     TextureProperties texture_properties = { 0 };
     texture_load(file_path, &texture_properties);
     texture_resize(&texture_properties, width, height);
-    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
     free(texture_properties.bytes);
     return icon_texture;
 }
@@ -368,7 +369,7 @@ u32 load_icon(const char* file_path)
 {
     TextureProperties texture_properties = { 0 };
     texture_load(file_path, &texture_properties);
-    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA);
+    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
     free(texture_properties.bytes);
     return icon_texture;
 }
