@@ -1268,7 +1268,7 @@ void ui_context_create()
     ui_context.default_textures_offset = textures.size;
 
     {
-        ui_context.frosted_blur_amount = 0.0013f;
+        ui_context.frosted_blur_amount = 0.00132f;
         ui_context.frosted_samples = 12;
 
         ui_context.frosted_blur_amount_location =
@@ -3763,8 +3763,17 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
         array_push(&ui_context.render.render.textures, item->texture_id);
         i32 new_width = (i32)icon_size.width;
         i32 new_height = (i32)icon_size.height;
-        texture_scale_down(item->texture_width, item->texture_height,
-                           &new_width, &new_height);
+        if (item->texture_width > icon_size.width ||
+            item->texture_height > icon_size.height)
+        {
+            texture_scale_down(item->texture_width, item->texture_height,
+                               &new_width, &new_height);
+        }
+        else
+        {
+            new_width = item->texture_width;
+            new_height = item->texture_height;
+        }
         icon_size.width = (f32)new_width;
         icon_size.height = (f32)new_height;
     }
