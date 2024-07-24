@@ -172,7 +172,7 @@ f32 ui_get_big_icon_size()
 void ui_set_big_icon_size(f32 new_size)
 {
     ui_big_icon_size = new_size;
-    ui_big_icon_size = clampf32_high(ui_big_icon_size, 128.0f);
+    ui_big_icon_size = clampf32_high(ui_big_icon_size, 256.0f);
     ui_big_icon_size = clampf32_low(ui_big_icon_size, 64.0f);
 }
 
@@ -1217,8 +1217,10 @@ void ui_context_create()
     u32 file_cpp_icon_big_texture = load_icon("res/icons/cppbig.png");
     u32 file_c_icon_big_texture = load_icon("res/icons/cbig.png");
 
+    u32 file_obj_icon_texture = load_icon("res/icons/obj.png");
+
     U32Array textures = { 0 };
-    array_create(&textures, 22);
+    array_create(&textures, 100);
     array_push(&textures, default_texture);
     array_push(&textures, font_texture);
     array_push(&textures, arrow_icon_texture);
@@ -1244,6 +1246,7 @@ void ui_context_create()
     array_push(&textures, file_java_icon_big_texture);
     array_push(&textures, file_cpp_icon_big_texture);
     array_push(&textures, file_c_icon_big_texture);
+    array_push(&textures, file_obj_icon_texture);
 
     array_create(&ui_context.render.vertices, 100 * 4);
     u32 vertex_buffer_id = vertex_buffer_create();
@@ -3606,6 +3609,10 @@ internal f32 get_file_icon_based_on_extension(const f32 icon_index,
                 return small ? UI_FILE_JAVA_ICON_TEXTURE
                              : UI_FILE_JAVA_ICON_BIG_TEXTURE;
             }
+            else if (strcmp(extension, "obj") == 0)
+            {
+                return UI_FILE_OBJ_ICON_TEXTURE;
+            }
         }
     }
     return icon_index;
@@ -3724,6 +3731,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
 internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
                                 f32 icon_index, ThreadTaskQueue* task_queue,
                                 SafeIdTexturePropertiesArray* textures,
+                                SafeObjectThumbnailArray* objects,
                                 DirectoryItem* item, List* list)
 {
     const u32 window_index =
@@ -3780,22 +3788,40 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
     else
     {
         icon_index = get_file_icon_based_on_extension(icon_index, item->name);
-        if (!item->reload_thumbnail &&
-            (icon_index == UI_FILE_PNG_ICON_BIG_TEXTURE ||
-             icon_index == UI_FILE_JPG_ICON_BIG_TEXTURE))
+        if (!item->reload_thumbnail)
         {
-            LoadThumpnailData* thump_nail_data =
-                (LoadThumpnailData*)calloc(1, sizeof(LoadThumpnailData));
-            thump_nail_data->file_id = guid_copy(&item->id);
-            thump_nail_data->array = textures;
-            thump_nail_data->file_path = item->path;
-            thump_nail_data->size = 128;
-            ThreadTask task = {
-                .data = thump_nail_data,
-                .task_callback = load_thumpnails,
-            };
-            thread_tasks_push(task_queue, &task, 1, NULL);
-            item->reload_thumbnail = true;
+            if ((icon_index == UI_FILE_PNG_ICON_BIG_TEXTURE ||
+                 icon_index == UI_FILE_JPG_ICON_BIG_TEXTURE))
+            {
+                LoadThumpnailData* thumbnail_data =
+                    (LoadThumpnailData*)calloc(1, sizeof(LoadThumpnailData));
+                thumbnail_data->file_id = guid_copy(&item->id);
+                thumbnail_data->array = textures;
+                thumbnail_data->file_path = item->path;
+                thumbnail_data->size = 128;
+                ThreadTask task = {
+                    .data = thumbnail_data,
+                    .task_callback = load_thumpnails,
+                };
+                thread_tasks_push(task_queue, &task, 1, NULL);
+                item->reload_thumbnail = true;
+            }
+            else if (icon_index == UI_FILE_OBJ_ICON_TEXTURE)
+            {
+                ObjectThumbnailData* thumbnail_data =
+                    (ObjectThumbnailData*)calloc(1,
+                                                 sizeof(ObjectThumbnailData));
+                thumbnail_data->file_id = guid_copy(&item->id);
+                thumbnail_data->array = objects;
+                thumbnail_data->file_path = item->path;
+                thumbnail_data->size = 128;
+                ThreadTask task = {
+                    .data = thumbnail_data,
+                    .task_callback = object_load_thumbnail,
+                };
+                thread_tasks_push(task_queue, &task, 1, NULL);
+                item->reload_thumbnail = true;
+            }
         }
     }
 
@@ -3890,20 +3916,18 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index,
     return double_clicked_index;
 }
 
-internal void display_grid_item(const V2 position, const i32 index,
-                                const DirectoryItemArray* folders,
-                                const DirectoryItemArray* files,
-                                const V2 item_dimensions,
-                                ThreadTaskQueue* task_queue,
-                                SafeIdTexturePropertiesArray* textures,
-                                II32* hit_index, List* list)
+internal void display_grid_item(
+    const V2 position, const i32 index, const DirectoryItemArray* folders,
+    const DirectoryItemArray* files, const V2 item_dimensions,
+    ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures,
+    SafeObjectThumbnailArray* objects, II32* hit_index, List* list)
 {
     if (index < (i32)folders->size)
     {
         DirectoryItem* item = folders->data + index;
         if (directory_item_grid(position, item_dimensions,
                                 UI_FOLDER_ICON_BIG_TEXTURE, task_queue,
-                                textures, item, list))
+                                textures, objects, item, list))
         {
             hit_index->first = 0;
             hit_index->second = index;
@@ -3915,7 +3939,7 @@ internal void display_grid_item(const V2 position, const i32 index,
         DirectoryItem* item = files->data + new_index;
         if (directory_item_grid(position, item_dimensions,
                                 UI_FILE_ICON_BIG_TEXTURE, task_queue, textures,
-                                item, list))
+                                objects, item, list))
         {
             hit_index->first = 1;
             hit_index->second = new_index;
@@ -3928,6 +3952,7 @@ II32 ui_window_add_directory_item_grid(V2 position,
                                        const DirectoryItemArray* files,
                                        ThreadTaskQueue* task_queue,
                                        SafeIdTexturePropertiesArray* textures,
+                                       SafeObjectThumbnailArray* objects,
                                        List* list)
 {
     const u32 window_index =
@@ -3968,7 +3993,7 @@ II32 ui_window_add_directory_item_grid(V2 position,
                 const i32 index = (row * columns) + column;
                 display_grid_item(position, index, folders, files,
                                   item_dimensions, task_queue, textures,
-                                  &hit_index, list);
+                                  objects, &hit_index, list);
                 position.x += item_dimensions.width + grid_padding_width;
             }
             position.x = start_x;
@@ -3983,7 +4008,7 @@ II32 ui_window_add_directory_item_grid(V2 position,
         {
             const i32 index = (rows * columns) + column;
             display_grid_item(position, index, folders, files, item_dimensions,
-                              task_queue, textures, &hit_index, list);
+                              task_queue, textures, objects, &hit_index, list);
             position.x += item_dimensions.width + grid_padding_width;
         }
     }

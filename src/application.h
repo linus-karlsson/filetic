@@ -140,6 +140,7 @@ typedef struct ApplicationContext
 
     Render render_3d;
     u32 index_count_3d;
+    int light_dir_location;
 
     U32Array free_window_ids;
     U32Array windows;

@@ -33,6 +33,7 @@
 #define UI_FILE_JAVA_ICON_BIG_TEXTURE 19.0f
 #define UI_FILE_CPP_ICON_BIG_TEXTURE 20.0f
 #define UI_FILE_C_ICON_BIG_TEXTURE 21.0f
+#define UI_FILE_OBJ_ICON_TEXTURE 22.0f
 
 typedef struct ScrollBar
 {
@@ -246,7 +247,7 @@ V2 ui_window_get_button_dimensions(V2 dimensions, const char* text, f32* x_advan
 b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text);
 b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index);
 b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index);
-II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, List* list);
+II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, List* list);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input);
 b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
 void ui_window_add_text(V2 position, const char* text, b8 scrolling);

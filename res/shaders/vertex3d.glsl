@@ -13,12 +13,12 @@ layout(location = 2) out flat float fTexIndex;
 uniform mat4 proj;
 uniform mat4 view;
 uniform mat4 model;
+uniform vec3 light_dir;
 
 void main()
 {
-    gl_Position = proj * view * mat4(1.0f) * vec4(vPosition, 1.0);
+    gl_Position = proj * view * model * vec4(vPosition, 1.0);
 
-    vec3 light_dir = vec3(model[0]);
     float intensity = max(dot(vNormal, light_dir), 0.0);
 
     float ambient = 0.1;

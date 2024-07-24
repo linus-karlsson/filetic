@@ -265,6 +265,7 @@ M4 ortho(float left, float right, float bottom, float top, float sy_near,
 M4 view(V3 eye, V3 center, V3 up);
 M4 perspective(float fov, float aspect, float sy_near, float sy_far);
 M4 inverse(M4 m);
+M4 rotate_z(float rad);
 
 #ifdef FTIC_MATH_IMPLEMENTATION
 
@@ -1552,6 +1553,16 @@ M4 inverse(M4 m)
 
     // Column major
     return m4_transpose(res);
+}
+
+M4 rotate_z(float rad)
+{
+    M4 res = m4i(1.0f);
+    res.data[0][0] = cosf(rad);
+    res.data[0][1] = sinf(rad);
+    res.data[1][0] = -sinf(rad);
+    res.data[1][1] = cosf(rad);
+    return res;
 }
 
 #endif

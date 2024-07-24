@@ -503,6 +503,7 @@ void directory_tab_add(const char* dir, ThreadTaskQueue* task_queue,
         directory_listen_to_directory_changes(page.directory.parent);
 
     safe_array_create(&tab->textures, 10);
+    safe_array_create(&tab->objects, 10);
 
     array_create(&tab->directory_list.selected_item_values.paths, 10);
     tab->directory_list.selected_item_values.selected_items =

@@ -381,12 +381,7 @@ internal void tab_clear_selected(DirectoryTab* tab)
     directory_clear_selected_items(&tab->directory_list.selected_item_values);
 }
 
-internal b8 show_directory_window(const u32 window, const f32 list_item_height,
-                                  const b8 check_collision,
-                                  const b8 context_menu_open,
-                                  RecentPanel* recent,
-                                  ThreadTaskQueue* task_queue,
-                                  DirectoryTab* tab)
+internal void look_for_and_load_image_thumbnails(DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
     platform_mutex_lock(&tab->textures.mutex);
@@ -408,6 +403,7 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
             if (item->texture_id)
             {
                 texture_delete(item->texture_id);
+                item->texture_id = 0;
             }
             item->texture_id = texture_create(&texture->texture_properties,
                                               GL_RGBA8, GL_RGBA, GL_LINEAR);
@@ -423,6 +419,139 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
     }
     tab->textures.array.size = 0;
     platform_mutex_unlock(&tab->textures.mutex);
+}
+
+internal void look_for_and_load_object_thumbnails(const V2 dimensions,
+                                                  DirectoryTab* tab,
+                                                  Render* render)
+{
+    DirectoryPage* current = directory_current(&tab->directory_history);
+    platform_mutex_lock(&tab->objects.mutex);
+    for (u32 i = 0; i < tab->objects.array.size; ++i)
+    {
+        ObjectThumbnail* object = tab->objects.array.data + i;
+        DirectoryItem* item = NULL;
+        for (u32 j = 0; j < current->directory.files.size; ++j)
+        {
+            DirectoryItem* current_item = current->directory.files.data + j;
+            if (!guid_compare(object->id, current_item->id))
+            {
+                item = current_item;
+                break;
+            }
+        }
+        if (item)
+        {
+            if (item->texture_id)
+            {
+                texture_delete(item->texture_id);
+                item->texture_id = 0;
+            }
+            item->texture_width = 128;
+            item->texture_height = 128;
+
+            u32 fbo = 0;
+            glGenFramebuffers(1, &fbo);
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+            glGenTextures(1, &item->texture_id);
+            glBindTexture(GL_TEXTURE_2D, item->texture_id);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+                         (GLsizei)item->texture_width,
+                         (GLsizei)item->texture_height, 0, GL_RGBA,
+                         GL_UNSIGNED_BYTE, NULL);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                   GL_TEXTURE_2D, item->texture_id, 0);
+
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) ==
+                GL_FRAMEBUFFER_COMPLETE)
+            {
+                vertex_buffer_orphan(
+                    render->vertex_buffer_id,
+                    object->mesh.vertices.size * sizeof(Vertex3D),
+                    GL_STATIC_DRAW, object->mesh.vertices.data);
+                index_buffer_orphan(render->index_buffer_id,
+                                    object->mesh.indices.size * sizeof(u32),
+                                    GL_STATIC_DRAW, object->mesh.indices.data);
+
+                Camera camera = camera_create_default();
+
+                camera.position = v3f(6.5f, -4.0f, 3.5f);
+
+                V3 target = v3f(2.0f, -2.0f, 0.0f);
+
+                camera.orientation =
+                    v3_normalize(v3_sub(target, camera.position));
+
+                AABB view_port = { .size = v2i(128.0f) };
+
+                camera.view_port = view_port;
+                camera.view_projection.projection = perspective(
+                    PI * 0.5f, view_port.size.width / view_port.size.height,
+                    0.1f, 100.0f);
+                camera.view_projection.view = view(
+                    camera.position,
+                    v3_add(camera.position, camera.orientation), camera.up);
+
+                MVP mvp = {
+                    .model = rotate_z(PI),
+                    .view = camera.view_projection.view,
+                    .projection = camera.view_projection.projection,
+                };
+
+                glViewport((int)roundf(camera.view_port.min.x),
+                           (int)roundf(camera.view_port.min.y),
+                           (int)roundf(camera.view_port.size.width),
+                           (int)roundf(camera.view_port.size.height));
+
+                glEnable(GL_DEPTH_TEST);
+                render_begin_draw(render, render->shader_properties.shader,
+                                  &mvp);
+
+                int location = glGetUniformLocation(
+                    render->shader_properties.shader, "light_dir");
+                ftic_assert(location != -1);
+                glUniform3f(location, camera.orientation.x,
+                            camera.orientation.y, camera.orientation.z);
+
+                render_draw(0, object->mesh.indices.size, &camera.view_port);
+                render_end_draw(render);
+                glDisable(GL_DEPTH_TEST);
+
+                glViewport(0, 0, (int)roundf(dimensions.width),
+                           (int)roundf(dimensions.height));
+            }
+            else
+            {
+                texture_delete(item->texture_id);
+                item->texture_id = 0;
+            }
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glDeleteFramebuffers(1, &fbo);
+
+            item->reload_thumbnail = false;
+        }
+        array_free(&object->mesh.vertices);
+        array_free(&object->mesh.indices);
+    }
+    tab->objects.array.size = 0;
+    platform_mutex_unlock(&tab->objects.mutex);
+}
+
+internal b8 show_directory_window(
+    const u32 window, const f32 list_item_height, const b8 check_collision,
+    const b8 context_menu_open, const V2 dimensions, Render* render,
+    RecentPanel* recent, ThreadTaskQueue* task_queue, DirectoryTab* tab)
+{
+    DirectoryPage* current = directory_current(&tab->directory_history);
+
+    look_for_and_load_image_thumbnails(tab);
+    look_for_and_load_object_thumbnails(dimensions, tab, render);
+
     if (ui_window_begin(window, get_parent_directory_name(current),
                         UI_WINDOW_TOP_BAR | UI_WINDOW_RESIZEABLE))
     {
@@ -442,7 +571,7 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
             II32 result = ui_window_add_directory_item_grid(
                 v2f(0.0f, list_position.y), &current->directory.sub_directories,
                 &current->directory.files, task_queue, &tab->textures,
-                &tab->directory_list);
+                &tab->objects, &tab->directory_list);
 
             if (result.first > -1)
             {
@@ -971,45 +1100,18 @@ void parse_file(FileAttrib* file, ColoredCharacterArray* array)
 
 u32 load_object(Render* render, const char* path)
 {
-    ObjectLoad object_load = { 0 };
-    object_load_model(&object_load, path);
-
-    Vertex3DArray vertices = { 0 };
-    array_create(&vertices, object_load.indices.size);
-    IndexArray indices = { 0 };
-    array_create(&indices, object_load.indices.size);
-    for (u32 i = 0; i < object_load.indices.size; ++i)
-    {
-        Vertex3D vertex = { 0 };
-        const u32 current_vert_index = object_load.indices.data[i].vertex_index;
-        vertex.position = object_load.vertex_positions.data[current_vert_index];
-        vertex.color = v4f(1.0f, 1.0f, 1.0f, 1.0f);
-
-        vertex.normal =
-            object_load.normals.data[object_load.indices.data[i].normal_index];
-
-        const u32 current_tex_index = object_load.indices.data[i].texture_index;
-        vertex.texture_coordinates.x =
-            object_load.texture_coordinates.data[current_tex_index].x;
-        vertex.texture_coordinates.y =
-            1.0f - object_load.texture_coordinates.data[current_tex_index].y;
-
-        vertex.texture_index = 0;
-
-        array_push(&vertices, vertex);
-        array_push(&indices, i);
-    }
-
+    Mesh3D mesh = { 0 };
+    mesh_3d_load(&mesh, path);
     vertex_buffer_orphan(render->vertex_buffer_id,
-                         vertices.size * sizeof(Vertex3D), GL_STATIC_DRAW,
-                         vertices.data);
-    index_buffer_orphan(render->index_buffer_id, indices.size * sizeof(u32),
-                        GL_STATIC_DRAW, indices.data);
-    u32 index_count = indices.size;
+                         mesh.vertices.size * sizeof(Vertex3D), GL_STATIC_DRAW,
+                         mesh.vertices.data);
+    index_buffer_orphan(render->index_buffer_id,
+                        mesh.indices.size * sizeof(u32), GL_STATIC_DRAW,
+                        mesh.indices.data);
+    u32 index_count = mesh.indices.size;
 
-    array_free(&indices);
-    array_free(&vertices);
-    object_load_free(&object_load);
+    array_free(&mesh.indices);
+    array_free(&mesh.vertices);
     return index_count;
 }
 
@@ -1445,7 +1547,7 @@ internal void main_render_initialize(RenderingProperties* main_render,
                                         vertex_buffer_id, index_buffer_id);
 }
 
-internal void render_3d_initialize(Render* render)
+internal void render_3d_initialize(Render* render, int* light_dir_location)
 {
     VertexBufferLayout vertex_buffer_layout = default_vertex_3d_buffer_layout();
     u32 default_texture = create_default_texture();
@@ -1453,6 +1555,9 @@ internal void render_3d_initialize(Render* render)
     u32 shader = shader_create("./res/shaders/vertex3d.glsl",
                                "./res/shaders/fragment.glsl");
     ftic_assert(shader);
+
+    *light_dir_location = glGetUniformLocation(shader, "light_dir");
+    ftic_assert((*light_dir_location) != -1);
 
     const u32 texture_count = 2;
     U32Array textures = { 0 };
@@ -1497,7 +1602,7 @@ u8* application_initialize(ApplicationContext* app)
 
     main_render_initialize(&app->main_render, &font_texture_properties);
 
-    render_3d_initialize(&app->render_3d);
+    render_3d_initialize(&app->render_3d, &app->light_dir_location);
 
     array_create(&app->tabs, 10);
     app->tab_index = 0;
@@ -2935,7 +3040,8 @@ void application_run()
 
                 if (show_directory_window(
                         window_id, list_item_height, check_collision,
-                        app.open_context_menu_window, &app.recent,
+                        app.open_context_menu_window, app.dimensions,
+                        &app.render_3d, &app.recent,
                         &app.thread_queue.task_queue, app.tabs.data + i))
                 {
                     DirectoryTab tab_to_remove = app.tabs.data[i];
@@ -3012,13 +3118,22 @@ void application_run()
                 .projection = preview_camera.view_projection.projection,
             };
 
-            mvp.model.data[0][0] = -preview_camera.orientation.x;
-            mvp.model.data[0][1] = -preview_camera.orientation.y;
-            mvp.model.data[0][2] = -preview_camera.orientation.z;
+            char buffer[64] = { 0 };
+            value_to_string(buffer, V3_FMT(preview_camera.position));
+            log_message(buffer, strlen(buffer));
+
+            char buffer2[64] = { 0 };
+            value_to_string(buffer2, V3_FMT(preview_camera.orientation));
+            log_message(buffer2, strlen(buffer2));
 
             glEnable(GL_DEPTH_TEST);
             render_begin_draw(&app.render_3d,
                               app.render_3d.shader_properties.shader, &mvp);
+
+            glUniform3f(app.light_dir_location, -preview_camera.orientation.x,
+                        -preview_camera.orientation.y,
+                        -preview_camera.orientation.z);
+
             render_draw(0, app.index_count_3d, &preview_camera.view_port);
             render_end_draw(&app.render_3d);
             glDisable(GL_DEPTH_TEST);

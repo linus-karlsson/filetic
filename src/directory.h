@@ -40,6 +40,7 @@ typedef struct DirectoryTab
 {
     u32 window_id;
     SafeIdTexturePropertiesArray textures;
+    SafeObjectThumbnailArray objects;
     DirectoryHistory directory_history;
     List directory_list;
 } DirectoryTab;

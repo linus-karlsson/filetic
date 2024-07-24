@@ -1,10 +1,10 @@
+C:\Users\linus\dev\filetic\res\kiha32
+C:\Users\linus\dev\filetic\res
+C:\Users\linus\dev\filetic
 C:\Users\linus\Images
 C:\Users\linus\dev\Books\health
 C:\Users\linus\dev\Books
 C:\Users\linus\dev
-C:\Users\linus\dev\filetic
 C:\Users\linus\dev\demo
 C:\Users\linus\dev\f1
 C:\Users\linus\dev\ddrr
-C:\Users\linus\dev\filetic\src
-C:\Users\linus\Downloads\apache-maven-3.9.6-bin

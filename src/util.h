@@ -83,6 +83,39 @@ typedef struct SelectedItemValues
     char* last_selected;
 } SelectedItemValues;
 
+typedef struct Mesh3D
+{
+    Vertex3DArray vertices;
+    IndexArray indices;
+} Mesh3D;
+
+typedef struct ObjectThumbnail
+{
+    FticGUID id;
+    Mesh3D mesh;
+} ObjectThumbnail;
+
+typedef struct ObjectThumbnailArray
+{
+    u32 size;
+    u32 capacity;
+    ObjectThumbnail* data;
+} ObjectThumbnailArray;
+
+typedef struct SafeObjectThumbnailArray
+{
+    ObjectThumbnailArray array;
+    FTicMutex mutex;
+} SafeObjectThumbnailArray;
+
+typedef struct ObjectThumbnailData
+{
+    FticGUID file_id;
+    char* file_path;
+    SafeObjectThumbnailArray* array;
+    i32 size;
+} ObjectThumbnailData;
+
 FileAttrib file_read(const char* file_path);
 void file_write(const char* file_path, const char* content, u32 size);
 b8 file_end_of_file(const FileAttrib* file);
@@ -124,3 +157,7 @@ u32 get_path_length(const char* path, u32 path_length);
 f32 radians(f32 deg);
 f32 abs_f32(f32 in);
 f32 round_f32(f32 value);
+
+void mesh_3d_load(Mesh3D* mesh, const char* object_path);
+void object_load_thumbnail(void* data);
+

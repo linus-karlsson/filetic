@@ -1,5 +1,7 @@
 #include "util.h"
 #include "logging.h"
+#include "object_load.h"
+#include "platform/platform.h"
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -346,4 +348,55 @@ f32 abs_f32(f32 in)
 f32 round_f32(f32 value)
 {
     return (f32)((int)(value + (0.5f - (f32)(value < 0.0f))));
+}
+
+void mesh_3d_load(Mesh3D* mesh, const char* object_path)
+{
+    ObjectLoad object_load = { 0 };
+    object_load_model(&object_load, object_path);
+
+    array_create(&mesh->vertices, object_load.indices.size);
+    array_create(&mesh->indices, object_load.indices.size);
+    for (u32 i = 0; i < object_load.indices.size; ++i)
+    {
+        Vertex3D vertex = { 0 };
+        const u32 current_vert_index = object_load.indices.data[i].vertex_index;
+        vertex.position = object_load.vertex_positions.data[current_vert_index];
+        vertex.color = v4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+        vertex.normal =
+            object_load.normals.data[object_load.indices.data[i].normal_index];
+
+        const u32 current_tex_index = object_load.indices.data[i].texture_index;
+        vertex.texture_coordinates.x =
+            object_load.texture_coordinates.data[current_tex_index].x;
+        vertex.texture_coordinates.y =
+            1.0f - object_load.texture_coordinates.data[current_tex_index].y;
+
+        vertex.texture_index = 0;
+
+        array_push(&mesh->vertices, vertex);
+        array_push(&mesh->indices, i);
+    }
+    object_load_free(&object_load);
+}
+
+void object_load_thumbnail(void* data)
+{
+    ObjectThumbnailData* arguments = (ObjectThumbnailData*)data;
+
+    ObjectThumbnail thumbnail = { .id = guid_copy(&arguments->file_id) };
+    mesh_3d_load(&thumbnail.mesh, arguments->file_path);
+    
+    platform_mutex_lock(&arguments->array->mutex);
+    if (arguments->array->array.data == NULL)
+    {
+        array_free(&thumbnail.mesh.vertices);
+        array_free(&thumbnail.mesh.indices);
+        free(data);
+        return;
+    }
+    array_push(&arguments->array->array, thumbnail);
+    platform_mutex_unlock(&arguments->array->mutex);
+    free(data);
 }
