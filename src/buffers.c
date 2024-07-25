@@ -123,6 +123,11 @@ void vertex_array_unbind()
     glBindVertexArray(0);
 }
 
+void vertex_array_delete(u32 vertex_array)
+{
+    glDeleteVertexArrays(1, &vertex_array);
+}
+
 void vertex_array_add_buffer(const u32 vertex_array, const u32 vertex_buffer,
                              const VertexBufferLayout* vertex_buffer_layout)
 {

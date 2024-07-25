@@ -188,6 +188,7 @@ void object_load_model(ObjectLoad* object_load, const char* model_path)
     if(file.buffer)
     {
         parse_buffer(object_load, &file);
+        free(file.buffer);
     }
 }
 

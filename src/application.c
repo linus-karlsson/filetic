@@ -381,6 +381,26 @@ internal void tab_clear_selected(DirectoryTab* tab)
     directory_clear_selected_items(&tab->directory_list.selected_item_values);
 }
 
+internal void render_3d_initialize(Render* render, const u32 shader,
+                                   int* light_dir_location)
+{
+    VertexBufferLayout vertex_buffer_layout = default_vertex_3d_buffer_layout();
+    u32 default_texture = create_default_texture();
+
+    *light_dir_location = glGetUniformLocation(shader, "light_dir");
+    ftic_assert((*light_dir_location) != -1);
+
+    const u32 texture_count = 2;
+    U32Array textures = { 0 };
+    array_create(&textures, texture_count);
+    array_push(&textures, default_texture);
+
+    *render = render_create(shader, textures, &vertex_buffer_layout,
+                            vertex_buffer_create(), index_buffer_create());
+
+    array_free(&vertex_buffer_layout.items);
+}
+
 internal void look_for_and_load_image_thumbnails(DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
@@ -410,12 +430,8 @@ internal void look_for_and_load_image_thumbnails(DirectoryTab* tab)
             item->texture_width = texture->texture_properties.width;
             item->texture_height = texture->texture_properties.height;
             item->reload_thumbnail = false;
-            free(texture->texture_properties.bytes);
         }
-        else
-        {
-            free(texture->texture_properties.bytes);
-        }
+        free(texture->texture_properties.bytes);
     }
     tab->textures.array.size = 0;
     platform_mutex_unlock(&tab->textures.mutex);
@@ -425,7 +441,7 @@ internal u32 mesh_3d_render_to_2d_texture(const Mesh3D* mesh,
                                           const AABB3D* mesh_aabb,
                                           const i32 width, const i32 height,
                                           const AABB* view_port_before,
-                                          Render* render)
+                                          const u32 shader)
 {
     u32 resulting_texture = 0;
 
@@ -469,10 +485,14 @@ internal u32 mesh_3d_render_to_2d_texture(const Mesh3D* mesh,
 
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
         {
-            vertex_buffer_orphan(render->vertex_buffer_id,
+            int light_dir_location = -1;
+            Render temp_render = { 0 };
+            render_3d_initialize(&temp_render, shader, &light_dir_location);
+
+            vertex_buffer_orphan(temp_render.vertex_buffer_id,
                                  mesh->vertices.size * sizeof(Vertex3D),
                                  GL_STATIC_DRAW, mesh->vertices.data);
-            index_buffer_orphan(render->index_buffer_id,
+            index_buffer_orphan(temp_render.index_buffer_id,
                                 mesh->indices.size * sizeof(u32),
                                 GL_STATIC_DRAW, mesh->indices.data);
 
@@ -517,16 +537,14 @@ internal u32 mesh_3d_render_to_2d_texture(const Mesh3D* mesh,
 
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            render_begin_draw(render, render->shader_properties.shader, &mvp);
+            render_begin_draw(&temp_render,
+                              temp_render.shader_properties.shader, &mvp);
 
-            int location = glGetUniformLocation(
-                render->shader_properties.shader, "light_dir");
-            ftic_assert(location != -1);
-            glUniform3f(location, -camera.orientation.x, -camera.orientation.y,
-                        -camera.orientation.z);
+            glUniform3f(light_dir_location, -camera.orientation.x,
+                        -camera.orientation.y, -camera.orientation.z);
 
             render_draw(0, mesh->indices.size, &camera.view_port);
-            render_end_draw(render);
+            render_end_draw(&temp_render);
 
             glDisable(GL_DEPTH_TEST);
 
@@ -541,6 +559,8 @@ internal u32 mesh_3d_render_to_2d_texture(const Mesh3D* mesh,
                        (int)round_f32(view_port_before->min.y),
                        (int)round_f32(view_port_before->size.width),
                        (int)round_f32(view_port_before->size.height));
+
+            render_destroy(&temp_render);
         }
         else
         {
@@ -549,7 +569,6 @@ internal u32 mesh_3d_render_to_2d_texture(const Mesh3D* mesh,
         }
         glDeleteFramebuffers(1, &resolve_fbo);
     }
-
     glDeleteTextures(1, &multisampled_texture);
     glDeleteFramebuffers(1, &fbo);
     glDeleteRenderbuffers(1, &rbo);
@@ -558,8 +577,8 @@ internal u32 mesh_3d_render_to_2d_texture(const Mesh3D* mesh,
 }
 
 internal void look_for_and_load_object_thumbnails(const V2 dimensions,
-                                                  DirectoryTab* tab,
-                                                  Render* render)
+                                                  const u32 shader,
+                                                  DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
     platform_mutex_lock(&tab->objects.mutex);
@@ -586,11 +605,10 @@ internal void look_for_and_load_object_thumbnails(const V2 dimensions,
             AABB view_port_before = { .size = dimensions };
             item->texture_id = mesh_3d_render_to_2d_texture(
                 &object->mesh, &object->mesh_aabb, item->texture_width,
-                item->texture_height, &view_port_before, render);
+                item->texture_height, &view_port_before, shader);
 
             item->reload_thumbnail = false;
         }
-
         array_free(&object->mesh.vertices);
         array_free(&object->mesh.indices);
     }
@@ -600,13 +618,13 @@ internal void look_for_and_load_object_thumbnails(const V2 dimensions,
 
 internal b8 show_directory_window(
     const u32 window, const f32 list_item_height, const b8 check_collision,
-    const b8 context_menu_open, const V2 dimensions, Render* render,
+    const b8 context_menu_open, const V2 dimensions, const u32 shader,
     RecentPanel* recent, ThreadTaskQueue* task_queue, DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
 
     look_for_and_load_image_thumbnails(tab);
-    look_for_and_load_object_thumbnails(dimensions, tab, render);
+    look_for_and_load_object_thumbnails(dimensions, shader, tab);
 
     if (ui_window_begin(window, get_parent_directory_name(current),
                         UI_WINDOW_TOP_BAR | UI_WINDOW_RESIZEABLE))
@@ -1504,6 +1522,7 @@ internal void access_panel_load(AccessPanel* panel, const char* file_path)
         line.size = 0;
     }
     free(line.data);
+    free(file.buffer);
 }
 
 internal void access_panel_initialize(AccessPanel* panel, const u32 window,
@@ -1601,27 +1620,8 @@ internal void main_render_initialize(RenderingProperties* main_render,
 
     main_render->render = render_create(shader, textures, &vertex_buffer_layout,
                                         vertex_buffer_id, index_buffer_id);
-}
 
-internal void render_3d_initialize(Render* render, int* light_dir_location)
-{
-    VertexBufferLayout vertex_buffer_layout = default_vertex_3d_buffer_layout();
-    u32 default_texture = create_default_texture();
-
-    u32 shader = shader_create("./res/shaders/vertex3d.glsl",
-                               "./res/shaders/fragment.glsl");
-    ftic_assert(shader);
-
-    *light_dir_location = glGetUniformLocation(shader, "light_dir");
-    ftic_assert((*light_dir_location) != -1);
-
-    const u32 texture_count = 2;
-    U32Array textures = { 0 };
-    array_create(&textures, texture_count);
-    array_push(&textures, default_texture);
-
-    *render = render_create(shader, textures, &vertex_buffer_layout,
-                            vertex_buffer_create(), index_buffer_create());
+    array_free(&vertex_buffer_layout.items);
 }
 
 u8* application_initialize(ApplicationContext* app)
@@ -1658,7 +1658,10 @@ u8* application_initialize(ApplicationContext* app)
 
     main_render_initialize(&app->main_render, &font_texture_properties);
 
-    render_3d_initialize(&app->render_3d, &app->light_dir_location);
+    u32 shader = shader_create("./res/shaders/vertex3d.glsl",
+                               "./res/shaders/fragment.glsl");
+    ftic_assert(shader);
+    render_3d_initialize(&app->render_3d, shader, &app->light_dir_location);
 
     array_create(&app->tabs, 10);
     app->tab_index = 0;
@@ -2211,28 +2214,34 @@ internal void application_open_menu_window(ApplicationContext* app,
         const V2 ui_icon_min_max = ui_get_big_icon_min_max();
         row.min.y += ui_font_pixel_height + 20.0f;
         {
-            i32 result = add_increment(row.min, "Ui icon min:", button_color,
-                                       drop_down_width, (u32)ui_icon_min_max.min);
+            i32 result =
+                add_increment(row.min, "Ui icon min:", button_color,
+                              drop_down_width, (u32)ui_icon_min_max.min);
             if (result == 0)
             {
-                ui_set_big_icon_min_size(max(ui_icon_min_max.min - 1.0f, 32.0f));
+                ui_set_big_icon_min_size(
+                    max(ui_icon_min_max.min - 1.0f, 32.0f));
             }
             else if (result == 1)
             {
-                ui_set_big_icon_min_size(min(ui_icon_min_max.min + 1.0f, 64.0f));
+                ui_set_big_icon_min_size(
+                    min(ui_icon_min_max.min + 1.0f, 64.0f));
             }
         }
         row.min.y += ui_font_pixel_height + 20.0f;
         {
-            i32 result = add_increment(row.min, "Ui icon max:", button_color,
-                                       drop_down_width, (u32)ui_icon_min_max.max);
+            i32 result =
+                add_increment(row.min, "Ui icon max:", button_color,
+                              drop_down_width, (u32)ui_icon_min_max.max);
             if (result == 0)
             {
-                ui_set_big_icon_max_size(max(ui_icon_min_max.max - 1.0f, 128.0f));
+                ui_set_big_icon_max_size(
+                    max(ui_icon_min_max.max - 1.0f, 128.0f));
             }
             else if (result == 1)
             {
-                ui_set_big_icon_max_size(min(ui_icon_min_max.max + 1.0f, 256.0f));
+                ui_set_big_icon_max_size(
+                    min(ui_icon_min_max.max + 1.0f, 256.0f));
             }
         }
 
@@ -3129,7 +3138,7 @@ void application_run()
                 if (show_directory_window(
                         window_id, list_item_height, check_collision,
                         app.open_context_menu_window, app.dimensions,
-                        &app.render_3d, &app.recent,
+                        app.render_3d.shader_properties.shader, &app.recent,
                         &app.thread_queue.task_queue, app.tabs.data + i))
                 {
                     DirectoryTab tab_to_remove = app.tabs.data[i];

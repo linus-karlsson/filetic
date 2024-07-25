@@ -26,6 +26,7 @@ void render_destroy(Render* render)
 {
     buffer_delete(render->vertex_buffer_id);
     buffer_delete(render->index_buffer_id);
+    vertex_array_delete(render->vertex_array_id);
     for (u32 i = 0; i < render->textures.size; ++i)
     {
         texture_delete(render->textures.data[i]);
