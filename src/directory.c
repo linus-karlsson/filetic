@@ -9,7 +9,6 @@ DirectoryPage* directory_current(DirectoryHistory* history)
     return history->history.data + history->current_index;
 }
 
-
 void load_thumpnails(void* data)
 {
     LoadThumpnailData* arguments = (LoadThumpnailData*)data;
@@ -361,27 +360,21 @@ internal u32 look_for_and_get_thumbnails(const DirectoryItemArray* files,
     return count;
 }
 
-internal u32 count_image_files(const DirectoryItemArray* files)
+internal u32 count_image_obj_files(const DirectoryItemArray* files)
 {
     u32 count = 0;
     for (u32 i = 0; i < files->size; ++i)
     {
         DirectoryItem* item = files->data + i;
-        const char* extension =
-            file_get_extension(item->path, (u32)strlen(item->path));
-
-        if (extension &&
-            (!strcmp(extension, "jpg") || !strcmp(extension, "png")))
-        {
-            ++count;
-        }
+        count += (item->type == FILE_PNG || item->type == FILE_JPG ||
+                  item->type == FILE_OBJ);
     }
     return count;
 }
 
 internal b8 should_be_grid_view(const DirectoryPage* page)
 {
-    u32 count = count_image_files(&page->directory.files);
+    u32 count = count_image_obj_files(&page->directory.files);
 
     if (count)
     {

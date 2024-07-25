@@ -2312,8 +2312,9 @@ internal void application_open_menu_window(ApplicationContext* app,
             row.min.y += ui_font_pixel_height + 20.0f;
             {
                 ui_window_add_text(row.min, "Blur amount:", false);
-                const V2 slider_size = v2f(78.0f + (ui_font_pixel_height * 2),
-                                           -3.0f + (ui_font_pixel_height * 0.5f));
+                const V2 slider_size =
+                    v2f(78.0f + (ui_font_pixel_height * 2),
+                        -3.0f + (ui_font_pixel_height * 0.5f));
                 const f32 slider_x =
                     drop_down_width - slider_size.width - row.min.x;
                 presist b8 pressed = false;
@@ -3132,7 +3133,8 @@ void application_run()
                     preview->bottom_color = v4ic(0.0f);
 
                     if (ui_window_begin(app.preview_window, NULL,
-                                        UI_WINDOW_OVERLAY))
+                                        UI_WINDOW_OVERLAY |
+                                            UI_WINDOW_FROSTED_GLASS))
                     {
                         ui_window_add_text_colored(v2f(10.0f, 10.0f),
                                                    &preview_file_colored, true);

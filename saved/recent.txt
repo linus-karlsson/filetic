@@ -1,10 +1,10 @@
-C:\Users\linus\dev\filetic\res\kiha32
-C:\Users\linus\dev\filetic\res
+C:\Users\linus\dev\filetic\src
 C:\Users\linus\dev\filetic
-C:\Users\linus\dev\demo\training
 C:\Users\linus\dev\demo
+C:\Users\linus\dev\filetic\res\icons
+C:\Users\linus\dev\filetic\res
+C:\Users\linus\dev\filetic\res\kiha32
+C:\Users\linus\dev\demo\training
 C:\Users\linus\dev
 C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\PlantAnimations\Plant 1
 C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\PlantAnimations
-C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\BlueWizardAnimations\BlueWizard\2BlueWizardIdle
-C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\BlueWizardAnimations\BlueWizard
