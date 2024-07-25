@@ -165,18 +165,19 @@ typedef struct UU32Array
 global UiContext ui_context = { 0 };
 global f32 ui_big_icon_size = 84.0f;
 global V2 ui_big_icon_min_max = { .min = 64.0f, .max = 256.0f };
+global b8 ui_frosted_glass = true;
 
 f32 ui_get_big_icon_size()
 {
     return ui_big_icon_size;
 }
 
-void ui_set_big_icon_min_size(f32 new_min)
+void ui_set_big_icon_min_size(const f32 new_min)
 {
     ui_big_icon_min_max.min = new_min;
 }
 
-void ui_set_big_icon_max_size(f32 new_max)
+void ui_set_big_icon_max_size(const f32 new_max)
 {
     ui_big_icon_min_max.max = new_max;
 }
@@ -186,11 +187,24 @@ V2 ui_get_big_icon_min_max()
     return ui_big_icon_min_max;
 }
 
-void ui_set_big_icon_size(f32 new_size)
+void ui_set_big_icon_size(const f32 new_size)
 {
     ui_big_icon_size = new_size;
-    ui_big_icon_size = clampf32_high(ui_big_icon_size, ui_big_icon_min_max.max);
-    ui_big_icon_size = clampf32_low(ui_big_icon_size, ui_big_icon_min_max.min);
+}
+
+void ui_set_frosted_glass(const b8 on)
+{
+    ui_frosted_glass = on;
+}
+
+f32 ui_get_frosted_blur_amount()
+{
+    return ui_context.frosted_blur_amount;
+}
+
+void ui_set_frosted_blur_amount(const f32 new_blur_amount)
+{
+    ui_context.frosted_blur_amount = new_blur_amount;
 }
 
 internal f32 set_scroll_offset(const f32 total_height, const f32 area_y,
@@ -1289,7 +1303,7 @@ void ui_context_create()
 
     {
         ui_context.frosted_blur_amount = 0.00132f;
-        ui_context.frosted_samples = 12;
+        ui_context.frosted_samples = 14;
 
         ui_context.frosted_blur_amount_location =
             glGetUniformLocation(frosted_shader, "blurAmount");
@@ -2189,7 +2203,7 @@ internal void render_overlay_ui(const u32 index_offset, const u32 index_count)
             scissor.size = window->size;
         }
 
-        if (window->frosted_background)
+        if (ui_frosted_glass && window->frosted_background)
         {
             const u32 shader =
                 ui_context.frosted_render.render.shader_properties.shader;
@@ -2315,7 +2329,7 @@ void ui_context_end()
     ui_context.frosted_render.render.textures.size = 0;
     u32 fbo = 0;
     u32 fbo_texture = 0;
-    if (ui_context.last_frame_overlay_windows.size)
+    if (ui_frosted_glass && ui_context.last_frame_overlay_windows.size)
     {
         glGenFramebuffers(1, &fbo);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -2362,6 +2376,13 @@ void ui_context_end()
                 sizeof(Vertex) * ui_context.frosted_render.vertices.size,
                 ui_context.frosted_render.vertices.data);
         }
+
+        shader_bind(ui_context.frosted_render.render.shader_properties.shader);
+        glUniform1f(ui_context.frosted_blur_amount_location,
+                    ui_context.frosted_blur_amount);
+        glUniform1i(ui_context.frosted_samples_location,
+                    ui_context.frosted_samples);
+        shader_unbind();
     }
     render_ui(&dock_spaces, &dock_spaces_index_offsets_and_counts);
 
@@ -2369,34 +2390,6 @@ void ui_context_end()
 
     if (ui_context.last_frame_overlay_windows.size)
     {
-#if 0
-        if (event_is_key_pressed_once(FTIC_KEY_I))
-        {
-            ui_context.frosted_blur_amount += 0.0001f;
-            log_f32("BlurAmount: ", ui_context.frosted_blur_amount);
-        }
-        if (event_is_key_pressed_once(FTIC_KEY_U))
-        {
-            ui_context.frosted_blur_amount -= 0.0001f;
-            log_f32("BlurAmount: ", ui_context.frosted_blur_amount);
-        }
-        if (event_is_key_pressed_once(FTIC_KEY_J))
-        {
-            ui_context.frosted_samples += 1;
-            log_u64("Samples: ", (u64)ui_context.frosted_samples);
-        }
-        if (event_is_key_pressed_once(FTIC_KEY_K))
-        {
-            ui_context.frosted_samples -= 1;
-            log_u64("Samples: ", (u64)ui_context.frosted_samples);
-        }
-#endif
-        shader_bind(ui_context.frosted_render.render.shader_properties.shader);
-        glUniform1f(ui_context.frosted_blur_amount_location,
-                    ui_context.frosted_blur_amount);
-        glUniform1i(ui_context.frosted_samples_location,
-                    ui_context.frosted_samples);
-        shader_unbind();
         render_overlay_ui(overlay_index_offset, overlay_index_count);
     }
 
@@ -2804,8 +2797,9 @@ b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
 
     if (window->frosted_background)
     {
-        window->top_color.a = 0.8f;
-        window->bottom_color.a = 0.8f;
+        const f32 alpha = 0.8f + (0.2f * !ui_frosted_glass);
+        window->top_color.a = alpha;
+        window->bottom_color.a = alpha;
     }
     array_push(aabbs,
                quad_gradiant_t_b(&ui_context.render.vertices, window->position,
@@ -4594,18 +4588,23 @@ f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value,
     v2_add_equal(&position, window->first_item_position);
 
     b8 hit = hover_clicked_index.index == (i32)aabbs->size;
+    b8 slider_hit = hover_clicked_index.index == (i32)aabbs->size + 1;
 
     V4 color = global_get_bright_color();
-    if (hit || *pressed)
+    V4 slider_color = global_get_secondary_color();
+    if (hit || slider_hit || *pressed)
     {
         color = v4a(v4_s_multi(color, 1.4f), 1.0f);
+        slider_color = v4a(v4_s_multi(slider_color, 1.2f), 1.0f);
     }
-    quad(&ui_context.render.vertices, position, size, color, 0.0f);
+    array_push(aabbs,
+               quad(&ui_context.render.vertices, position, size, color, 0.0f));
     window->rendering_index_count += 6;
 
-    const V2 slider_size = v2f(15.0f, size.height + 20.0f);
+    V2 slider_size = v2f(0.0f, size.height * 5.0f);
+    slider_size.width = slider_size.height * 0.5f;
 
-    if (hit && hover_clicked_index.pressed)
+    if (slider_hit && hover_clicked_index.pressed)
     {
         *pressed = true;
     }
@@ -4615,13 +4614,14 @@ f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value,
     }
 
     V2 slider_position = position;
-    slider_position.y -= 10.0f;
+    slider_position.y -= (slider_size.height - size.height) * 0.5f;
 
     const f32 start_x = position.x;
     const f32 end_x = position.x + (size.width - slider_size.width);
 
-    if (*pressed)
+    if (*pressed || (hit && hover_clicked_index.pressed))
     {
+        *pressed = true;
         f32 position_x =
             event_get_mouse_position().x - (slider_size.width * 0.5f);
         position_x = clampf32_low(position_x, start_x);
@@ -4638,7 +4638,7 @@ f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value,
     slider_position.x = lerp_f32(start_x, end_x, p);
 
     array_push(aabbs, quad(&ui_context.render.vertices, slider_position,
-                           slider_size, global_get_secondary_color(), 0.0f));
+                           slider_size, slider_color, 0.0f));
     window->rendering_index_count += 6;
 
     return value;

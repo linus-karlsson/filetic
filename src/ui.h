@@ -216,6 +216,9 @@ void ui_set_big_icon_size(f32 new_size);
 void ui_set_big_icon_min_size(f32 new_min);
 void ui_set_big_icon_max_size(f32 new_max);
 V2 ui_get_big_icon_min_max();
+void ui_set_frosted_glass(b8 on);
+f32 ui_get_frosted_blur_amount();
+void ui_set_frosted_blur_amount(const f32 new_blur_amount);
 
 const FontTTF* ui_context_get_font();
 f32 ui_context_get_font_pixel_height();

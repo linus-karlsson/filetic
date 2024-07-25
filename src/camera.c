@@ -102,7 +102,7 @@ b8 camera_update(Camera* camera, const f64 delta_time)
                      v3_s_multi(camera->up, (f32)(camera->speed * delta_time)));
         moved = true;
     }
-    if (event_is_key_pressed(FTIC_KEY_RIGHT_CONTROL))
+    if (event_is_key_pressed(FTIC_KEY_LEFT_CONTROL))
     {
         v3_add_equal(&camera->position,
                      v3_s_multi(v3_s_multi(camera->up, -1.0f),

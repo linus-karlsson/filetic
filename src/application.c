@@ -2122,11 +2122,13 @@ internal void application_open_menu_window(ApplicationContext* app,
         presist b8 animation_on_selected = true;
         presist b8 dark_mode_selected = true;
         presist b8 highlight_fucused_window_selected = true;
+        presist b8 ui_frosted_glass_selected = true;
 
         presist f32 dark_mode_x = 0.0f;
         presist f32 hidden_files_x = 0.0f;
         presist f32 focused_window_x = 0.0f;
         presist f32 animation_x = 0.0f;
+        presist f32 ui_frosted_x = 0.0f;
 
         AABB row = {
             .min = v2i(10.0f),
@@ -2299,6 +2301,30 @@ internal void application_open_menu_window(ApplicationContext* app,
 
         row.min.y += ui_font_pixel_height + 20.0f;
         {
+            ui_window_add_text(row.min, "Frosted glass:", false);
+            ui_window_add_switch(v2f(switch_x, row.min.y),
+                                 &ui_frosted_glass_selected, &ui_frosted_x);
+            ui_set_frosted_glass(ui_frosted_glass_selected);
+        }
+
+        if (ui_frosted_glass_selected)
+        {
+            row.min.y += ui_font_pixel_height + 20.0f;
+            {
+                ui_window_add_text(row.min, "Blur amount:", false);
+                const V2 slider_size = v2f(78.0f + (ui_font_pixel_height * 2),
+                                           -3.0f + (ui_font_pixel_height * 0.5f));
+                const f32 slider_x =
+                    drop_down_width - slider_size.width - row.min.x;
+                presist b8 pressed = false;
+                ui_set_frosted_blur_amount(ui_window_add_slider(
+                    v2f(slider_x, row.min.y + 8.0f), slider_size, 0.0002f,
+                    0.003f, ui_get_frosted_blur_amount(), &pressed));
+            }
+        }
+
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
             const char* text = "Reset to default";
             const V2 button_dim =
                 ui_window_get_button_dimensions(v2d(), text, NULL);
@@ -2323,6 +2349,7 @@ internal void application_open_menu_window(ApplicationContext* app,
 
                 ui_set_big_icon_min_size(64.0f);
                 ui_set_big_icon_max_size(256.0f);
+                ui_set_frosted_blur_amount(0.00132f);
             }
         }
 
@@ -2333,6 +2360,7 @@ internal void application_open_menu_window(ApplicationContext* app,
             hidden_files_x = 0.0f;
             focused_window_x = 0.0f;
             animation_x = 0.0f;
+            ui_frosted_x = 0.0f;
             app->open_menu_window = false;
         }
 
@@ -2992,16 +3020,19 @@ void application_run()
                     bottom_bar->size.width - (2.0f * bottom_bar_height + 5.0f),
                     0);
 
-                const V2 slider_position =
-                    v2f(list_grid_icon_position.x - 100.0f,
-                        list_grid_icon_position.y +
-                            middle(bottom_bar_height, 5.0f));
+                if (current->grid_view)
+                {
+                    const V2 slider_position =
+                        v2f(list_grid_icon_position.x - 120.0f,
+                            list_grid_icon_position.y +
+                                middle(bottom_bar_height, 5.0f));
 
-                const V2 ui_icon_min_max = ui_get_big_icon_min_max();
-                static b8 pressed = false;
-                ui_set_big_icon_size(ui_window_add_slider(
-                    slider_position, v2f(90.0f, 5.0f), ui_icon_min_max.min,
-                    ui_icon_min_max.max, ui_get_big_icon_size(), &pressed));
+                    const V2 ui_icon_min_max = ui_get_big_icon_min_max();
+                    static b8 pressed = false;
+                    ui_set_big_icon_size(ui_window_add_slider(
+                        slider_position, v2f(110.0f, 5.0f), ui_icon_min_max.min,
+                        ui_icon_min_max.max, ui_get_big_icon_size(), &pressed));
+                }
 
                 ui_window_row_begin(0.0f);
 
@@ -3214,14 +3245,6 @@ void application_run()
                 .view = preview_camera.view_projection.view,
                 .projection = preview_camera.view_projection.projection,
             };
-
-            char buffer[64] = { 0 };
-            value_to_string(buffer, V3_FMT(preview_camera.position));
-            log_message(buffer, strlen(buffer));
-
-            char buffer2[64] = { 0 };
-            value_to_string(buffer2, V3_FMT(preview_camera.orientation));
-            log_message(buffer2, strlen(buffer2));
 
             glEnable(GL_DEPTH_TEST);
             render_begin_draw(&app.render_3d,

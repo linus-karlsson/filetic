@@ -1,5 +1,6 @@
 #include "object_load.h"
 #include "util.h"
+#include "ftic_window.h"
 #include <string.h>
 
 #define GAP(x) (((x) == ' ') || ((x) == '\t'))
@@ -140,8 +141,12 @@ internal void f_parse(ObjectLoad* object_load, char* line)
 
 internal void parse_buffer(ObjectLoad* object_load, FileAttrib* file)
 {
+#if 0
     u32 v = 0, vt = 0, vn = 0, f = 0;
     parse_sizes(file, &v, &vt, &vn, &f);
+#else
+    u32 v = 1000, vt = 1000, vn = 1000, f = 1000;
+#endif
 
     init(v, vn, vt, f, object_load);
 
@@ -187,7 +192,9 @@ void object_load_model(ObjectLoad* object_load, const char* model_path)
     FileAttrib file = file_read(model_path);
     if(file.buffer)
     {
+        f64 start = window_get_time();
         parse_buffer(object_load, &file);
+        log_f32(" ", (f32)(window_get_time() - start));
         free(file.buffer);
     }
 }
