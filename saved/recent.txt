@@ -1,3 +1,6 @@
+C:\Boot
+C:\Users\linus\dev\demo\training
+C:\Users\linus\dev\demo
 C:\Users\linus\Images
 C:\Users\linus\dev
 C:\Users\linus\dev\filetic\src
@@ -7,4 +10,3 @@ C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\PlantAnimations\BlueFlower2
 C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\PlantAnimations\Plant 1
 C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\PlantAnimations\Plant 8 Poison
 C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\PlantAnimations
-C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\BlueWizardAnimations\BlueWizard\2BlueWizardWalk
