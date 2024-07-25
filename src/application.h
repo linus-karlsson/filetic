@@ -9,6 +9,7 @@
 #include "ui.h"
 #include "thread_queue.h"
 #include "directory.h"
+#include "camera.h"
 
 #define COPY_OPTION_INDEX 0
 #define PASTE_OPTION_INDEX 1
@@ -113,6 +114,17 @@ typedef struct RecentPanel {
     u32 total;
 }RecentPanel;
 
+typedef struct PreviewImage{
+    V2 dimensions;
+    char* current_viewed_path;
+    U32Array textures;
+} PreviewImage;
+
+typedef struct PreviewTextFile{
+    FileAttrib file;
+    ColoredCharacterArray file_colored;
+}PreviewTextFile;
+
 typedef struct ApplicationContext
 {
     FTicWindow* window;
@@ -158,6 +170,12 @@ typedef struct ApplicationContext
     f32 context_menu_x;
 
     Directory font_change_directory;
+
+    i32 preview_index;
+    PreviewImage preview_image;
+    PreviewTextFile preview_text;
+    Camera preview_camera;
+    AABB3D preview_mesh_aabb;
 
     b8 open_font_change_window;
     b8 open_menu_window;

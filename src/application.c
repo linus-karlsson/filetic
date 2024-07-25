@@ -3,7 +3,6 @@
 #include "logging.h"
 #include "texture.h"
 #include "opengl_util.h"
-#include "camera.h"
 #include "object_load.h"
 #include "random.h"
 #include "globals.h"
@@ -127,6 +126,26 @@ internal void enable_gldebugging()
     glDebugMessageCallback(opengl_log_message, NULL);
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+}
+
+internal void camera_set_based_on_mesh_aabb(Camera* camera,
+                                            const AABB3D* mesh_aabb)
+{
+    const V3 aabb_center =
+        v3_add(mesh_aabb->min, v3_s_multi(mesh_aabb->size, 0.5f));
+
+    const V3 top_right_corner =
+        v3_add(mesh_aabb->min,
+               v3f(mesh_aabb->size.x, mesh_aabb->size.y, mesh_aabb->size.z));
+
+    camera->position = top_right_corner;
+    camera->orientation = v3_normalize(v3_sub(aabb_center, camera->position));
+
+    const f32 diagonal_length = v3_len(v3_sub(top_right_corner, aabb_center));
+    const f32 scale_factor = 0.082f * diagonal_length;
+
+    camera->position =
+        v3_sub(camera->position, v3_s_multi(camera->orientation, scale_factor));
 }
 
 internal b8 load_preview_image(const char* path, V2* image_dimensions,
@@ -496,24 +515,9 @@ internal u32 mesh_3d_render_to_2d_texture(const Mesh3D* mesh,
                                 mesh->indices.size * sizeof(u32),
                                 GL_STATIC_DRAW, mesh->indices.data);
 
-            const V3 aabb_center =
-                v3_add(mesh_aabb->min, v3_s_multi(mesh_aabb->size, 0.5f));
-
-            const V3 top_right_corner =
-                v3_add(mesh_aabb->min, v3f(mesh_aabb->size.x, mesh_aabb->size.y,
-                                           mesh_aabb->size.z));
 
             Camera camera = camera_create_default();
-            camera.position = top_right_corner;
-            camera.orientation =
-                v3_normalize(v3_sub(aabb_center, camera.position));
-
-            const f32 diagonal_length =
-                v3_len(v3_sub(top_right_corner, mesh_aabb->min));
-            const f32 scale_factor = 0.082f * diagonal_length;
-
-            camera.position = v3_sub(
-                camera.position, v3_s_multi(camera.orientation, scale_factor));
+            camera_set_based_on_mesh_aabb(&camera, mesh_aabb);
 
             const AABB view_port = { .size = v2i((f32)width) };
             camera.view_port = view_port;
@@ -1172,10 +1176,10 @@ void parse_file(FileAttrib* file, ColoredCharacterArray* array)
     free(word.data);
 }
 
-u32 load_object(Render* render, const char* path)
+u32 load_object(Render* render, const char* path, AABB3D* preview_mesh_aabb)
 {
     Mesh3D mesh = { 0 };
-    mesh_3d_load(&mesh, path, 0.0f);
+    *preview_mesh_aabb = mesh_3d_load(&mesh, path, 0.0f);
     vertex_buffer_orphan(render->vertex_buffer_id,
                          mesh.vertices.size * sizeof(Vertex3D), GL_STATIC_DRAW,
                          mesh.vertices.data);
@@ -1804,6 +1808,10 @@ u8* application_initialize(ApplicationContext* app)
 
     app->show_hidden_files = true;
 
+    app->preview_index = -1;
+    array_create(&app->preview_image.textures, 10);
+    array_create(&app->preview_text.file_colored, 1000);
+
     return font_bitmap;
 }
 
@@ -1811,6 +1819,11 @@ void application_uninitialize(ApplicationContext* app)
 {
     memset(app->search_page.running_callbacks, 0,
            sizeof(app->search_page.running_callbacks));
+
+    if (app->preview_image.current_viewed_path)
+    {
+        free(app->preview_image.current_viewed_path);
+    }
 
     window_destroy(app->window);
 
@@ -2521,22 +2534,79 @@ internal void application_open_context_menu_window(ApplicationContext* app,
     }
 }
 
+void application_open_preview(ApplicationContext* app)
+{
+    if (app->preview_index == 0)
+    {
+        DirectoryPage* current = directory_current(
+            &app->tabs.data[app->tab_index].directory_history);
+        UiWindow* preview = ui_window_get(app->preview_window);
+
+        V2 image_dimensions = load_and_scale_preview_image(
+            app, &app->preview_image.dimensions,
+            &app->preview_image.current_viewed_path, &current->directory.files,
+            &app->preview_image.textures);
+
+        preview->size = image_dimensions;
+        preview->position =
+            v2f(middle(app->dimensions.width, preview->size.width),
+                middle(app->dimensions.height, preview->size.height));
+        preview->top_color = global_get_clear_color();
+        preview->bottom_color = global_get_clear_color();
+
+        if (ui_window_begin(app->preview_window, NULL, UI_WINDOW_OVERLAY))
+        {
+            ui_window_add_image(v2d(), image_dimensions,
+                                app->preview_image.textures.data[0]);
+
+            if (ui_window_end()) app->preview_index = -1;
+        }
+    }
+    else if (app->preview_index == 1)
+    {
+        AABB view_port = {
+            .min = v2i(0.0f),
+            .size = v2_s_sub(app->dimensions, 0.0f),
+        };
+        app->preview_camera.view_port = view_port;
+        app->preview_camera.view_projection.projection =
+            perspective(PI * 0.5f, view_port.size.width / view_port.size.height,
+                        0.1f, 100.0f);
+        app->preview_camera.view_projection.view =
+            view(app->preview_camera.position,
+                 v3_add(app->preview_camera.position,
+                        app->preview_camera.orientation),
+                 app->preview_camera.up);
+        camera_update(&app->preview_camera, app->delta_time);
+    }
+    else
+    {
+        UiWindow* preview = ui_window_get(app->preview_window);
+        preview->size =
+            v2f(app->dimensions.width * 0.9f, app->dimensions.height * 0.9f);
+        preview->position =
+            v2f(middle(app->dimensions.width, preview->size.width),
+                middle(app->dimensions.height, preview->size.height));
+
+        preview->top_color = v4ic(0.0f);
+        preview->bottom_color = v4ic(0.0f);
+
+        if (ui_window_begin(app->preview_window, NULL,
+                            UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+        {
+            ui_window_add_text_colored(v2f(10.0f, 10.0f),
+                                       &app->preview_text.file_colored, true);
+            if (ui_window_end()) app->preview_index = -1;
+        }
+    }
+}
+
 void application_run()
 {
     ApplicationContext app = { 0 };
     u8* font_bitmap = application_initialize(&app);
 
     ContextMenu menu = { 0 };
-
-    V2 preview_image_dimensions = v2d();
-    char* current_path = NULL;
-    FileAttrib preview_file = { 0 };
-    ColoredCharacterArray preview_file_colored = { 0 };
-    array_create(&preview_file_colored, 1000);
-    U32Array preview_textures = { 0 };
-    array_create(&preview_textures, 10);
-    i32 preview_index = -1;
-    Camera preview_camera = camera_create_default();
 
     AABBArray parent_directory_aabbs = { 0 };
     array_create(&parent_directory_aabbs, 10);
@@ -2591,7 +2661,7 @@ void application_run()
             }
         }
 
-        b8 check_collision = preview_index != 1;
+        b8 check_collision = app.preview_index != 1;
 
         if (check_collision &&
             (collision_point_in_aabb(app.mouse_position,
@@ -2602,7 +2672,7 @@ void application_run()
             check_collision = false;
         }
 
-        if (preview_index != 1 &&
+        if (app.preview_index != 1 &&
             tab->directory_list.selected_item_values.paths.size)
         {
             if (event_is_ctrl_and_key_pressed(FTIC_KEY_C))
@@ -2610,20 +2680,22 @@ void application_run()
                 // TODO: this is used in input fields
                 // platform_copy_to_clipboard(&tab->selected_item_values.paths);
             }
-            else if (preview_index == -1 &&
+            else if (app.preview_index == -1 &&
                      tab->directory_list.selected_item_values.paths.size == 1 &&
-                     event_is_ctrl_and_key_pressed(FTIC_KEY_D))
+                     event_is_key_pressed_once(FTIC_KEY_E) &&
+                     event_get_key_event()->shift_pressed)
             {
                 const char* path =
                     tab->directory_list.selected_item_values.paths.data[0];
 
-                if (load_preview_image(path, &preview_image_dimensions,
-                                       &preview_textures))
+                if (load_preview_image(path, &app.preview_image.dimensions,
+                                       &app.preview_image.textures))
                 {
-                    current_path = string_copy(path, (u32)strlen(path), 0);
+                    app.preview_image.current_viewed_path =
+                        string_copy(path, (u32)strlen(path), 0);
                     directory_clear_selected_items(
                         &tab->directory_list.selected_item_values);
-                    preview_index = 0;
+                    app.preview_index = 0;
                 }
                 else
                 {
@@ -2631,14 +2703,20 @@ void application_run()
                         file_get_extension(path, (u32)strlen(path));
                     if (strcmp(extension, "obj") == 0)
                     {
-                        preview_index = 1;
-                        app.index_count_3d = load_object(&app.render_3d, path);
+                        app.preview_index = 1;
+                        app.index_count_3d = load_object(
+                            &app.render_3d, path, &app.preview_mesh_aabb);
+
+                        app.preview_camera = camera_create_default();
+                        camera_set_based_on_mesh_aabb(&app.preview_camera,
+                                                      &app.preview_mesh_aabb);
                     }
                     else
                     {
-                        preview_file = file_read(path);
-                        parse_file(&preview_file, &preview_file_colored);
-                        preview_index = 2;
+                        app.preview_text.file = file_read(path);
+                        parse_file(&app.preview_text.file,
+                                   &app.preview_text.file_colored);
+                        app.preview_index = 2;
                     }
                 }
             }
@@ -2653,7 +2731,7 @@ void application_run()
             }
         }
 
-        if (preview_index != 1 && event_is_ctrl_and_key_pressed(FTIC_KEY_V))
+        if (app.preview_index != 1 && event_is_ctrl_and_key_pressed(FTIC_KEY_V))
         {
             // TODO: this is used in input fields
             // directory_paste_in_directory(
@@ -2698,7 +2776,7 @@ void application_run()
 
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
-        if (preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
+        if (app.preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
             event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
         {
 #if 0
@@ -3075,85 +3153,23 @@ void application_run()
                 }
             }
 
-            if (preview_index != -1)
+            if (app.preview_index != -1)
             {
-                if (preview_index == 0)
-                {
-                    UiWindow* preview = ui_window_get(app.preview_window);
-
-                    V2 image_dimensions = load_and_scale_preview_image(
-                        &app, &preview_image_dimensions, &current_path,
-                        &directory_current(&tab->directory_history)
-                             ->directory.files,
-                        &preview_textures);
-
-                    preview->size = image_dimensions;
-                    preview->position = v2f(
-                        middle(app.dimensions.width, preview->size.width),
-                        middle(app.dimensions.height, preview->size.height));
-                    preview->top_color = global_get_clear_color();
-                    preview->bottom_color = global_get_clear_color();
-
-                    if (ui_window_begin(app.preview_window, NULL,
-                                        UI_WINDOW_OVERLAY))
-                    {
-                        ui_window_add_image(v2d(), image_dimensions,
-                                            preview_textures.data[0]);
-
-                        if (ui_window_end()) preview_index = -1;
-                    }
-                }
-                else if (preview_index == 1)
-                {
-                    AABB view_port = {
-                        .min = v2i(0.0f),
-                        .size = v2_s_sub(app.dimensions, 0.0f),
-                    };
-                    preview_camera.view_port = view_port;
-                    preview_camera.view_projection.projection = perspective(
-                        PI * 0.5f, view_port.size.width / view_port.size.height,
-                        0.1f, 100.0f);
-                    preview_camera.view_projection.view =
-                        view(preview_camera.position,
-                             v3_add(preview_camera.position,
-                                    preview_camera.orientation),
-                             preview_camera.up);
-                    camera_update(&preview_camera, app.delta_time);
-                }
-                else
-                {
-                    UiWindow* preview = ui_window_get(app.preview_window);
-                    preview->size = v2f(app.dimensions.width * 0.9f,
-                                        app.dimensions.height * 0.9f);
-                    preview->position = v2f(
-                        middle(app.dimensions.width, preview->size.width),
-                        middle(app.dimensions.height, preview->size.height));
-
-                    preview->top_color = v4ic(0.0f);
-                    preview->bottom_color = v4ic(0.0f);
-
-                    if (ui_window_begin(app.preview_window, NULL,
-                                        UI_WINDOW_OVERLAY |
-                                            UI_WINDOW_FROSTED_GLASS))
-                    {
-                        ui_window_add_text_colored(v2f(10.0f, 10.0f),
-                                                   &preview_file_colored, true);
-                        if (ui_window_end()) preview_index = -1;
-                    }
-                }
+                application_open_preview(&app);
             }
             else
             {
-                if (preview_textures.size > 0)
+                if (app.preview_image.textures.size > 0)
                 {
                     texture_delete(
-                        preview_textures.data[--preview_textures.size]);
+                        app.preview_image.textures
+                            .data[--app.preview_image.textures.size]);
                 }
-                if (preview_file.buffer)
+                if (app.preview_text.file.buffer)
                 {
-                    free(preview_file.buffer);
-                    preview_file = (FileAttrib){ 0 };
-                    preview_file_colored.size = 0;
+                    free(app.preview_text.file.buffer);
+                    app.preview_text.file = (FileAttrib){ 0 };
+                    app.preview_text.file_colored.size = 0;
                 }
             }
 
@@ -3233,7 +3249,7 @@ void application_run()
         render_draw(0, app.main_index_count, &whole_screen_scissor);
         render_end_draw(&app.main_render.render);
 
-        if (preview_index == 1)
+        if (app.preview_index == 1)
         {
 #if 0
             glViewport((int)roundf(preview_camera.view_port.min.x),
@@ -3244,29 +3260,31 @@ void application_run()
 
             MVP mvp = {
                 .model = m4i(1.0f),
-                .view = preview_camera.view_projection.view,
-                .projection = preview_camera.view_projection.projection,
+                .view = app.preview_camera.view_projection.view,
+                .projection = app.preview_camera.view_projection.projection,
             };
 
             glEnable(GL_DEPTH_TEST);
             render_begin_draw(&app.render_3d,
                               app.render_3d.shader_properties.shader, &mvp);
 
-            glUniform3f(app.light_dir_location, -preview_camera.orientation.x,
-                        -preview_camera.orientation.y,
-                        -preview_camera.orientation.z);
+            glUniform3f(app.light_dir_location,
+                        -app.preview_camera.orientation.x,
+                        -app.preview_camera.orientation.y,
+                        -app.preview_camera.orientation.z);
 
-            render_draw(0, app.index_count_3d, &preview_camera.view_port);
+            render_draw(0, app.index_count_3d, &app.preview_camera.view_port);
             render_end_draw(&app.render_3d);
             glDisable(GL_DEPTH_TEST);
             if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
             {
-                preview_index = -1;
+                app.preview_index = -1;
             }
 
             if (event_is_key_pressed_once(FTIC_KEY_R))
             {
-                preview_camera = camera_create_default();
+                camera_set_based_on_mesh_aabb(&app.preview_camera,
+                                              &app.preview_mesh_aabb);
             }
         }
 
@@ -3286,7 +3304,6 @@ void application_run()
 
         application_end_frame(&app);
     }
-    if (current_path) free(current_path);
 
     // TODO: Cleanup of all
     application_uninitialize(&app);

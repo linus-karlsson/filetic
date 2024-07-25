@@ -1,5 +1,6 @@
 #include "camera.h"
 #include "event.h"
+#include "logging.h"
 
 Camera camera_create_default()
 {
@@ -14,6 +15,7 @@ Camera camera_create_default()
     result.speed = 1.5f;
     result.old_speed = result.speed;
     result.sens = 5.0f;
+    result.first_clicked = true;
     return result;
 }
 
@@ -30,6 +32,7 @@ Camera camera_create(f32 speed, f32 sensitivity)
     result.speed = speed;
     result.old_speed = speed;
     result.sens = sensitivity;
+    result.first_clicked = true;
     return result;
 }
 

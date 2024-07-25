@@ -7,3 +7,5 @@ C:\Users\linus
 C:\Users\linus\dev\help
 C:\Users\linus\dev\filetic\lib
 C:\Users\linus\dev\filetic\remedy
+C:\Users\linus\dev\OpenGL\OpenGL\res\MossyGame\BlueWizardAnimations\BlueWizard\2BlueWizardWalk
+C:\Users\linus\dev\demo
