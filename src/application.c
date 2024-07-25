@@ -462,9 +462,22 @@ internal void look_for_and_load_object_thumbnails(const V2 dimensions,
                          GL_UNSIGNED_BYTE, NULL);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+            u32 rbo;
+            glGenRenderbuffers(1, &rbo);
+            glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT,
+                                  (GLsizei)item->texture_width,
+                         (GLsizei)item->texture_height);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                      GL_RENDERBUFFER, rbo);
 
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                    GL_TEXTURE_2D, item->texture_id, 0);
+
+
 
             if (glCheckFramebufferStatus(GL_FRAMEBUFFER) ==
                 GL_FRAMEBUFFER_COMPLETE)
@@ -502,25 +515,30 @@ internal void look_for_and_load_object_thumbnails(const V2 dimensions,
                     .projection = camera.view_projection.projection,
                 };
 
+                glEnable(GL_DEPTH_TEST);
+                glBindFramebuffer(GL_FRAMEBUFFER, fbo);
                 glViewport((int)roundf(camera.view_port.min.x),
                            (int)roundf(camera.view_port.min.y),
                            (int)roundf(camera.view_port.size.width),
                            (int)roundf(camera.view_port.size.height));
 
-                glEnable(GL_DEPTH_TEST);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
                 render_begin_draw(render, render->shader_properties.shader,
                                   &mvp);
 
                 int location = glGetUniformLocation(
                     render->shader_properties.shader, "light_dir");
                 ftic_assert(location != -1);
-                glUniform3f(location, camera.orientation.x,
-                            camera.orientation.y, camera.orientation.z);
+                glUniform3f(location, -camera.orientation.x,
+                            camera.orientation.y, -camera.orientation.z);
 
                 render_draw(0, object->mesh.indices.size, &camera.view_port);
                 render_end_draw(render);
+
                 glDisable(GL_DEPTH_TEST);
 
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glViewport(0, 0, (int)roundf(dimensions.width),
                            (int)roundf(dimensions.height));
             }
@@ -532,6 +550,7 @@ internal void look_for_and_load_object_thumbnails(const V2 dimensions,
 
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glDeleteFramebuffers(1, &fbo);
+            glDeleteRenderbuffers(1, &rbo);
 
             item->reload_thumbnail = false;
         }
