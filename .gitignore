@@ -14,3 +14,4 @@ error_logging.txt
 .cache/
 x64/
 compile_commands.json
+saved/
