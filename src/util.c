@@ -350,10 +350,43 @@ f32 round_f32(f32 value)
     return (f32)((int)(value + (0.5f - (f32)(value < 0.0f))));
 }
 
-void mesh_3d_load(Mesh3D* mesh, const char* object_path)
+internal void mesh_3d_aabb_check_min_max(const V3 vertex_position, AABB3D* aabb,
+                                         V3* current_max)
+{
+    if (vertex_position.x < aabb->min.x)
+    {
+        aabb->min.x = vertex_position.x;
+    }
+    if (vertex_position.x > current_max->x)
+    {
+        current_max->x = vertex_position.x;
+    }
+    if (vertex_position.y < aabb->min.y)
+    {
+        aabb->min.y = vertex_position.y;
+    }
+    if (vertex_position.y > current_max->y)
+    {
+        current_max->y = vertex_position.y;
+    }
+    if (vertex_position.z < aabb->min.z)
+    {
+        aabb->min.z = vertex_position.z;
+    }
+    if (vertex_position.z > current_max->z)
+    {
+        current_max->z = vertex_position.z;
+    }
+}
+
+AABB3D mesh_3d_load(Mesh3D* mesh, const char* object_path,
+                    const f32 texture_index)
 {
     ObjectLoad object_load = { 0 };
     object_load_model(&object_load, object_path);
+
+    AABB3D result = { .min = v3i(INFINITY) };
+    V3 max = v3i(-INFINITY);
 
     array_create(&mesh->vertices, object_load.indices.size);
     array_create(&mesh->indices, object_load.indices.size);
@@ -373,12 +406,17 @@ void mesh_3d_load(Mesh3D* mesh, const char* object_path)
         vertex.texture_coordinates.y =
             1.0f - object_load.texture_coordinates.data[current_tex_index].y;
 
-        vertex.texture_index = 0;
+        vertex.texture_index = texture_index;
+
+        mesh_3d_aabb_check_min_max(vertex.position, &result, &max);
 
         array_push(&mesh->vertices, vertex);
         array_push(&mesh->indices, i);
     }
     object_load_free(&object_load);
+
+    result.size = v3_sub(max, result.min);
+    return result;
 }
 
 void object_load_thumbnail(void* data)
@@ -386,8 +424,9 @@ void object_load_thumbnail(void* data)
     ObjectThumbnailData* arguments = (ObjectThumbnailData*)data;
 
     ObjectThumbnail thumbnail = { .id = guid_copy(&arguments->file_id) };
-    mesh_3d_load(&thumbnail.mesh, arguments->file_path);
-    
+    thumbnail.mesh_aabb =
+        mesh_3d_load(&thumbnail.mesh, arguments->file_path, 0.0f);
+
     platform_mutex_lock(&arguments->array->mutex);
     if (arguments->array->array.data == NULL)
     {

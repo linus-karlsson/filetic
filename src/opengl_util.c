@@ -360,7 +360,8 @@ u32 load_icon_and_resize(const char* file_path, i32 width, i32 height)
     TextureProperties texture_properties = { 0 };
     texture_load(file_path, &texture_properties);
     texture_resize(&texture_properties, width, height);
-    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
+    u32 icon_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
     free(texture_properties.bytes);
     return icon_texture;
 }
@@ -369,7 +370,29 @@ u32 load_icon(const char* file_path)
 {
     TextureProperties texture_properties = { 0 };
     texture_load(file_path, &texture_properties);
-    u32 icon_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
+    u32 icon_texture =
+        texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
     free(texture_properties.bytes);
     return icon_texture;
 }
+
+TextureCoordinates default_texture_coordinates()
+{
+    TextureCoordinates texture_coordinates;
+    texture_coordinates.coordinates[0] = v2i(0.0f);
+    texture_coordinates.coordinates[1] = v2f(0.0f, 1.0f);
+    texture_coordinates.coordinates[2] = v2i(1.0f);
+    texture_coordinates.coordinates[3] = v2f(1.0f, 0.0f);
+    return texture_coordinates;
+}
+
+TextureCoordinates flip_texture_coordinates()
+{
+    TextureCoordinates texture_coordinates;
+    texture_coordinates.coordinates[0] = v2f(0.0f, 1.0f);
+    texture_coordinates.coordinates[1] = v2i(0.0f);
+    texture_coordinates.coordinates[2] = v2f(1.0f, 0.0f);
+    texture_coordinates.coordinates[3] = v2i(1.0f);
+    return texture_coordinates;
+}
+

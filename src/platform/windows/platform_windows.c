@@ -551,7 +551,8 @@ b8 platform_directory_exists(const char* directory_path)
 }
 
 internal void insert_directory_item(const u32 directory_len, const u64 size,
-                                    const u64 last_write_time, char* path,
+                                    const u64 last_write_time,
+                                    const DirectoryItemType type, char* path,
                                     DirectoryItemArray* items)
 {
     HANDLE h = CreateFile(
@@ -570,6 +571,7 @@ internal void insert_directory_item(const u32 directory_len, const u64 size,
                 .last_write_time = last_write_time,
                 .path = path,
                 .name = path + directory_len - 1,
+                .type = type,
             };
 
             item.id = guid_copy_bytes(buffer.ObjectId);
@@ -582,6 +584,44 @@ internal void insert_directory_item(const u32 directory_len, const u64 size,
 void platform_show_hidden_files(b8 show)
 {
     show_hidden_files = show;
+}
+
+internal DirectoryItemType
+get_file_type_based_on_extension(const char* name, const u32 name_length)
+{
+    const char* extension = file_get_extension(name, (u32)strlen(name));
+    if (extension)
+    {
+        if (strcmp(extension, "png") == 0)
+        {
+            return FILE_PNG;
+        }
+        else if (strcmp(extension, "jpg") == 0)
+        {
+            return FILE_JPG;
+        }
+        else if (strcmp(extension, "pdf") == 0)
+        {
+            return FILE_PDF;
+        }
+        else if (strcmp(extension, "cpp") == 0)
+        {
+            return FILE_CPP;
+        }
+        else if (strcmp(extension, "c") == 0 || strcmp(extension, "h") == 0)
+        {
+            return FILE_C;
+        }
+        else if (strcmp(extension, "java") == 0)
+        {
+            return FILE_JAVA;
+        }
+        else if (strcmp(extension, "obj") == 0)
+        {
+            return FILE_OBJ;
+        }
+    }
+    return FILE_DEFAULT;
 }
 
 Directory platform_get_directory(const char* directory_path,
@@ -612,9 +652,9 @@ Directory platform_get_directory(const char* directory_path,
                 }
             }
 
-            char* path =
-                concatinate(directory_path, directory_len - 1, ffd.cFileName,
-                            (u32)strlen(ffd.cFileName), 0, 2, NULL);
+            const u32 name_length = (u32)strlen(ffd.cFileName);
+            char* path = concatinate(directory_path, directory_len - 1,
+                                     ffd.cFileName, name_length, 0, 2, NULL);
 
             u64 last_write_time =
                 ((u64)ffd.ftLastWriteTime.dwHighDateTime << 32) |
@@ -622,15 +662,18 @@ Directory platform_get_directory(const char* directory_path,
 
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
-                insert_directory_item(directory_len, 0, last_write_time, path,
+                insert_directory_item(directory_len, 0, last_write_time,
+                                      FOLDER_DEFAULT, path,
                                       &directory.sub_directories);
             }
             else
             {
-                insert_directory_item(directory_len,
-                                      (ffd.nFileSizeHigh * (MAXDWORD + 1)) +
-                                          ffd.nFileSizeLow,
-                                      last_write_time, path, &directory.files);
+                DirectoryItemType type = get_file_type_based_on_extension(
+                    ffd.cFileName, name_length);
+                insert_directory_item(
+                    directory_len,
+                    (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
+                    last_write_time, type, path, &directory.files);
             }
 
         } while (FindNextFile(file_handle, &ffd));

@@ -164,16 +164,33 @@ typedef struct UU32Array
 
 global UiContext ui_context = { 0 };
 global f32 ui_big_icon_size = 84.0f;
+global V2 ui_big_icon_min_max = { .min = 64.0f, .max = 256.0f };
 
 f32 ui_get_big_icon_size()
 {
     return ui_big_icon_size;
 }
+
+void ui_set_big_icon_min_size(f32 new_min)
+{
+    ui_big_icon_min_max.min = new_min;
+}
+
+void ui_set_big_icon_max_size(f32 new_max)
+{
+    ui_big_icon_min_max.max = new_max;
+}
+
+V2 ui_get_big_icon_min_max()
+{
+    return ui_big_icon_min_max;
+}
+
 void ui_set_big_icon_size(f32 new_size)
 {
     ui_big_icon_size = new_size;
-    ui_big_icon_size = clampf32_high(ui_big_icon_size, 256.0f);
-    ui_big_icon_size = clampf32_low(ui_big_icon_size, 64.0f);
+    ui_big_icon_size = clampf32_high(ui_big_icon_size, ui_big_icon_min_max.max);
+    ui_big_icon_size = clampf32_low(ui_big_icon_size, ui_big_icon_min_max.min);
 }
 
 internal f32 set_scroll_offset(const f32 total_height, const f32 area_y,
@@ -3571,48 +3588,48 @@ internal b8 check_directory_item_collision(V2 starting_position,
 }
 
 internal f32 get_file_icon_based_on_extension(const f32 icon_index,
-                                              const char* name)
+                                              DirectoryItemType type)
 {
     b8 small = icon_index == UI_FILE_ICON_TEXTURE;
     if (small || icon_index == UI_FILE_ICON_BIG_TEXTURE)
     {
-        const char* extension = file_get_extension(name, (u32)strlen(name));
-        if (extension)
+        switch (type)
         {
-            if (strcmp(extension, "png") == 0)
+            case FILE_PNG:
             {
                 return small ? UI_FILE_PNG_ICON_TEXTURE
                              : UI_FILE_PNG_ICON_BIG_TEXTURE;
             }
-            else if (strcmp(extension, "jpg") == 0)
+            case FILE_JPG:
             {
                 return small ? UI_FILE_JPG_ICON_TEXTURE
                              : UI_FILE_JPG_ICON_BIG_TEXTURE;
             }
-            else if (strcmp(extension, "pdf") == 0)
+            case FILE_PDF:
             {
                 return small ? UI_FILE_PDF_ICON_TEXTURE
                              : UI_FILE_PDF_ICON_BIG_TEXTURE;
             }
-            else if (strcmp(extension, "cpp") == 0)
+            case FILE_CPP:
             {
                 return small ? UI_FILE_CPP_ICON_TEXTURE
                              : UI_FILE_CPP_ICON_BIG_TEXTURE;
             }
-            else if (strcmp(extension, "c") == 0 || strcmp(extension, "h") == 0)
+            case FILE_C:
             {
                 return small ? UI_FILE_C_ICON_TEXTURE
                              : UI_FILE_C_ICON_BIG_TEXTURE;
             }
-            else if (strcmp(extension, "java") == 0)
+            case FILE_JAVA:
             {
                 return small ? UI_FILE_JAVA_ICON_TEXTURE
                              : UI_FILE_JAVA_ICON_BIG_TEXTURE;
             }
-            else if (strcmp(extension, "obj") == 0)
+            case FILE_OBJ:
             {
                 return UI_FILE_OBJ_ICON_TEXTURE;
             }
+            default: break;
         }
     }
     return icon_index;
@@ -3688,7 +3705,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions,
     starting_position.x += animated.x;
     item_dimensions.width -= animated.x;
 
-    icon_index = get_file_icon_based_on_extension(icon_index, item->name);
+    icon_index = get_file_icon_based_on_extension(icon_index, item->type);
 
     const V2 icon_size = v2i(24.0f);
     AABB icon_aabb =
@@ -3787,7 +3804,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
     }
     else
     {
-        icon_index = get_file_icon_based_on_extension(icon_index, item->name);
+        icon_index = get_file_icon_based_on_extension(icon_index, item->type);
         if (!item->reload_thumbnail)
         {
             if ((icon_index == UI_FILE_PNG_ICON_BIG_TEXTURE ||
@@ -3798,7 +3815,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
                 thumbnail_data->file_id = guid_copy(&item->id);
                 thumbnail_data->array = textures;
                 thumbnail_data->file_path = item->path;
-                thumbnail_data->size = 128;
+                thumbnail_data->size = 256;
                 ThreadTask task = {
                     .data = thumbnail_data,
                     .task_callback = load_thumpnails,
@@ -3814,7 +3831,9 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
                 thumbnail_data->file_id = guid_copy(&item->id);
                 thumbnail_data->array = objects;
                 thumbnail_data->file_path = item->path;
-                thumbnail_data->size = 128;
+
+                item->texture_width = 256;
+                item->texture_height = item->texture_width;
                 ThreadTask task = {
                     .data = thumbnail_data,
                     .task_callback = object_load_thumbnail,
@@ -3825,12 +3844,20 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions,
         }
     }
 
-    AABB icon_aabb = quad(
-        &ui_context.render.vertices,
-        v2f(starting_position.x +
-                middle(item_dimensions.width, icon_size.width),
-            starting_position.y + 3.0f + (ui_big_icon_size - icon_size.height)),
-        icon_size, v4a(v4i(1.0f), window->alpha), icon_index);
+    AABB icon_aabb = {
+        .min = v2f(starting_position.x +
+                       middle(item_dimensions.width, icon_size.width),
+                   starting_position.y + 3.0f +
+                       (ui_big_icon_size - icon_size.height)),
+        .size = icon_size,
+    };
+
+    const TextureCoordinates coords[2] = { default_texture_coordinates(),
+                                           flip_texture_coordinates() };
+
+    set_up_verticies(&ui_context.render.vertices, icon_aabb.min, icon_size,
+                     v4a(v4i(1.0f), window->alpha), icon_index,
+                     coords[item->type == FILE_OBJ]);
     window->rendering_index_count += 6;
 
     const f32 total_available_width_for_text = item_dimensions.width;

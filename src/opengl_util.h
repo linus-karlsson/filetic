@@ -25,3 +25,6 @@ u32 load_icon_as_white(const char* file_path);
 u32 load_icon_as_white_resize(const char* file_path, i32 width, i32 height);
 u32 load_icon(const char* file_path);
 u32 load_icon_and_resize(const char* file_path, i32 width, i32 height);
+
+TextureCoordinates default_texture_coordinates();
+TextureCoordinates flip_texture_coordinates();

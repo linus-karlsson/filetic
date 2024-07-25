@@ -3,6 +3,19 @@
 #include "util.h"
 #include "ftic_guid.h"
 
+typedef enum DirectoryItemType
+{
+    FOLDER_DEFAULT,
+    FILE_DEFAULT,
+    FILE_PNG,
+    FILE_JPG,
+    FILE_PDF,
+    FILE_CPP,
+    FILE_C,
+    FILE_JAVA,
+    FILE_OBJ,
+} DirectoryItemType;
+
 typedef void Platform;
 typedef void (*OnKeyPressedCallback)(u16 key, b8 ctrl_pressed, b8 alt_pressed);
 typedef void (*OnKeyReleasedCallback)(u16 key, b8 ctrl_pressed, b8 alt_pressed);
@@ -42,6 +55,7 @@ typedef struct DirectoryItem
     u64 last_write_time;
     char* name;
     char* path;
+    DirectoryItemType type;
 
     V2 before_animation;
     V2 after_animation;
@@ -151,10 +165,7 @@ void platform_semaphore_increment(FTicSemaphore* sem, long* previous_count);
 void platform_semaphore_wait_and_decrement(FTicSemaphore* sem);
 void platform_semaphore_destroy(FTicSemaphore* sem);
 
-FTicThreadHandle
-platform_thread_create(void* data,
-                       thread_return_value (*thread_function)(void* data),
-                       unsigned long creation_flag, unsigned long* thread_id);
+FTicThreadHandle platform_thread_create(void* data, thread_return_value (*thread_function)(void* data), unsigned long creation_flag, unsigned long* thread_id);
 void platform_thread_join(FTicThreadHandle handle);
 void platform_thread_close(FTicThreadHandle handle);
 void platform_thread_terminate(FTicThreadHandle handle);

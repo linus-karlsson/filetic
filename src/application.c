@@ -421,6 +421,142 @@ internal void look_for_and_load_image_thumbnails(DirectoryTab* tab)
     platform_mutex_unlock(&tab->textures.mutex);
 }
 
+internal u32 mesh_3d_render_to_2d_texture(const Mesh3D* mesh,
+                                          const AABB3D* mesh_aabb,
+                                          const i32 width, const i32 height,
+                                          const AABB* view_port_before,
+                                          Render* render)
+{
+    u32 resulting_texture = 0;
+
+    u32 fbo;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    u32 multisampled_texture;
+    glGenTextures(1, &multisampled_texture);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, multisampled_texture);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_RGBA8,
+                            (GLsizei)width, (GLsizei)height, GL_TRUE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D_MULTISAMPLE, multisampled_texture, 0);
+
+    u32 rbo;
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH_COMPONENT,
+                                     (GLsizei)width, (GLsizei)height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                              GL_RENDERBUFFER, rbo);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
+    {
+        u32 resolve_fbo;
+        glGenFramebuffers(1, &resolve_fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, resolve_fbo);
+
+        glGenTextures(1, &resulting_texture);
+        glBindTexture(GL_TEXTURE_2D, resulting_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)width,
+                     (GLsizei)height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, resulting_texture, 0);
+
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
+        {
+            vertex_buffer_orphan(render->vertex_buffer_id,
+                                 mesh->vertices.size * sizeof(Vertex3D),
+                                 GL_STATIC_DRAW, mesh->vertices.data);
+            index_buffer_orphan(render->index_buffer_id,
+                                mesh->indices.size * sizeof(u32),
+                                GL_STATIC_DRAW, mesh->indices.data);
+
+            const V3 aabb_center =
+                v3_add(mesh_aabb->min, v3_s_multi(mesh_aabb->size, 0.5f));
+
+            const V3 top_right_corner =
+                v3_add(mesh_aabb->min, v3f(mesh_aabb->size.x, mesh_aabb->size.y,
+                                           mesh_aabb->size.z));
+
+            Camera camera = camera_create_default();
+            camera.position = top_right_corner;
+            camera.orientation =
+                v3_normalize(v3_sub(aabb_center, camera.position));
+
+            const f32 diagonal_length =
+                v3_len(v3_sub(top_right_corner, mesh_aabb->min));
+            const f32 scale_factor = 0.082f * diagonal_length;
+
+            camera.position = v3_sub(
+                camera.position, v3_s_multi(camera.orientation, scale_factor));
+
+            const AABB view_port = { .size = v2i((f32)width) };
+            camera.view_port = view_port;
+            camera.view_projection.projection = perspective(
+                PI * 0.5f, view_port.size.width / view_port.size.height, 0.1f,
+                100.0f);
+            camera.view_projection.view =
+                view(camera.position,
+                     v3_add(camera.position, camera.orientation), camera.up);
+
+            const MVP mvp = {
+                .model = m4d(),
+                .view = camera.view_projection.view,
+                .projection = camera.view_projection.projection,
+            };
+
+            glEnable(GL_DEPTH_TEST);
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+            glViewport(0, 0, (int)round_f32(camera.view_port.size.width),
+                       (int)round_f32(camera.view_port.size.height));
+
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            render_begin_draw(render, render->shader_properties.shader, &mvp);
+
+            int location = glGetUniformLocation(
+                render->shader_properties.shader, "light_dir");
+            ftic_assert(location != -1);
+            glUniform3f(location, -camera.orientation.x, -camera.orientation.y,
+                        -camera.orientation.z);
+
+            render_draw(0, mesh->indices.size, &camera.view_port);
+            render_end_draw(render);
+
+            glDisable(GL_DEPTH_TEST);
+
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolve_fbo);
+            glBlitFramebuffer(0, 0, (GLsizei)width, (GLsizei)height, 0, 0,
+                              (GLsizei)width, (GLsizei)height,
+                              GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport((int)round_f32(view_port_before->min.x),
+                       (int)round_f32(view_port_before->min.y),
+                       (int)round_f32(view_port_before->size.width),
+                       (int)round_f32(view_port_before->size.height));
+        }
+        else
+        {
+            texture_delete(resulting_texture);
+            resulting_texture = 0;
+        }
+        glDeleteFramebuffers(1, &resolve_fbo);
+    }
+
+    glDeleteTextures(1, &multisampled_texture);
+    glDeleteFramebuffers(1, &fbo);
+    glDeleteRenderbuffers(1, &rbo);
+
+    return resulting_texture;
+}
+
 internal void look_for_and_load_object_thumbnails(const V2 dimensions,
                                                   DirectoryTab* tab,
                                                   Render* render)
@@ -447,113 +583,14 @@ internal void look_for_and_load_object_thumbnails(const V2 dimensions,
                 texture_delete(item->texture_id);
                 item->texture_id = 0;
             }
-            item->texture_width = 128;
-            item->texture_height = 128;
-
-            u32 fbo = 0;
-            glGenFramebuffers(1, &fbo);
-            glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-            glGenTextures(1, &item->texture_id);
-            glBindTexture(GL_TEXTURE_2D, item->texture_id);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
-                         (GLsizei)item->texture_width,
-                         (GLsizei)item->texture_height, 0, GL_RGBA,
-                         GL_UNSIGNED_BYTE, NULL);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-            u32 rbo;
-            glGenRenderbuffers(1, &rbo);
-            glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT,
-                                  (GLsizei)item->texture_width,
-                         (GLsizei)item->texture_height);
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                                      GL_RENDERBUFFER, rbo);
-
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_2D, item->texture_id, 0);
-
-
-
-            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) ==
-                GL_FRAMEBUFFER_COMPLETE)
-            {
-                vertex_buffer_orphan(
-                    render->vertex_buffer_id,
-                    object->mesh.vertices.size * sizeof(Vertex3D),
-                    GL_STATIC_DRAW, object->mesh.vertices.data);
-                index_buffer_orphan(render->index_buffer_id,
-                                    object->mesh.indices.size * sizeof(u32),
-                                    GL_STATIC_DRAW, object->mesh.indices.data);
-
-                Camera camera = camera_create_default();
-
-                camera.position = v3f(6.5f, -4.0f, 3.5f);
-
-                V3 target = v3f(2.0f, -2.0f, 0.0f);
-
-                camera.orientation =
-                    v3_normalize(v3_sub(target, camera.position));
-
-                AABB view_port = { .size = v2i(128.0f) };
-
-                camera.view_port = view_port;
-                camera.view_projection.projection = perspective(
-                    PI * 0.5f, view_port.size.width / view_port.size.height,
-                    0.1f, 100.0f);
-                camera.view_projection.view = view(
-                    camera.position,
-                    v3_add(camera.position, camera.orientation), camera.up);
-
-                MVP mvp = {
-                    .model = rotate_z(PI),
-                    .view = camera.view_projection.view,
-                    .projection = camera.view_projection.projection,
-                };
-
-                glEnable(GL_DEPTH_TEST);
-                glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-                glViewport((int)roundf(camera.view_port.min.x),
-                           (int)roundf(camera.view_port.min.y),
-                           (int)roundf(camera.view_port.size.width),
-                           (int)roundf(camera.view_port.size.height));
-
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-                render_begin_draw(render, render->shader_properties.shader,
-                                  &mvp);
-
-                int location = glGetUniformLocation(
-                    render->shader_properties.shader, "light_dir");
-                ftic_assert(location != -1);
-                glUniform3f(location, -camera.orientation.x,
-                            camera.orientation.y, -camera.orientation.z);
-
-                render_draw(0, object->mesh.indices.size, &camera.view_port);
-                render_end_draw(render);
-
-                glDisable(GL_DEPTH_TEST);
-
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                glViewport(0, 0, (int)roundf(dimensions.width),
-                           (int)roundf(dimensions.height));
-            }
-            else
-            {
-                texture_delete(item->texture_id);
-                item->texture_id = 0;
-            }
-
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glDeleteFramebuffers(1, &fbo);
-            glDeleteRenderbuffers(1, &rbo);
+            AABB view_port_before = { .size = dimensions };
+            item->texture_id = mesh_3d_render_to_2d_texture(
+                &object->mesh, &object->mesh_aabb, item->texture_width,
+                item->texture_height, &view_port_before, render);
 
             item->reload_thumbnail = false;
         }
+
         array_free(&object->mesh.vertices);
         array_free(&object->mesh.indices);
     }
@@ -1120,7 +1157,7 @@ void parse_file(FileAttrib* file, ColoredCharacterArray* array)
 u32 load_object(Render* render, const char* path)
 {
     Mesh3D mesh = { 0 };
-    mesh_3d_load(&mesh, path);
+    mesh_3d_load(&mesh, path, 0.0f);
     vertex_buffer_orphan(render->vertex_buffer_id,
                          mesh.vertices.size * sizeof(Vertex3D), GL_STATIC_DRAW,
                          mesh.vertices.data);
@@ -2171,6 +2208,34 @@ internal void application_open_menu_window(ApplicationContext* app,
             }
         }
 
+        const V2 ui_icon_min_max = ui_get_big_icon_min_max();
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            i32 result = add_increment(row.min, "Ui icon min:", button_color,
+                                       drop_down_width, (u32)ui_icon_min_max.min);
+            if (result == 0)
+            {
+                ui_set_big_icon_min_size(max(ui_icon_min_max.min - 1.0f, 32.0f));
+            }
+            else if (result == 1)
+            {
+                ui_set_big_icon_min_size(min(ui_icon_min_max.min + 1.0f, 64.0f));
+            }
+        }
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            i32 result = add_increment(row.min, "Ui icon max:", button_color,
+                                       drop_down_width, (u32)ui_icon_min_max.max);
+            if (result == 0)
+            {
+                ui_set_big_icon_max_size(max(ui_icon_min_max.max - 1.0f, 128.0f));
+            }
+            else if (result == 1)
+            {
+                ui_set_big_icon_max_size(min(ui_icon_min_max.max + 1.0f, 256.0f));
+            }
+        }
+
         row.min.y += ui_font_pixel_height + 20.0f;
         {
             ui_window_add_text(row.min, "Animation on:", false);
@@ -2246,6 +2311,9 @@ internal void application_open_menu_window(ApplicationContext* app,
                 app->show_hidden_files = true;
 
                 app->recent.total = 10;
+
+                ui_set_big_icon_min_size(64.0f);
+                ui_set_big_icon_max_size(256.0f);
             }
         }
 
@@ -2920,10 +2988,11 @@ void application_run()
                         list_grid_icon_position.y +
                             middle(bottom_bar_height, 5.0f));
 
+                const V2 ui_icon_min_max = ui_get_big_icon_min_max();
                 static b8 pressed = false;
                 ui_set_big_icon_size(ui_window_add_slider(
-                    slider_position, v2f(90.0f, 5.0f), 64.0f, 128.0f,
-                    ui_get_big_icon_size(), &pressed));
+                    slider_position, v2f(90.0f, 5.0f), ui_icon_min_max.min,
+                    ui_icon_min_max.max, ui_get_big_icon_size(), &pressed));
 
                 ui_window_row_begin(0.0f);
 

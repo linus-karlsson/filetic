@@ -8,6 +8,12 @@ typedef struct AABB
     V2 size;
 } Rect, AABB;
 
+typedef struct AABB3D
+{
+    V3 min;
+    V3 size;
+} Rect3D, AABB3D;
+
 typedef struct AABBArray
 {
     u32 size;

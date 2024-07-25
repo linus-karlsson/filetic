@@ -2,6 +2,7 @@
 #include "define.h"
 #include "math/ftic_math.h"
 #include "hash_table.h"
+#include "collision.h"
 
 typedef struct Vertex
 {
@@ -93,6 +94,7 @@ typedef struct ObjectThumbnail
 {
     FticGUID id;
     Mesh3D mesh;
+    AABB3D mesh_aabb;
 } ObjectThumbnail;
 
 typedef struct ObjectThumbnailArray
@@ -113,7 +115,6 @@ typedef struct ObjectThumbnailData
     FticGUID file_id;
     char* file_path;
     SafeObjectThumbnailArray* array;
-    i32 size;
 } ObjectThumbnailData;
 
 FileAttrib file_read(const char* file_path);
@@ -158,6 +159,6 @@ f32 radians(f32 deg);
 f32 abs_f32(f32 in);
 f32 round_f32(f32 value);
 
-void mesh_3d_load(Mesh3D* mesh, const char* object_path);
+AABB3D mesh_3d_load(Mesh3D* mesh, const char* object_path, const f32 texture_index);
 void object_load_thumbnail(void* data);
 
