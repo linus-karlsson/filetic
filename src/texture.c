@@ -1,15 +1,24 @@
 #include "texture.h"
+#include "util.h"
+#include <stdio.h>
 #include <glad/glad.h>
 #include <stb/stb_image.h>
 #include <stb/stb_image_resize2.h>
 
-void texture_load(const char* file_path, TextureProperties* texture_properties)
+void texture_load_full_path(const char* file_path, TextureProperties* texture_properties)
 {
     // stbi_set_flip_vertically_on_load(1);
-    texture_properties->bytes = (u8*)stbi_load(
-        file_path, &texture_properties->width, &texture_properties->height,
-        &texture_properties->channels, 4);
+    texture_properties->bytes =
+        (u8*)stbi_load(file_path, &texture_properties->width, &texture_properties->height,
+                       &texture_properties->channels, 4);
     texture_properties->channels = 4;
+}
+
+void texture_load(const char* file_path, TextureProperties* texture_properties)
+{
+    char full_path_buffer[FTIC_MAX_PATH] = { 0 };
+    append_full_path(file_path, full_path_buffer);
+    texture_load_full_path(full_path_buffer, texture_properties);
 }
 
 void texture_scale_down(i32 width, i32 height, i32* new_width, i32* new_height)
@@ -25,24 +34,21 @@ void texture_scale_down(i32 width, i32 height, i32* new_width, i32* new_height)
     }
 }
 
-void texture_resize(TextureProperties* texture_properties, int box_width,
-                    int box_height)
+void texture_resize(TextureProperties* texture_properties, int box_width, int box_height)
 {
 
     TextureProperties result = { 0 };
 
     i32 new_width = box_width;
     i32 new_height = box_height;
-    texture_scale_down(texture_properties->width, texture_properties->height,
-                       &new_width, &new_height);
+    texture_scale_down(texture_properties->width, texture_properties->height, &new_width,
+                       &new_height);
 
-    result.bytes =
-        (u8*)malloc(new_width * new_height * texture_properties->channels);
+    result.bytes = (u8*)malloc(new_width * new_height * texture_properties->channels);
 
-    stbir_resize_uint8_linear(
-        texture_properties->bytes, texture_properties->width,
-        texture_properties->height, 0, result.bytes, new_width, new_height, 0,
-        texture_properties->channels);
+    stbir_resize_uint8_linear(texture_properties->bytes, texture_properties->width,
+                              texture_properties->height, 0, result.bytes, new_width,
+                              new_height, 0, texture_properties->channels);
 
     result.width = new_width;
     result.height = new_height;
@@ -52,8 +58,8 @@ void texture_resize(TextureProperties* texture_properties, int box_width,
     *texture_properties = result;
 }
 
-u32 texture_create(const TextureProperties* texture_properties,
-                   int internal_format, u32 format, int param)
+u32 texture_create(const TextureProperties* texture_properties, int internal_format,
+                   u32 format, int param)
 {
     uint32_t texture;
     glCreateTextures(GL_TEXTURE_2D, 1, &texture);

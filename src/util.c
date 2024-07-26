@@ -50,7 +50,7 @@ void file_line_read(FileAttrib* file, b8 remove_newline, CharArray* line)
     file_buffer_read(file, "\n", 1, remove_newline, line);
 }
 
-FileAttrib file_read(const char* file_path)
+FileAttrib file_read_full_path(const char* file_path)
 {
     FILE* file = fopen(file_path, "rb");
 
@@ -77,11 +77,21 @@ FileAttrib file_read(const char* file_path)
     }
     fclose(file);
     return file_attrib;
+
+}
+
+FileAttrib file_read(const char* file_path)
+{
+    char full_path_buffer[FTIC_MAX_PATH] = {0};
+    append_full_path(file_path, full_path_buffer);
+    return file_read_full_path(full_path_buffer);
 }
 
 void file_write(const char* file_path, const char* content, u32 size)
 {
-    FILE* file = fopen(file_path, "w");
+    char full_path_buffer[FTIC_MAX_PATH] = {0};
+    append_full_path(file_path, full_path_buffer);
+    FILE* file = fopen(full_path_buffer, "w");
 
     if (file == NULL)
     {
@@ -438,4 +448,15 @@ void object_load_thumbnail(void* data)
     array_push(&arguments->array->array, thumbnail);
     platform_mutex_unlock(&arguments->array->mutex);
     free(data);
+}
+
+u32 append_full_path(const char* path, char* destination)
+{
+    const char* executable_dir = platform_get_executable_directory();
+    const u32 length = platform_get_executable_directory_length();
+    memcpy(destination, executable_dir, length);
+    const u32 path_length = (u32)strlen(path);
+    memcpy(destination + length, path, path_length);
+    destination[length + path_length] = '\0';
+    return length + path_length;
 }

@@ -118,6 +118,7 @@ typedef struct ObjectThumbnailData
 } ObjectThumbnailData;
 
 FileAttrib file_read(const char* file_path);
+FileAttrib file_read_full_path(const char* file_path);
 void file_write(const char* file_path, const char* content, u32 size);
 b8 file_end_of_file(const FileAttrib* file);
 void file_buffer_read(FileAttrib* file, char* delims, u32 delim_len, b8 remove_character, CharArray* buffer);
@@ -161,4 +162,6 @@ f32 round_f32(f32 value);
 
 AABB3D mesh_3d_load(Mesh3D* mesh, const char* object_path, const f32 texture_index);
 void object_load_thumbnail(void* data);
+
+u32 append_full_path(const char* path, char* destination);
 

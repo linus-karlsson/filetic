@@ -188,7 +188,9 @@ void platform_show_properties(i32 x, i32 y, const char* file_path);
 
 void platform_listen_to_directory_change(void* data);
 
-void platform_get_executable_directory(CharArray* buffer);
+void platform_set_executable_directory();
+const char* platform_get_executable_directory();
+u32 platform_get_executable_directory_length();
 
 void platform_context_menu_create(ContextMenu* menu, const char* path);
 void platform_context_menu_destroy(ContextMenu* menu);

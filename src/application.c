@@ -664,7 +664,8 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                 platform_open_file(current->directory.files.data[selected_item].path);
             }
         }
-        if (!tab->directory_list.item_selected && !tab->directory_list.inputs.data[0].active)
+        if (!tab->directory_list.item_selected &&
+            !tab->directory_list.inputs.data[0].active)
         {
             if ((!context_menu_open &&
                  event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT)) ||
@@ -1359,10 +1360,12 @@ internal void open_window(const V2 dimensions, const u32 window_id)
 
 internal void save_application_state(ApplicationContext* app)
 {
-    FILE* file = fopen("saved/application.txt", "wb");
+    char full_path_buffer[FTIC_MAX_PATH] = { 0 };
+    append_full_path("saved/application.txt", full_path_buffer);
+    FILE* file = fopen(full_path_buffer, "wb");
     if (file == NULL)
     {
-        log_file_error("saved/application.txt");
+        log_file_error(full_path_buffer);
         return;
     }
 
@@ -1382,10 +1385,12 @@ internal void save_application_state(ApplicationContext* app)
 
 internal void load_application_state(ApplicationContext* app)
 {
-    FILE* file = fopen("saved/application.txt", "rb");
+    char full_path_buffer[FTIC_MAX_PATH] = { 0 };
+    append_full_path("saved/application.txt", full_path_buffer);
+    FILE* file = fopen(full_path_buffer, "rb");
     if (file == NULL)
     {
-        log_file_error("saved/application.txt");
+        log_file_error(full_path_buffer);
         return;
     }
 
@@ -1553,8 +1558,7 @@ internal void main_render_initialize(RenderingProperties* main_render,
     u32 paste_texture = load_icon("res/icons/paste.png");
     u32 delete_texture = load_icon("res/icons/delete.png");
 
-    u32 shader =
-        shader_create("./res/shaders/vertex.glsl", "./res/shaders/fragment.glsl");
+    u32 shader = shader_create("res/shaders/vertex.glsl", "res/shaders/fragment.glsl");
 
     ftic_assert(shader);
 
@@ -1593,6 +1597,7 @@ u8* application_initialize(ApplicationContext* app)
     event_initialize(app->window);
     platform_init_drag_drop();
     thread_initialize(100000, platform_get_core_count() - 1, &app->thread_queue);
+    platform_set_executable_directory();
 
     app->font = (FontTTF){ 0 };
     const i32 width_atlas = 512;
@@ -1620,8 +1625,7 @@ u8* application_initialize(ApplicationContext* app)
 
     main_render_initialize(&app->main_render, &font_texture_properties);
 
-    u32 shader =
-        shader_create("./res/shaders/vertex3d.glsl", "./res/shaders/fragment.glsl");
+    u32 shader = shader_create("res/shaders/vertex3d.glsl", "res/shaders/fragment.glsl");
     ftic_assert(shader);
     render_3d_initialize(&app->render_3d, shader, &app->light_dir_location);
 

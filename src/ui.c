@@ -987,10 +987,12 @@ internal void write_node(FILE* file, DockNode* node)
 
 internal void save_layout()
 {
-    FILE* file = fopen("saved/ui_layout.txt", "wb");
+    char full_path_buffer[FTIC_MAX_PATH] = { 0 };
+    append_full_path("saved/ui_layout.txt", full_path_buffer);
+    FILE* file = fopen(full_path_buffer, "wb");
     if (file == NULL)
     {
-        log_file_error("saved/ui_layout.txt");
+        log_file_error(full_path_buffer);
         return;
     }
     write_node(file, ui_context.dock_tree);
@@ -1044,10 +1046,12 @@ DockNode* read_node(FILE* file)
 
 internal DockNode* load_layout()
 {
-    FILE* file = fopen("saved/ui_layout.txt", "rb");
+    char full_path_buffer[FTIC_MAX_PATH] = { 0 };
+    append_full_path("saved/ui_layout.txt", full_path_buffer);
+    FILE* file = fopen(full_path_buffer, "rb");
     if (file == NULL)
     {
-        log_file_error("saved/ui_layout.txt");
+        log_file_error(full_path_buffer);
         return NULL;
     }
 
@@ -3471,6 +3475,7 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
                     array_push(&input->buffer, item->name[i]);
                 }
                 array_push(&input->buffer, '\0');
+                input->buffer.size--;
             }
         }
     }
@@ -3786,6 +3791,7 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index,
     V2 item_dimensions = v2f(window->size.width - relative_position.x, item_height);
     
     const b8 enter_presssed = event_is_key_pressed_once(FTIC_KEY_ENTER);
+    const b8 scroll = event_get_mouse_wheel_event()->activated;
 
     if (list) list->input_index = -1;
     i32 double_clicked_index = -1;
@@ -3802,6 +3808,7 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index,
             if (item->rename && list && list->inputs.data[list->input_index].active)
             {
                 InputBuffer* input = list->inputs.data + list->input_index;
+                input->active = !scroll;
                 const f32 icon_size = 24.0f;
                 V2 input_field_position =
                     v2f(relative_position.x + icon_size + 20.0f,

@@ -189,7 +189,7 @@ internal void parse_buffer(ObjectLoad* object_load, FileAttrib* file)
 
 void object_load_model(ObjectLoad* object_load, const char* model_path)
 {
-    FileAttrib file = file_read(model_path);
+    FileAttrib file = file_read_full_path(model_path);
     if(file.buffer)
     {
         f64 start = window_get_time();

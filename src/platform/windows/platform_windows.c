@@ -29,6 +29,8 @@
 #define TOTAL_CURSORS 7
 
 global b8 show_hidden_files = true;
+global char executable_dir[MAX_PATH] = { 0 };
+global u32 executable_dir_length = 0;
 
 typedef struct Callbacks
 {
@@ -73,8 +75,7 @@ internal wchar_t* char_to_wchar(const char* text, const size_t original_size)
     return wText;
 }
 
-internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
-                             LPARAM l_param)
+internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_param)
 {
     WindowsPlatformInternal* platform =
         (WindowsPlatformInternal*)GetWindowLongPtrA(window, GWLP_USERDATA);
@@ -99,8 +100,7 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
                 u16 key = (u16)w_param;
                 b8 ctrl_pressed = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
                 b8 alt_pressed = (GetKeyState(VK_MENU) & 0x8000) != 0;
-                platform->callbacks.on_key_pressed(key, ctrl_pressed,
-                                                   alt_pressed);
+                platform->callbacks.on_key_pressed(key, ctrl_pressed, alt_pressed);
             }
             break;
         }
@@ -112,8 +112,7 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
                 u16 key = (u16)w_param;
                 b8 ctrl_pressed = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
                 b8 alt_pressed = (GetKeyState(VK_MENU) & 0x8000) != 0;
-                platform->callbacks.on_key_released(key, ctrl_pressed,
-                                                    alt_pressed);
+                platform->callbacks.on_key_released(key, ctrl_pressed, alt_pressed);
             }
             break;
         }
@@ -178,8 +177,7 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
             {
                 platform->width = LOWORD(l_param);
                 platform->height = HIWORD(l_param);
-                platform->callbacks.on_window_resize(platform->width,
-                                                     platform->height);
+                platform->callbacks.on_window_resize(platform->width, platform->height);
             }
             break;
         }
@@ -214,6 +212,31 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param,
     return result;
 }
 
+void platform_set_executable_directory()
+{
+    u32 size = GetModuleFileName(NULL, executable_dir, (DWORD)sizeof(executable_dir));
+    for(i32 i = size; i >= 0; --i)
+    {
+        const char current_char = executable_dir[i];
+        if(current_char == '\\' || current_char == '/')
+        {
+            executable_dir[i + 1] = '\0';
+            executable_dir_length = i + 1;
+            break;
+        }
+    }
+}
+
+const char* platform_get_executable_directory()
+{
+    return executable_dir;
+}
+
+u32 platform_get_executable_directory_length()
+{
+    return executable_dir_length;
+}
+
 i32 platform_time_compare(const PlatformTime* first, const PlatformTime* second)
 {
     if (first->year == second->year)
@@ -243,20 +266,16 @@ i32 platform_time_compare(const PlatformTime* first, const PlatformTime* second)
     return first->year - second->year;
 }
 
-void platform_init(const char* title, u16 width, u16 height,
-                   Platform** platform)
+void platform_init(const char* title, u16 width, u16 height, Platform** platform)
 {
     WindowsPlatformInternal* platform_internal =
         (WindowsPlatformInternal*)calloc(1, sizeof(WindowsPlatformInternal));
 
     platform_internal->cursors[FTIC_NORMAL_CURSOR] = LoadCursor(0, IDC_ARROW);
     platform_internal->cursors[FTIC_HAND_CURSOR] = LoadCursor(0, IDC_HAND);
-    platform_internal->cursors[FTIC_RESIZE_H_CURSOR] =
-        LoadCursor(0, IDC_SIZEWE);
-    platform_internal->cursors[FTIC_RESIZE_V_CURSOR] =
-        LoadCursor(0, IDC_SIZENS);
-    platform_internal->cursors[FTIC_RESIZE_NW_CURSOR] =
-        LoadCursor(0, IDC_SIZENWSE);
+    platform_internal->cursors[FTIC_RESIZE_H_CURSOR] = LoadCursor(0, IDC_SIZEWE);
+    platform_internal->cursors[FTIC_RESIZE_V_CURSOR] = LoadCursor(0, IDC_SIZENS);
+    platform_internal->cursors[FTIC_RESIZE_NW_CURSOR] = LoadCursor(0, IDC_SIZENWSE);
     platform_internal->cursors[FTIC_MOVE_CURSOR] = LoadCursor(0, IDC_SIZEALL);
     platform_internal->cursors[FTIC_HIDDEN_CURSOR] = NULL;
 
@@ -274,19 +293,17 @@ void platform_init(const char* title, u16 width, u16 height,
     ATOM res = RegisterClass(&window_class);
     if (res)
     {
-        platform_internal->window = CreateWindowEx(
-            0, window_class.lpszClassName, "FileTic",
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
-            CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, window_class.hInstance, 0);
+        platform_internal->window =
+            CreateWindowEx(0, window_class.lpszClassName, "FileTic",
+                           WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
+                           CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, window_class.hInstance, 0);
 
         if (platform_internal->window)
         {
             RECT window_rect = { 0 };
             GetWindowRect(platform_internal->window, &window_rect);
-            platform_internal->width =
-                (u16)(window_rect.right - window_rect.left);
-            platform_internal->height =
-                (u16)(window_rect.bottom - window_rect.top);
+            platform_internal->width = (u16)(window_rect.right - window_rect.left);
+            platform_internal->height = (u16)(window_rect.bottom - window_rect.top);
             platform_internal->running = true;
         }
         else
@@ -307,8 +324,7 @@ void platform_init(const char* title, u16 width, u16 height,
 
 void platform_shut_down(Platform* platform)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     DestroyWindow(platform_internal->window);
 }
 
@@ -319,8 +335,7 @@ b8 platform_is_running(Platform* platform)
 
 void platform_event_fire(Platform* platform)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
 
     MSG msg;
     while (PeekMessage(&msg, platform_internal->window, 0, 0, PM_REMOVE))
@@ -350,8 +365,7 @@ char* platform_get_last_error()
     DWORD size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
-        0, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*)&message, 0,
-        NULL);
+        0, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*)&message, 0, NULL);
 
     return message;
 }
@@ -368,8 +382,7 @@ void platform_local_free(void* memory)
 
 void platform_opengl_init(Platform* platform)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     HDC hdc = GetDC(platform_internal->window);
 
     PIXELFORMATDESCRIPTOR pixel_format_desc = {
@@ -417,25 +430,21 @@ void platform_opengl_init(Platform* platform)
 
 void platform_opengl_clean(Platform* platform)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     wglMakeCurrent(NULL, NULL);
     wglDeleteContext(platform_internal->opengl_properties.context);
-    ReleaseDC(platform_internal->window,
-              platform_internal->opengl_properties.hdc);
+    ReleaseDC(platform_internal->window, platform_internal->opengl_properties.hdc);
 }
 
 void platform_opengl_swap_buffers(Platform* platform)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     SwapBuffers(platform_internal->opengl_properties.hdc);
 }
 
 ClientRect platform_get_client_rect(Platform* platform)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
 
     RECT client_rect;
     GetClientRect(platform_internal->window, &client_rect);
@@ -447,98 +456,82 @@ ClientRect platform_get_client_rect(Platform* platform)
     };
 }
 
-void platform_event_set_on_key_pressed(Platform* platform,
-                                       OnKeyPressedCallback callback)
+void platform_event_set_on_key_pressed(Platform* platform, OnKeyPressedCallback callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_key_pressed = callback;
 }
 
 void platform_event_set_on_key_released(Platform* platform,
                                         OnKeyReleasedCallback callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_key_released = callback;
 }
 
 void platform_event_set_on_button_pressed(Platform* platform,
                                           OnButtonPressedCallback callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_button_pressed = callback;
 }
 
 void platform_event_set_on_button_released(Platform* platform,
                                            OnButtonReleasedCallback callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_button_released = callback;
 }
 
-void platform_event_set_on_mouse_move(Platform* platform,
-                                      OnMouseMovedCallback_ callback)
+void platform_event_set_on_mouse_move(Platform* platform, OnMouseMovedCallback_ callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_mouse_moved = callback;
 }
 
-void platform_event_set_on_mouse_wheel(Platform* platform,
-                                       OnMouseWheelCallback_ callback)
+void platform_event_set_on_mouse_wheel(Platform* platform, OnMouseWheelCallback_ callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_mouse_wheel = callback;
 }
 
 void platform_event_set_on_window_focused(Platform* platform,
                                           OnWindowFocusedCallback callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_window_focused = callback;
 }
 
 void platform_event_set_on_window_resize(Platform* platform,
                                          OnWindowResizeCallback callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_window_resize = callback;
 }
 
-void platform_event_set_on_window_enter_leave(
-    Platform* platform, OnWindowEnterLeaveCallback callback)
+void platform_event_set_on_window_enter_leave(Platform* platform,
+                                              OnWindowEnterLeaveCallback callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_window_enter_leave = callback;
 }
 
-void platform_event_set_on_key_stroke(Platform* platform,
-                                      OnKeyStrokeCallback_ callback)
+void platform_event_set_on_key_stroke(Platform* platform, OnKeyStrokeCallback_ callback)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_key_stroke = callback;
 }
 
 void platform_change_cursor(Platform* platform, u32 cursor_id)
 {
-    WindowsPlatformInternal* platform_internal =
-        (WindowsPlatformInternal*)platform;
+    WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
 
     if (platform_internal->current_cursor != cursor_id)
     {
         if (cursor_id < TOTAL_CURSORS)
         {
             platform_internal->current_cursor = cursor_id;
-            SetCursor(
-                platform_internal->cursors[platform_internal->current_cursor]);
+            SetCursor(platform_internal->cursors[platform_internal->current_cursor]);
         }
     }
 }
@@ -555,9 +548,8 @@ internal void insert_directory_item(const u32 directory_len, const u64 size,
                                     const DirectoryItemType type, char* path,
                                     DirectoryItemArray* items)
 {
-    HANDLE h = CreateFile(
-        path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
-        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    HANDLE h = CreateFile(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                          NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
     if (h != INVALID_HANDLE_VALUE)
     {
         FILE_OBJECTID_BUFFER buffer;
@@ -586,8 +578,8 @@ void platform_show_hidden_files(b8 show)
     show_hidden_files = show;
 }
 
-internal DirectoryItemType
-get_file_type_based_on_extension(const char* name, const u32 name_length)
+internal DirectoryItemType get_file_type_based_on_extension(const char* name,
+                                                            const u32 name_length)
 {
     const char* extension = file_get_extension(name, (u32)strlen(name));
     if (extension)
@@ -624,8 +616,7 @@ get_file_type_based_on_extension(const char* name, const u32 name_length)
     return FILE_DEFAULT;
 }
 
-Directory platform_get_directory(const char* directory_path,
-                                 const u32 directory_len)
+Directory platform_get_directory(const char* directory_path, const u32 directory_len)
 {
     Directory directory = { 0 };
     array_create(&directory.files, 10);
@@ -638,9 +629,8 @@ Directory platform_get_directory(const char* directory_path,
         do
         {
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM ||
-                (!show_hidden_files &&
-                 ((ffd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) ||
-                  ffd.cFileName[0] == '.')))
+                (!show_hidden_files && ((ffd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) ||
+                                        ffd.cFileName[0] == '.')))
             {
                 continue;
             }
@@ -653,27 +643,25 @@ Directory platform_get_directory(const char* directory_path,
             }
 
             const u32 name_length = (u32)strlen(ffd.cFileName);
-            char* path = concatinate(directory_path, directory_len - 1,
-                                     ffd.cFileName, name_length, 0, 2, NULL);
+            char* path = concatinate(directory_path, directory_len - 1, ffd.cFileName,
+                                     name_length, 0, 2, NULL);
 
-            u64 last_write_time =
-                ((u64)ffd.ftLastWriteTime.dwHighDateTime << 32) |
-                ffd.ftLastWriteTime.dwLowDateTime;
+            u64 last_write_time = ((u64)ffd.ftLastWriteTime.dwHighDateTime << 32) |
+                                  ffd.ftLastWriteTime.dwLowDateTime;
 
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
-                insert_directory_item(directory_len, 0, last_write_time,
-                                      FOLDER_DEFAULT, path,
-                                      &directory.sub_directories);
+                insert_directory_item(directory_len, 0, last_write_time, FOLDER_DEFAULT,
+                                      path, &directory.sub_directories);
             }
             else
             {
-                DirectoryItemType type = get_file_type_based_on_extension(
-                    ffd.cFileName, name_length);
-                insert_directory_item(
-                    directory_len,
-                    (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
-                    last_write_time, type, path, &directory.files);
+                DirectoryItemType type =
+                    get_file_type_based_on_extension(ffd.cFileName, name_length);
+                insert_directory_item(directory_len,
+                                      (ffd.nFileSizeHigh * (MAXDWORD + 1)) +
+                                          ffd.nFileSizeLow,
+                                      last_write_time, type, path, &directory.files);
             }
 
         } while (FindNextFile(file_handle, &ffd));
@@ -747,8 +735,7 @@ void platform_semaphore_destroy(FTicSemaphore* sem)
 }
 
 FTicThreadHandle
-platform_thread_create(void* data,
-                       thread_return_value (*thread_function)(void* data),
+platform_thread_create(void* data, thread_return_value (*thread_function)(void* data),
                        unsigned long creation_flag, unsigned long* thread_id)
 {
     return CreateThread(0, 0, thread_function, data, creation_flag, thread_id);
@@ -774,8 +761,7 @@ void platform_interlock_exchange(volatile long* target, long value)
     InterlockedExchange(target, value);
 }
 
-long platform_interlock_compare_exchange(volatile long* dest, long value,
-                                         long compare)
+long platform_interlock_compare_exchange(volatile long* dest, long value, long compare)
 {
     return InterlockedCompareExchange(dest, value, compare);
 }
@@ -801,8 +787,7 @@ void platform_sleep(u64 milli)
 
 void platform_open_file(const char* file_path)
 {
-    HINSTANCE result =
-        ShellExecute(NULL, "open", file_path, NULL, NULL, SW_SHOWNORMAL);
+    HINSTANCE result = ShellExecute(NULL, "open", file_path, NULL, NULL, SW_SHOWNORMAL);
 
     if ((int)result <= 32)
     {
@@ -950,8 +935,7 @@ b8 platform_clipboard_is_empty()
     return result;
 }
 
-void platform_paste_to_directory(const CharPtrArray* paths,
-                                 const char* directory_path)
+void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path)
 {
 
     const size_t directory_path_length = strlen(directory_path);
@@ -976,10 +960,8 @@ void platform_paste_to_directory(const CharPtrArray* paths,
         }
         source_path[source_parent_length - 1] = saved_char;
 
-        const size_t destination_path_length =
-            directory_path_length + name_length + 1;
-        char* destination_path =
-            (char*)calloc(destination_path_length + 2, sizeof(char));
+        const size_t destination_path_length = directory_path_length + name_length + 1;
+        char* destination_path = (char*)calloc(destination_path_length + 2, sizeof(char));
         memcpy(destination_path, directory_path, directory_path_length);
         destination_path[directory_path_length] = '\\';
         memcpy(destination_path + directory_path_length + 1,
@@ -1014,8 +996,7 @@ void platform_delete_files(const CharPtrArray* paths)
     }
 }
 
-void platform_rename_file(const char* path, char* new_name,
-                          const u32 name_length)
+void platform_rename_file(const char* path, char* new_name, const u32 name_length)
 {
     u32 path_length = get_path_length(path, (u32)strlen(path));
 
@@ -1059,13 +1040,6 @@ void platform_listen_to_directory_change(void* data)
 }
 */
 
-void platform_get_executable_directory(CharArray* buffer)
-{
-    buffer->capacity = MAX_PATH;
-    buffer->data = (char*)calloc(buffer->capacity, sizeof(char));
-    buffer->size =
-        GetModuleFileNameA(NULL, buffer->data, (DWORD)buffer->capacity);
-}
 
 typedef struct DataObject
 {
@@ -1107,15 +1081,12 @@ ULONG STDMETHODCALLTYPE data_object_release(IDataObject* data_object)
 }
 
 HRESULT STDMETHODCALLTYPE data_object_get_data(IDataObject* data_object,
-                                               FORMATETC* format_etc,
-                                               STGMEDIUM* medium)
+                                               FORMATETC* format_etc, STGMEDIUM* medium)
 {
-    CLIPFORMAT cfShellIDList =
-        (CLIPFORMAT)RegisterClipboardFormat(CFSTR_SHELLIDLIST);
+    CLIPFORMAT cfShellIDList = (CLIPFORMAT)RegisterClipboardFormat(CFSTR_SHELLIDLIST);
 
     DataObject* object = (DataObject*)data_object;
-    if ((format_etc->cfFormat == CF_HDROP ||
-         format_etc->cfFormat == cfShellIDList) &&
+    if ((format_etc->cfFormat == CF_HDROP || format_etc->cfFormat == cfShellIDList) &&
         (format_etc->tymed & TYMED_HGLOBAL))
     {
         medium->tymed = TYMED_HGLOBAL;
@@ -1143,11 +1114,9 @@ HRESULT STDMETHODCALLTYPE data_object_get_data_here(IDataObject* data_object,
 HRESULT STDMETHODCALLTYPE data_object_query_get_data(IDataObject* data_object,
                                                      FORMATETC* format_etc)
 {
-    CLIPFORMAT cfShellIDList =
-        (CLIPFORMAT)RegisterClipboardFormat(CFSTR_SHELLIDLIST);
+    CLIPFORMAT cfShellIDList = (CLIPFORMAT)RegisterClipboardFormat(CFSTR_SHELLIDLIST);
 
-    if ((format_etc->cfFormat == CF_HDROP ||
-         format_etc->cfFormat == cfShellIDList) &&
+    if ((format_etc->cfFormat == CF_HDROP || format_etc->cfFormat == cfShellIDList) &&
         (format_etc->tymed & TYMED_HGLOBAL))
     {
         return S_OK;
@@ -1155,32 +1124,31 @@ HRESULT STDMETHODCALLTYPE data_object_query_get_data(IDataObject* data_object,
     return DV_E_FORMATETC;
 }
 
-HRESULT STDMETHODCALLTYPE data_object_get_canonical_format_etc(
-    IDataObject* data_object, FORMATETC* format_etc_in,
-    FORMATETC* format_etc_out)
+HRESULT STDMETHODCALLTYPE data_object_get_canonical_format_etc(IDataObject* data_object,
+                                                               FORMATETC* format_etc_in,
+                                                               FORMATETC* format_etc_out)
 {
     format_etc_out->ptd = NULL;
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE data_object_set_data(IDataObject* data_object,
-                                               FORMATETC* format_etc,
-                                               STGMEDIUM* medium, BOOL release)
+                                               FORMATETC* format_etc, STGMEDIUM* medium,
+                                               BOOL release)
 {
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE data_object_enum_format_etc(
-    IDataObject* data_object, DWORD direction, IEnumFORMATETC** enum_format_etc)
+HRESULT STDMETHODCALLTYPE data_object_enum_format_etc(IDataObject* data_object,
+                                                      DWORD direction,
+                                                      IEnumFORMATETC** enum_format_etc)
 {
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE data_object_d_advise(IDataObject* data_object,
-                                               FORMATETC* format_etc,
-                                               DWORD advf,
-                                               IAdviseSink* adv_sink,
-                                               DWORD* connection)
+                                               FORMATETC* format_etc, DWORD advf,
+                                               IAdviseSink* adv_sink, DWORD* connection)
 {
     return OLE_E_ADVISENOTSUPPORTED;
 }
@@ -1261,8 +1229,9 @@ ULONG STDMETHODCALLTYPE drop_source_release(IDropSource* drop_source)
     return count;
 }
 
-HRESULT STDMETHODCALLTYPE drop_source_query_continue_drag(
-    IDropSource* drop_source, BOOL escape_pressed, DWORD grf_key_state)
+HRESULT STDMETHODCALLTYPE drop_source_query_continue_drag(IDropSource* drop_source,
+                                                          BOOL escape_pressed,
+                                                          DWORD grf_key_state)
 {
     if (escape_pressed)
     {
@@ -1281,10 +1250,10 @@ HRESULT STDMETHODCALLTYPE drop_source_give_feedback(IDropSource* drop_source,
     return DRAGDROP_S_USEDEFAULTCURSORS;
 }
 
-IDropSourceVtbl drop_source_vtbl = {
-    drop_source_query_interface, drop_source_add_reference, drop_source_release,
-    drop_source_query_continue_drag, drop_source_give_feedback
-};
+IDropSourceVtbl drop_source_vtbl = { drop_source_query_interface,
+                                     drop_source_add_reference, drop_source_release,
+                                     drop_source_query_continue_drag,
+                                     drop_source_give_feedback };
 
 DropSource* drop_source_create()
 {
@@ -1303,9 +1272,8 @@ void platform_start_drag_drop(const CharPtrArray* paths)
     DropSource* drop_source = drop_source_create();
 
     DWORD effect;
-    HRESULT hr =
-        DoDragDrop((IDataObject*)data_object, (IDropSource*)drop_source,
-                   DROPEFFECT_COPY | DROPEFFECT_MOVE, &effect);
+    HRESULT hr = DoDragDrop((IDataObject*)data_object, (IDropSource*)drop_source,
+                            DROPEFFECT_COPY | DROPEFFECT_MOVE, &effect);
 
     data_object->vtbl->Release((IDataObject*)data_object);
     drop_source->vtbl->Release((IDropSource*)drop_source);
@@ -1314,12 +1282,12 @@ void platform_start_drag_drop(const CharPtrArray* paths)
 char* wchar_to_char(const wchar_t* w_buffer)
 {
     size_t w_len = wcslen(w_buffer);
-    size_t c_len = WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, NULL,
-                                       0, NULL, NULL);
+    size_t c_len =
+        WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, NULL, 0, NULL, NULL);
 
     char* c_buffer = (char*)calloc(c_len + 1, sizeof(char));
-    WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, c_buffer, (int)c_len,
-                        NULL, NULL);
+    WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, c_buffer, (int)c_len, NULL,
+                        NULL);
 
     return c_buffer;
 }
@@ -1358,8 +1326,7 @@ internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
                 bi.biPlanes = 1;
                 bi.biBitCount = 32;
                 bi.biCompression = BI_RGB;
-                bi.biSizeImage =
-                    ((bitmap.bmWidth * 32 + 31) / 32) * 4 * bitmap.bmHeight;
+                bi.biSizeImage = ((bitmap.bmWidth * 32 + 31) / 32) * 4 * bitmap.bmHeight;
 
                 BITMAPINFO bmi;
                 bmi.bmiHeader = bi;
@@ -1399,8 +1366,7 @@ void platform_context_menu_create(ContextMenu* menu, const char* path)
 
     IShellFolder* psf_parent = NULL;
     PCUITEMID_CHILD pidl_child = NULL;
-    hr = SHBindToParent(pidl, &IID_IShellFolder, (void**)&psf_parent,
-                        &pidl_child);
+    hr = SHBindToParent(pidl, &IID_IShellFolder, (void**)&psf_parent, &pidl_child);
     if (FAILED(hr))
     {
         log_last_error();
@@ -1410,8 +1376,8 @@ void platform_context_menu_create(ContextMenu* menu, const char* path)
     }
 
     IContextMenu* pcm = NULL;
-    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child,
-                                      &IID_IContextMenu, NULL, (void**)&pcm);
+    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child, &IID_IContextMenu,
+                                      NULL, (void**)&pcm);
     if (FAILED(hr))
     {
         log_last_error();
@@ -1451,8 +1417,7 @@ void platform_context_menu_destroy(ContextMenu* menu)
 {
     free_sub_menus(&menu->items);
     ((IContextMenu*)menu->pcm)->lpVtbl->Release((IContextMenu*)menu->pcm);
-    ((IShellFolder*)menu->psf_parent)
-        ->lpVtbl->Release((IShellFolder*)menu->psf_parent);
+    ((IShellFolder*)menu->psf_parent)->lpVtbl->Release((IShellFolder*)menu->psf_parent);
     CoTaskMemFree(menu->pidl);
     CoUninitialize();
 }
@@ -1475,8 +1440,7 @@ void platform_open_context(void* window, const char* path)
 
     IShellFolder* psf_parent = NULL;
     PCUITEMID_CHILD pidl_child = NULL;
-    hr = SHBindToParent(pidl, &IID_IShellFolder, (void**)&psf_parent,
-                        &pidl_child);
+    hr = SHBindToParent(pidl, &IID_IShellFolder, (void**)&psf_parent, &pidl_child);
     if (FAILED(hr))
     {
         log_last_error();
@@ -1486,8 +1450,8 @@ void platform_open_context(void* window, const char* path)
     }
 
     IContextMenu* pcm = NULL;
-    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child,
-                                      &IID_IContextMenu, NULL, (void**)&pcm);
+    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child, &IID_IContextMenu,
+                                      NULL, (void**)&pcm);
     if (FAILED(hr))
     {
         log_last_error();
@@ -1507,8 +1471,8 @@ void platform_open_context(void* window, const char* path)
 
         POINT pt;
         GetCursorPos(&pt);
-        cmd = TrackPopupMenu(h_menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x,
-                             pt.y, 0, hwnd, NULL);
+        cmd = TrackPopupMenu(h_menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd,
+                             NULL);
         if (cmd)
         {
             CMINVOKECOMMANDINFOEX cmi = { 0 };

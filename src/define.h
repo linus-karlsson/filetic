@@ -104,6 +104,8 @@
 #define true 1
 #define false 0
 
+#define FTIC_MAX_PATH 260
+
 #define set_bit(val, bit) (val) |= (bit)
 #define unset_bit(val, bit) (val) &= ~(bit)
 #define switch_bit(val, bit) (val) ^= (bit)

@@ -8,7 +8,7 @@ set(GLFW_USE_HYBRID_HPG ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY bin)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) 
 IF(WIN32)
-    set(STANDARD_FLAGS "-WL -nologo -Gm- -WX -W4 -wd4505 -wd4100 -wd4201 -wd4189 -wd4101 -wd4127 -wd4311 -DCRASH_DEREF")
+    set(STANDARD_FLAGS "-WL -MP -nologo -Gm- -WX -W4 -wd4505 -wd4100 -wd4201 -wd4189 -wd4101 -wd4127 -wd4311")
     set(CMAKE_CXX_FLAGS_DEBUG "${STANDARD_FLAGS} -Od -Oi -Z7 -DDEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "${STANDARD_FLAGS} -O2 -Oi -Z7 -DNDEBUG")
     set(CMAKE_C_FLAGS_DEBUG "${STANDARD_FLAGS} -Od -Oi -Z7 -DDEBUG")
@@ -47,7 +47,7 @@ target_include_directories(${EXE}
 target_link_libraries(${EXE} glfw)
 
 IF (WIN32)
-    target_link_options(${EXE} PRIVATE "/SUBSYSTEM:WINDOWS" PRIVATE "/ENTRY:mainCRTStartup") 
+    target_link_options(${EXE} PRIVATE "/SUBSYSTEM:CONSOLE" PRIVATE "/ENTRY:mainCRTStartup") 
     # For gcc and g++, clang
     #target_link_options(${EXE} PRIVATE "-mwindows") 
     target_link_libraries(${EXE} user32 Winmm opengl32)
@@ -61,3 +61,26 @@ ELSE()
     option(WINDOW_32 "Windows" OFF)
     option(LINUX "Linux" ON)
 ENDIF()
+
+add_custom_command(
+    TARGET ${EXE} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/res" "$<TARGET_FILE_DIR:${EXE}>/res"
+    COMMENT "Copying res folder to executable directory"
+)
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/saved")
+add_custom_command(
+    TARGET ${EXE} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/saved" "$<TARGET_FILE_DIR:${EXE}>/saved"
+    COMMENT "Copying saved folder to executable directory"
+)
+else()
+add_custom_command(
+    TARGET ${EXE} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+    "$<TARGET_FILE_DIR:${EXE}>/saved"
+    COMMENT "Ensuring saved folder exists in executable directory"
+)
+endif()

@@ -28,6 +28,7 @@ typedef struct SafeIdTexturePropertiesArray
     FTicMutex mutex;
 } SafeIdTexturePropertiesArray;
 
+void texture_load_full_path(const char* file_path, TextureProperties* texture_properties);
 void texture_load(const char* file_path, TextureProperties* texture_properties);
 void texture_scale_down(i32 width, i32 height, i32* new_width, i32* new_height);
 void texture_resize(TextureProperties* texture_properties, int box_width, int box_height);

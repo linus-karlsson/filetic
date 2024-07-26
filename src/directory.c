@@ -14,7 +14,7 @@ void load_thumpnails(void* data)
     LoadThumpnailData* arguments = (LoadThumpnailData*)data;
 
     IdTextureProperties value = { .id = guid_copy(&arguments->file_id) };
-    texture_load(arguments->file_path, &value.texture_properties);
+    texture_load_full_path(arguments->file_path, &value.texture_properties);
     if (!value.texture_properties.bytes)
     {
         free(data);
