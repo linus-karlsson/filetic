@@ -502,7 +502,7 @@ void directory_tab_add(const char* dir, ThreadTaskQueue* task_queue,
     tab->directory_list.selected_item_values.selected_items =
         hash_table_create_guid(100, hash_guid);
 
-    tab->directory_list.input = ui_input_buffer_create();
+    array_create(&tab->directory_list.inputs, 10);
 
     DirectoryPage* last_page = array_back(&tab->directory_history.history);
 #if 0
@@ -529,7 +529,10 @@ void directory_tab_clear(DirectoryTab* tab)
 
     directory_unlisten_to_directory_changes(
         tab->directory_history.change_handle);
-    ui_input_buffer_delete(&tab->directory_list.input);
+    for(u32 i = 0; i < tab->directory_list.inputs.size; ++i)
+    {
+        ui_input_buffer_delete(tab->directory_list.inputs.data + i);
+    }
     directory_clear_selected_items(&tab->directory_list.selected_item_values);
 }
 

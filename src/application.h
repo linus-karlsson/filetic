@@ -63,11 +63,28 @@ typedef struct FindingCallbackAttribute
     b8* running_callbacks;
 } FindingCallbackAttribute;
 
+typedef struct WindowOpenMenuItem
+{
+    u32 window;
+    f32 switch_x;
+
+    b8 switch_on;
+    b8 show;
+} WindowOpenMenuItem;
+
+typedef struct AccessPanel
+{
+    DirectoryItemArray items;
+    WindowOpenMenuItem menu_item;
+    MovableList list;
+} AccessPanel;
+
 typedef struct MainDropDownSelectionData
 {
     DirectoryPage* directory;
     DirectoryItemArray* quick_access;
     const CharPtrArray* selected_paths;
+    AccessPanel* panel;
     FTicWindow* window;
     b8 show_hidden_files;
 } MainDropDownSelectionData;
@@ -94,20 +111,6 @@ typedef struct DropDownMenu2
                                  b8 item_clicked, V4* text_color, void* data);
 } DropDownMenu2;
 
-typedef struct WindowOpenMenuItem
-{
-    u32 window;
-    f32 switch_x;
-
-    b8 switch_on;
-    b8 show;
-} WindowOpenMenuItem;
-
-typedef struct AccessPanel
-{
-    DirectoryItemArray items;
-    WindowOpenMenuItem menu_item;
-} AccessPanel;
 
 typedef struct RecentPanel {
     AccessPanel panel;
@@ -177,13 +180,14 @@ typedef struct ApplicationContext
     Camera preview_camera;
     AABB3D preview_mesh_aabb;
 
+    AccessPanel* panel_right_clicked;
+
+    CharPtrArray context_menu_options;
+
     b8 open_font_change_window;
     b8 open_menu_window;
     b8 open_windows_window;
     b8 open_context_menu_window;
-
-    DropDownMenu2 context_menu;
-    b8 context_menu_open;
 
     AccessPanel quick_access;
     RecentPanel recent;

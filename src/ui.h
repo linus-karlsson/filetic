@@ -144,7 +144,6 @@ typedef struct UiWindow
 #define DOCK_SIDE_BOTTOM 0
 #define DOCK_SIDE_TOP 1
 
-
 typedef struct InputBuffer
 {
     CharArray buffer;
@@ -161,29 +160,34 @@ typedef struct InputBuffer
     b8 active;
 } InputBuffer;
 
+typedef struct InputBufferArray
+{
+    u32 size;
+    u32 capacity;
+    InputBuffer* data;
+} InputBufferArray;
+
 typedef struct DropDownMenu
 {
     f32 x;
     i32 tab_index;
     CharPtrArray options;
-    b8 (*menu_options_selection)(u32 index, b8 hit, b8 should_close,
-                                 b8 item_clicked, V4* text_color, void* data);
+    b8 (*menu_options_selection)(u32 index, b8 hit, b8 should_close, b8 item_clicked,
+                                 V4* text_color, void* data);
 } DropDownMenu;
 
 typedef struct II32
 {
     i32 first;
     i32 second;
-}II32;
+} II32;
 
 typedef struct List
 {
-    InputBuffer input;
     SelectedItemValues selected_item_values;
-    DirectoryItem* item_to_change;
-    AABB input_field;
+    InputBufferArray inputs;
     f64 input_pressed;
-    b8 reload;
+    i32 input_index;
     b8 item_selected;
 } List;
 
@@ -192,6 +196,17 @@ typedef struct UU32
     u32 first;
     u32 second;
 } UU32;
+
+typedef struct MovableList
+{
+    V2 pressed_offset;
+    V2 hold_position;
+    i32 selected_item;
+    b8 right_click;
+    b8 pressed;
+    b8 hold;
+    b8 selected;
+} MovableList;
 
 #define UI_WINDOW_NONE 0
 #define UI_WINDOW_TOP_BAR BIT_1
@@ -216,6 +231,8 @@ void ui_set_big_icon_size(f32 new_size);
 void ui_set_big_icon_min_size(f32 new_min);
 void ui_set_big_icon_max_size(f32 new_max);
 V2 ui_get_big_icon_min_max();
+void ui_set_list_padding(const f32 padding);
+f32 ui_get_list_padding();
 void ui_set_frosted_glass(b8 on);
 f32 ui_get_frosted_blur_amount();
 void ui_set_frosted_blur_amount(const f32 new_blur_amount);
@@ -267,3 +284,4 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x);
 
 b8 ui_window_add_drop_down(V2 position, b8* open);
 f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 max_value, f32 value, b8* pressed);
+b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list);

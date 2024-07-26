@@ -614,8 +614,6 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
         UiWindow* ui_window = ui_window_get(window);
         button_size.width = ui_window->size.width / 3.0f;
 
-        tab->directory_list.reload = false;
-        tab->directory_list.item_to_change = NULL;
         tab->directory_list.item_selected = false;
 
         V2 list_position = v2f(10.0f, position.y + button_size.height + 5.0f);
@@ -626,24 +624,19 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                 &current->directory.files, task_queue, &tab->textures, &tab->objects,
                 &tab->directory_list);
 
-            if (result.first > -1)
+            if (result.first == 0)
             {
-                if (result.first == 0)
-                {
-                    directory_open_folder(
-                        current->directory.sub_directories.data[result.second].path,
-                        &tab->directory_history);
-                    directory_clear_selected_items(
-                        &tab->directory_list.selected_item_values);
+                directory_open_folder(
+                    current->directory.sub_directories.data[result.second].path,
+                    &tab->directory_history);
+                directory_clear_selected_items(&tab->directory_list.selected_item_values);
 
-                    recent_panel_add_item(
-                        recent,
-                        current->directory.sub_directories.data[result.second].path);
-                }
-                else
-                {
-                    platform_open_file(current->directory.files.data[result.second].path);
-                }
+                recent_panel_add_item(
+                    recent, current->directory.sub_directories.data[result.second].path);
+            }
+            else if (result.first == 1)
+            {
+                platform_open_file(current->directory.files.data[result.second].path);
             }
         }
         else
@@ -662,7 +655,8 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                 recent_panel_add_item(
                     recent, current->directory.sub_directories.data[selected_item].path);
             }
-            list_position.y += list_item_height * current->directory.sub_directories.size;
+            list_position.y += (list_item_height + ui_get_list_padding()) *
+                               current->directory.sub_directories.size;
             if (ui_window_add_file_list(list_position, list_item_height,
                                         &current->directory.files, &tab->directory_list,
                                         &selected_item))
@@ -670,13 +664,7 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                 platform_open_file(current->directory.files.data[selected_item].path);
             }
         }
-        if (tab->directory_list.reload)
-        {
-            platform_rename_file(tab->directory_list.item_to_change->path,
-                                 tab->directory_list.input.buffer.data,
-                                 tab->directory_list.input.buffer.size);
-        }
-        if (!tab->directory_list.item_selected && !tab->directory_list.input.active)
+        if (!tab->directory_list.item_selected && !tab->directory_list.inputs.data[0].active)
         {
             if ((!context_menu_open &&
                  event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT)) ||
@@ -1154,17 +1142,25 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item
     {
         case COPY_OPTION_INDEX:
         {
-            if (arguments->selected_paths->size == 0)
+            if (arguments->selected_paths->size == 0 && arguments->panel == NULL)
             {
                 *text_color = global_get_lighter_color();
             }
-            else
+            else if (item_clicked && hit)
             {
-                if (item_clicked && hit)
+                if (arguments->panel)
+                {
+                    char* paths[1] = { arguments->panel->items
+                                           .data[arguments->panel->list.selected_item]
+                                           .path };
+                    CharPtrArray array = { .size = 1, .capacity = 1, .data = paths };
+                    platform_copy_to_clipboard(&array);
+                }
+                else
                 {
                     platform_copy_to_clipboard(arguments->selected_paths);
-                    should_close = true;
                 }
+                should_close = true;
             }
             break;
         }
@@ -1190,26 +1186,36 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item
             {
                 *text_color = global_get_lighter_color();
             }
-            else
+            else if (item_clicked && hit)
             {
-                if (item_clicked && hit)
-                {
-                    platform_delete_files(arguments->selected_paths);
-                    directory_reload(arguments->directory);
-                    should_close = true;
-                }
+                platform_delete_files(arguments->selected_paths);
+                directory_reload(arguments->directory);
+
+                should_close = true;
             }
             break;
         }
         case ADD_TO_QUICK_OPTION_INDEX:
         {
-            if (arguments->selected_paths->size == 0)
+            if (arguments->selected_paths->size == 0 && arguments->panel == NULL)
             {
                 *text_color = global_get_lighter_color();
             }
-            else
+            else if (item_clicked && hit)
             {
-                if (item_clicked && hit)
+                if (arguments->panel)
+                {
+                    DirectoryItemArray* items = &arguments->panel->items;
+                    const i32 selected_item = arguments->panel->list.selected_item;
+                    DirectoryItem item_to_remove = items->data[selected_item];
+                    for (u32 i = selected_item; i < items->size - 1; ++i)
+                    {
+                        items->data[i] = items->data[i + 1];
+                    }
+                    items->size--;
+                    free(item_to_remove.path);
+                }
+                else
                 {
                     for (u32 i = 0; i < arguments->selected_paths->size; ++i)
                     {
@@ -1239,8 +1245,8 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item
                             array_push(arguments->quick_access, item);
                         }
                     }
-                    should_close = true;
                 }
+                should_close = true;
             }
             break;
         }
@@ -1250,13 +1256,10 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item
             {
                 *text_color = global_get_lighter_color();
             }
-            else
+            else if (item_clicked && hit)
             {
-                if (item_clicked && hit)
-                {
-                    platform_show_properties(10, 10, arguments->selected_paths->data[0]);
-                    should_close = true;
-                }
+                platform_show_properties(10, 10, arguments->selected_paths->data[0]);
+                should_close = true;
             }
             break;
         }
@@ -1265,15 +1268,28 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item
             if (item_clicked && hit)
             {
                 should_close = true;
-                if (arguments->selected_paths->size != 0)
+                if (arguments->panel)
                 {
-                    if (platform_directory_exists(arguments->selected_paths->data[0]))
+                    char* path =
+                        arguments->panel->items.data[arguments->panel->list.selected_item]
+                            .path;
+                    if (platform_directory_exists(path))
                     {
-                        platform_open_terminal(arguments->selected_paths->data[0]);
-                        break;
+                        platform_open_terminal(path);
                     }
                 }
-                platform_open_terminal(arguments->directory->directory.parent);
+                else
+                {
+                    if (arguments->selected_paths->size != 0)
+                    {
+                        if (platform_directory_exists(arguments->selected_paths->data[0]))
+                        {
+                            platform_open_terminal(arguments->selected_paths->data[0]);
+                            break;
+                        }
+                    }
+                    platform_open_terminal(arguments->directory->directory.parent);
+                }
             }
             break;
         }
@@ -1283,14 +1299,11 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item
             {
                 *text_color = global_get_lighter_color();
             }
-            else
+            else if (item_clicked && hit)
             {
-                if (item_clicked && hit)
-                {
-                    platform_open_context(arguments->window,
-                                          arguments->selected_paths->data[0]);
-                    should_close = true;
-                }
+                platform_open_context(arguments->window,
+                                      arguments->selected_paths->data[0]);
+                should_close = true;
             }
             break;
         }
@@ -1484,11 +1497,12 @@ internal void access_panel_initialize(AccessPanel* panel, const u32 window,
     panel->menu_item.show = true;
     panel->menu_item.switch_on = true;
     panel->menu_item.switch_x = 0.0f;
+    panel->list.selected_item = -1;
 }
 
-internal void access_panel_open(AccessPanel* panel, const char* title,
-                                const f32 list_item_height, RecentPanel* recent,
-                                DirectoryHistory* directory_history)
+internal b8 access_panel_open(AccessPanel* panel, const char* title,
+                              const f32 list_item_height, RecentPanel* recent,
+                              DirectoryHistory* directory_history)
 {
     if (panel->menu_item.show)
     {
@@ -1496,14 +1510,13 @@ internal void access_panel_open(AccessPanel* panel, const char* title,
                             UI_WINDOW_TOP_BAR | UI_WINDOW_RESIZEABLE))
         {
             V2 list_position = v2i(10.0f);
-            i32 selected_item = -1;
-            if (ui_window_add_folder_list(list_position, list_item_height, &panel->items,
-                                          NULL, &selected_item))
+            if (ui_window_add_movable_list(list_position, &panel->items, &panel->list))
             {
-                directory_open_folder(panel->items.data[selected_item].path,
+                directory_open_folder(panel->items.data[panel->list.selected_item].path,
                                       directory_history);
 
-                recent_panel_add_item(recent, panel->items.data[selected_item].path);
+                recent_panel_add_item(recent,
+                                      panel->items.data[panel->list.selected_item].path);
             }
 
             panel->menu_item.show = !ui_window_end();
@@ -1511,8 +1524,11 @@ internal void access_panel_open(AccessPanel* panel, const char* title,
         if (!panel->menu_item.show)
         {
             panel->menu_item.switch_on = panel->menu_item.show;
+            return false;
         }
+        return panel->list.right_click;
     }
+    return false;
 }
 
 internal void search_page_initialize(SearchPage* search_page)
@@ -1686,34 +1702,7 @@ u8* application_initialize(ApplicationContext* app)
     }
 
     array_create(&app->pasted_paths, 10);
-
-    app->context_menu = (DropDownMenu2){
-        .index_count = &app->main_index_count,
-        .tab_index = -1,
-        .menu_options_selection = main_drop_down_selection,
-        .render = &app->main_render,
-    };
-
-    char* options[] = {
-        [COPY_OPTION_INDEX] = "Copy",
-        [PASTE_OPTION_INDEX] = "Paste",
-        [DELETE_OPTION_INDEX] = "Delete",
-        [ADD_TO_QUICK_OPTION_INDEX] = "Add to quick",
-        [OPEN_IN_TERMINAL_OPTION_INDEX] = "Open in terminal",
-        [PROPERTIES_OPTION_INDEX] = "Properties",
-        [MORE_OPTION_INDEX] = "More",
-    };
-    array_create(&app->context_menu.options, static_array_size(options));
-    array_push(&app->context_menu.options, string_copy_d(options[COPY_OPTION_INDEX]));
-    array_push(&app->context_menu.options, string_copy_d(options[PASTE_OPTION_INDEX]));
-    array_push(&app->context_menu.options, string_copy_d(options[DELETE_OPTION_INDEX]));
-    array_push(&app->context_menu.options,
-               string_copy_d(options[ADD_TO_QUICK_OPTION_INDEX]));
-    array_push(&app->context_menu.options,
-               string_copy_d(options[OPEN_IN_TERMINAL_OPTION_INDEX]));
-    array_push(&app->context_menu.options,
-               string_copy_d(options[PROPERTIES_OPTION_INDEX]));
-    array_push(&app->context_menu.options, string_copy_d(options[MORE_OPTION_INDEX]));
+    array_create(&app->context_menu_options, 10);
 
     access_panel_initialize(&app->quick_access, app->windows.data[window_index++],
                             "saved/quick_access.txt");
@@ -1765,10 +1754,6 @@ void application_uninitialize(ApplicationContext* app)
     for (u32 i = 0; i < app->tabs.size; ++i)
     {
         directory_tab_clear(app->tabs.data + i);
-    }
-    for (u32 i = 0; i < app->context_menu.options.size; ++i)
-    {
-        free(app->context_menu.options.data[i]);
     }
     free(app->windows.data);
     free(app->tab_windows.data);
@@ -2174,6 +2159,17 @@ internal void application_open_menu_window(ApplicationContext* app,
                                  256.0f)));
         }
 
+        row.min.y += ui_font_pixel_height + 20.0f;
+        {
+            f32 ui_list_padding = ui_get_list_padding();
+            u32 result = add_increment(row.min, "List padding:", button_color,
+                                       drop_down_width, (u32)ui_list_padding);
+            ui_set_list_padding(
+                ui_list_padding +
+                ((f32)add_table[result] *
+                 closed_interval(0.0f, ui_list_padding + (f32)add_table[result], 15.0f)));
+        }
+
         Switch switch_ = {
             .position = row.min,
             .switch_x = switch_x,
@@ -2217,9 +2213,9 @@ internal void application_open_menu_window(ApplicationContext* app,
                         &ui_frosted_x);
         ui_set_frosted_glass(ui_frosted_glass_selected);
 
+        row.min.y = switch_.position.y;
         if (ui_frosted_glass_selected)
         {
-            row.min.y = switch_.position.y;
             {
                 ui_window_add_text(row.min, "Blur amount:", false);
                 const V2 slider_size = v2f(78.0f + (ui_font_pixel_height * 2),
@@ -2230,9 +2226,9 @@ internal void application_open_menu_window(ApplicationContext* app,
                     v2f(slider_x, row.min.y + 8.0f), slider_size, 0.0002f, 0.003f,
                     ui_get_frosted_blur_amount(), &pressed));
             }
+            row.min.y += ui_font_pixel_height + 20.0f;
         }
 
-        row.min.y += ui_font_pixel_height + 20.0f;
         {
             const char* text = "Reset to default";
             const V2 button_dim = ui_window_get_button_dimensions(v2d(), text, NULL);
@@ -2258,6 +2254,7 @@ internal void application_open_menu_window(ApplicationContext* app,
                 ui_set_big_icon_min_size(64.0f);
                 ui_set_big_icon_max_size(256.0f);
                 ui_set_frosted_blur_amount(0.00132f);
+                ui_set_list_padding(0.0f);
             }
         }
 
@@ -2361,7 +2358,8 @@ internal void application_open_context_menu_window(ApplicationContext* app,
             [COPY_OPTION_INDEX] = "Copy",
             [PASTE_OPTION_INDEX] = "Paste",
             [DELETE_OPTION_INDEX] = "Delete",
-            [ADD_TO_QUICK_OPTION_INDEX] = "Add to quick",
+            [ADD_TO_QUICK_OPTION_INDEX] =
+                app->panel_right_clicked ? "Remove from quick" : "Add to quick",
             [OPEN_IN_TERMINAL_OPTION_INDEX] = "Open in terminal",
             [PROPERTIES_OPTION_INDEX] = "Properties",
             [MORE_OPTION_INDEX] = "More",
@@ -2379,6 +2377,7 @@ internal void application_open_context_menu_window(ApplicationContext* app,
                 .quick_access = &app->quick_access.items,
                 .directory = directory_current(&current_tab->directory_history),
                 .selected_paths = &current_tab->directory_list.selected_item_values.paths,
+                .panel = app->panel_right_clicked,
             };
             if (main_drop_down_selection(i, clicked, false, clicked, &text_color, &data))
             {
@@ -2544,8 +2543,7 @@ void application_run()
         b8 check_collision = app.preview_index != 1;
 
         if (check_collision &&
-            (collision_point_in_aabb(app.mouse_position, &app.context_menu.aabb) ||
-             collision_point_in_aabb(app.mouse_position, &app.suggestions.aabb)))
+            collision_point_in_aabb(app.mouse_position, &app.suggestions.aabb))
         {
             check_collision = false;
         }
@@ -2612,22 +2610,6 @@ void application_run()
             // directory_paste_in_directory(
             //   directory_current(&tab->directory_history));
         }
-        if (app.context_menu_open)
-        {
-            MainDropDownSelectionData data = {
-                .window = app.window,
-                .quick_access = &app.quick_access.items,
-                .directory = directory_current(&tab->directory_history),
-                .selected_paths = &tab->directory_list.selected_item_values.paths,
-            };
-            app.context_menu_open =
-                !drop_down_menu_add(&app.context_menu, true, &app, &data);
-        }
-        else
-        {
-            app.context_menu.aabb = (AABB){ 0 };
-        }
-
         const char* directory_to_drop_in = NULL;
 #if 0
         if (main_list_return_value.hit_index >= 0 &&
@@ -2651,7 +2633,7 @@ void application_run()
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
         if (app.preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
-            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_2))
+            event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT))
         {
 #if 0
             if (tab->directory_list.selected_item_values.paths.size)
@@ -2669,11 +2651,7 @@ void application_run()
             else
 #endif
             {
-                // app.context_menu_open = true;
                 app.open_context_menu_window = true;
-                app.context_menu.position = app.mouse_position;
-                app.context_menu.position.x += 18.0f;
-                app.context_menu.x = 0.0f;
                 UiWindow* window = ui_window_get(app.context_menu_window);
                 V2 item_size = v2f(250.0f, 24.0f + ui_font_pixel_height);
                 const f32 end_height = CONTEXT_ITEM_COUNT * item_size.height;
@@ -2970,8 +2948,16 @@ void application_run()
                 ui_window_end();
             }
 
-            access_panel_open(&app.quick_access, "Quick access", list_item_height,
-                              &app.recent, &tab->directory_history);
+            if (!app.open_context_menu_window)
+            {
+                app.panel_right_clicked = NULL;
+            }
+
+            if (access_panel_open(&app.quick_access, "Quick access", list_item_height,
+                                  &app.recent, &tab->directory_history))
+            {
+                app.panel_right_clicked = &app.quick_access;
+            }
 
             access_panel_open(&app.recent.panel, "Recent", list_item_height, &app.recent,
                               &tab->directory_history);
