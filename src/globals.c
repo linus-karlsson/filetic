@@ -1,56 +1,63 @@
 #include "globals.h"
 
-global V4 default_clear_color = {
-    .r = 0.09f,
-    .g = 0.09f,
-    .b = 0.09f,
+global const V4 default_clear_color = {
+    .r = 0.1f,
+    .g = 0.1f,
+    .b = 0.1f,
     .a = 1.0f,
 };
 
-global V4 default_high_light_color = {
+global const V4 default_high_light_color = {
     .r = 0.2f,
     .g = 0.2f,
     .b = 0.2f,
     .a = 1.0f,
 };
 
-global V4 default_border_color = {
+global const V4 default_border_color = {
     .r = 0.35f,
     .g = 0.35f,
     .b = 0.35f,
     .a = 1.0f,
 };
 
-global V4 default_lighter_color = {
+global const V4 default_lighter_color = {
     .r = 0.55f,
     .g = 0.55f,
     .b = 0.55f,
     .a = 1.0f,
 };
-global V4 default_bright_color = {
+global const V4 default_bright_color = {
     .r = 0.7f,
     .g = 0.7f,
     .b = 0.7f,
     .a = 1.0f,
 };
-global V4 default_secondary_color = {
+global const V4 default_secondary_color = {
     .r = 0.0f,
     .g = 0.58f,
     .b = 1.0f,
     .a = 1.0f,
 };
 
-global V4 default_text_color = {
+global const V4 default_text_color = {
     .r = 1.0f,
     .g = 1.0f,
     .b = 1.0f,
     .a = 1.0f,
 };
 
+global const V4 default_tab_color = {
+    .r = 0.25f,
+    .g = 0.25f,
+    .b = 0.25f,
+    .a = 1.0f,
+};
+
 global V4 clear_color = {
-    .r = 0.09f,
-    .g = 0.09f,
-    .b = 0.09f,
+    .r = 0.1f,
+    .g = 0.1f,
+    .b = 0.1f,
     .a = 1.0f,
 };
 
@@ -94,6 +101,13 @@ global V4 text_color = {
     .a = 1.0f,
 };
 
+global V4 tab_color = {
+    .r = 0.25f,
+    .g = 0.25f,
+    .b = 0.25f,
+    .a = 1.0f,
+};
+
 global f32 border_width = 1.0f;
 
 
@@ -130,6 +144,11 @@ V4 global_get_secondary_color()
 V4 global_get_text_color()
 {
     return text_color;
+}
+
+V4 global_get_tab_color()
+{
+    return tab_color;
 }
 
 f32 global_get_border_width()
@@ -172,6 +191,11 @@ void global_set_text_color(V4 v)
     text_color = v;
 }
 
+void global_set_tab_color(V4 v)
+{
+    tab_color = v;
+}
+
 void global_set_border_width(f32 v)
 {
     border_width = v;
@@ -210,4 +234,9 @@ void global_set_default_secondary_color()
 void global_set_default_text_color()
 {
     text_color = default_text_color;
+}
+
+void global_set_default_tab_color()
+{
+    tab_color = default_tab_color;
 }

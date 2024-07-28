@@ -2004,10 +2004,10 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                     .size = tab_dimensions,
                 };
 
-                V4 tab_color = v4ic(0.25f);
+                V4 tab_color = global_get_tab_color();
                 if (j == (i32)dock_space->window_in_focus)
                 {
-                    tab_color = v4ic(0.35f);
+                    tab_color = v4a(v4_s_multi(tab_color, 1.2f), 1.0f);
                 }
                 b8 tab_collided = false;
                 if (should_check_collision && window->area_hit && !tab_change.close_tab &&
@@ -3031,7 +3031,7 @@ b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color,
         }
     }
 
-    V4 button_color = v4ic(1.0f);
+    V4 button_color = global_get_text_color();
     b8 hover = false;
     b8 clicked = false;
     if (disable)
@@ -4414,7 +4414,7 @@ f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 ma
     b8 hit = hover_clicked_index.index == (i32)aabbs->size;
     b8 slider_hit = hover_clicked_index.index == (i32)aabbs->size + 1;
 
-    V4 color = global_get_bright_color();
+    V4 color = global_get_text_color();
     V4 slider_color = global_get_secondary_color();
     if (hit || slider_hit || *pressed)
     {
@@ -4799,4 +4799,15 @@ V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker)
     window->rendering_index_count += 6;
 
     return picker_color;
+}
+
+void ui_window_add_border(V2 position, const V2 size, const V4 color, const f32 thickness)
+{
+    const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+
+    v2_add_equal(&position, window->first_item_position);
+
+    quad_border(&ui_context.render.vertices, &window->rendering_index_count, position, size, color,
+                thickness, UI_DEFAULT_TEXTURE);
 }

@@ -191,8 +191,12 @@ typedef struct ApplicationContext
 
     ColorPicker secondary_color_picker;
     ColorPicker clear_color_picker;
+    ColorPicker text_color_picker;
+    ColorPicker tab_color_picker;
     V4 secondary_color;
     V4 clear_color;
+    V4 text_color;
+    V4 tab_color;
     V2 color_picker_position;
     ColorPicker* color_picker_to_use;
     V4* color_to_change;

@@ -295,3 +295,4 @@ b8 ui_window_add_drop_down(V2 position, b8* open);
 f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 max_value, f32 value, b8* pressed);
 b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list);
 V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker);
+void ui_window_add_border(V2 position, const V2 size, const V4 color, const f32 thickness);

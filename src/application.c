@@ -1772,10 +1772,19 @@ u8* application_initialize(ApplicationContext* app)
     app->style_menu_window = app->windows.data[window_index++];
 
     app->color_picker_window = app->windows.data[window_index++];
+
     app->secondary_color = global_get_secondary_color();
-    app->clear_color = global_get_clear_color();
     app->secondary_color_picker.at = v2f(200.0f, 0.0f);
     app->secondary_color_picker.spectrum_at = 114.0f;
+
+    app->clear_color = global_get_clear_color();
+    app->clear_color_picker.at = v2f(0.0f, 180.0f);
+
+    app->text_color = global_get_text_color();
+    app->text_color_picker.at = v2i(0.0f);
+
+    app->tab_color = global_get_tab_color();
+    app->tab_color_picker.at = v2f(0.0f, 150.0f);
 
     app->parent_directory_input = ui_input_buffer_create();
 
@@ -2320,14 +2329,27 @@ internal void application_open_windows_window(ApplicationContext* app, const f32
     }
 }
 
-internal b8 drop_down_layout_add_button_with_text(DropDownLayout* layout, const char* text,
-                                                  V2 button_size, const V4 button_color)
+internal void drop_down_layout_add_color_picker_button(DropDownLayout* layout, const char* text,
+                                                       V2 button_size, const V4 button_color,
+                                                       const V2 window_position,
+                                                       ApplicationContext* app,
+                                                       ColorPicker* color_picker_to_use,
+                                                       V4* color_to_change)
 {
     ui_window_add_text(drop_down_layout_text_position(layout), text, false);
-    b8 result = ui_window_add_button(v2f(layout->switch_x, layout->at.y), &button_size,
-                                     &button_color, NULL);
+    const V2 position = v2f(layout->switch_x, layout->at.y);
+
+    if (ui_window_add_button(position, &button_size, &button_color, NULL))
+    {
+
+        app->color_picker_to_use = color_picker_to_use;
+        app->color_to_change = color_to_change;
+        app->open_color_picker_window = true;
+        app->color_picker_position =
+            v2f(window_position.x + layout->at.x + layout->width, window_position.y + layout->at.y);
+    }
+    ui_window_add_border(position, button_size, v4ic(1.0f), 1.0f);
     drop_down_layout_row(layout);
-    return result;
 }
 
 internal void application_open_style_menu_window(ApplicationContext* app, DropDownLayout layout,
@@ -2342,28 +2364,28 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
         layout.switch_x = layout.width - button_size.width - 10.0f;
 
         {
-            if (drop_down_layout_add_button_with_text(&layout, "Secondary color:", button_size,
-                                                      app->secondary_color))
-            {
-                app->color_to_change = &app->secondary_color;
-                app->open_color_picker_window = true;
-                app->color_picker_position =
-                    v2f(top_bar_style->position.x + layout.at.x + layout.width,
-                        top_bar_style->position.y + layout.at.y);
-            }
+            drop_down_layout_add_color_picker_button(
+                &layout, "Secondary color:", button_size, app->secondary_color,
+                top_bar_style->position, app, &app->secondary_color_picker, &app->secondary_color);
             global_set_secondary_color(app->secondary_color);
         }
         {
-            if (drop_down_layout_add_button_with_text(&layout, "Clear color:", button_size,
-                                                      app->clear_color))
-            {
-                app->color_to_change = &app->clear_color;
-                app->open_color_picker_window = true;
-                app->color_picker_position =
-                    v2f(top_bar_style->position.x + layout.at.x + layout.width,
-                        top_bar_style->position.y + layout.at.y);
-            }
+            drop_down_layout_add_color_picker_button(&layout, "Clear color:", button_size,
+                                                     app->clear_color, top_bar_style->position, app,
+                                                     &app->clear_color_picker, &app->clear_color);
             global_set_clear_color(app->clear_color);
+        }
+        {
+            drop_down_layout_add_color_picker_button(&layout, "Text color:", button_size,
+                                                     app->text_color, top_bar_style->position, app,
+                                                     &app->text_color_picker, &app->text_color);
+            global_set_text_color(app->text_color);
+        }
+        {
+            drop_down_layout_add_color_picker_button(&layout, "Tab color:", button_size,
+                                                     app->tab_color, top_bar_style->position, app,
+                                                     &app->tab_color_picker, &app->tab_color);
+            global_set_tab_color(app->tab_color);
         }
 
         {
@@ -2376,8 +2398,18 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
                 app->secondary_color_picker.spectrum_at = 114.0f;
                 global_set_default_secondary_color();
                 app->secondary_color = global_get_secondary_color();
+
+                app->clear_color_picker.at = v2f(0.0f, 180.0f);
                 global_set_default_clear_color();
                 app->clear_color = global_get_clear_color();
+
+                app->text_color_picker.at = v2i(0.0f);
+                global_set_default_text_color();
+                app->text_color = global_get_text_color();
+
+                app->tab_color_picker.at = v2f(0.0f, 150.0f);
+                global_set_default_tab_color();
+                app->tab_color = global_get_tab_color();
             }
         }
 
@@ -2786,7 +2818,16 @@ void application_run()
                                     UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
                 {
                     *app.color_to_change = ui_window_add_color_picker(
-                        v2i(10.0f), v2f(200.0f, 200.0f), &app.secondary_color_picker);
+                        v2i(10.0f), v2f(200.0f, 200.0f), app.color_picker_to_use);
+#if 0
+                    char buffer[64] = {0};
+                    value_to_string(buffer, V2_FMT(app.color_picker_to_use->at));
+                    log_message(buffer, strlen(buffer));
+                    memset(buffer, 0, sizeof(buffer));
+                    value_to_string(buffer, V3_FMT(*app.color_to_change));
+                    log_message(buffer, strlen(buffer));
+#endif
+
                     app.open_color_picker_window = !ui_window_end();
                 }
             }
