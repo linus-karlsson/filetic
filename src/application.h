@@ -86,6 +86,7 @@ typedef struct MainDropDownSelectionData
     const CharPtrArray* selected_paths;
     AccessPanel* panel;
     FTicWindow* window;
+    ThreadTaskQueue* task_queue;
     b8 show_hidden_files;
 } MainDropDownSelectionData;
 
@@ -169,6 +170,8 @@ typedef struct ApplicationContext
     u32 windows_window;
     u32 font_change_window;
     u32 context_menu_window;
+    u32 color_picker_window;
+    u32 style_menu_window;
 
     f32 context_menu_x;
 
@@ -182,12 +185,24 @@ typedef struct ApplicationContext
 
     AccessPanel* panel_right_clicked;
 
+    i32 drop_down_tab_index;
+
     CharPtrArray context_menu_options;
+
+    ColorPicker secondary_color_picker;
+    ColorPicker clear_color_picker;
+    V4 secondary_color;
+    V4 clear_color;
+    V2 color_picker_position;
+    ColorPicker* color_picker_to_use;
+    V4* color_to_change;
 
     b8 open_font_change_window;
     b8 open_menu_window;
     b8 open_windows_window;
     b8 open_context_menu_window;
+    b8 open_style_menu_window;
+    b8 open_color_picker_window;
 
     AccessPanel quick_access;
     RecentPanel recent;

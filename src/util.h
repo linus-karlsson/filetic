@@ -124,10 +124,9 @@ b8 file_end_of_file(const FileAttrib* file);
 void file_buffer_read(FileAttrib* file, char* delims, u32 delim_len, b8 remove_character, CharArray* buffer);
 void file_line_read(FileAttrib* file, b8 remove_newline, CharArray* line);
 const char* file_get_extension(const char* path, const u32 path_length);
-
 Token file_read_token(CharArray* line, const char* delims, u32 delims_len);
-
 void file_format_size(u64 size_in_bytes, char* output, size_t output_size);
+void file_rename(const char* full_path, const char* new_name, const u32 name_length);
 
 f32 lerp_f32(const f32 a, const f32 b, const f32 t);
 V4 v4_lerp(V4 v1, V4 v2, f32 t);
@@ -159,9 +158,11 @@ u32 get_path_length(const char* path, u32 path_length);
 f32 radians(f32 deg);
 f32 abs_f32(f32 in);
 f32 round_f32(f32 value);
+V2 round_v2(V2 v2);
 
 AABB3D mesh_3d_load(Mesh3D* mesh, const char* object_path, const f32 texture_index);
 void object_load_thumbnail(void* data);
 
 u32 append_full_path(const char* path, char* destination);
+
 

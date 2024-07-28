@@ -75,6 +75,21 @@ typedef struct UiWindowPtrArray
     UiWindow** data;
 } UiWindowPtrArray;
 
+typedef struct WindowRenderData
+{
+    u32 id;
+    AABB aabb;
+    u32 index_offset;
+    u32 index_count;
+} WindowRenderData;
+
+typedef struct WindowRenderDataArray
+{
+    u32 size;
+    u32 capacity;
+    WindowRenderData* data;
+} WindowRenderDataArray;
+
 typedef struct UiContext
 {
     MVP mvp;
@@ -85,14 +100,19 @@ typedef struct UiContext
     U32Array id_to_index;
     U32Array free_indices;
 
+    U32Array generated_textures;
+
     U32Array last_frame_windows;
     U32Array current_frame_windows;
+
+    U32Array last_frame_docked_windows;
+    U32Array current_frame_docked_windows;
 
     U32Array last_frame_top_bar_windows;
     U32Array current_frame_top_bar_windows;
 
-    U32Array last_frame_overlay_windows;
-    U32Array current_frame_overlay_windows;
+    WindowRenderDataArray last_frame_overlay_windows;
+    WindowRenderDataArray current_frame_overlay_windows;
 
     RenderingProperties frosted_render;
     f32 frosted_blur_amount;
@@ -167,6 +187,12 @@ global f32 ui_big_icon_size = 84.0f;
 global f32 ui_list_padding = 0.0f;
 global V2 ui_big_icon_min_max = { .min = 64.0f, .max = 256.0f };
 global b8 ui_frosted_glass = true;
+global V4 color_picker_spectrum_colors[7] = {
+    { .r = 1.0f, .g = 0, .b = 0, .a = 1.0f }, { .r = 1.0f, .g = 1.0f, .b = 0, .a = 1.0f },
+    { .r = 0, .g = 1.0f, .b = 0, .a = 1.0f }, { .r = 0, .g = 1.0f, .b = 1.0f, .a = 1.0f },
+    { .r = 0, .g = 0, .b = 1.0f, .a = 1.0f }, { .r = 1.0f, .g = 0, .b = 1.0f, .a = 1.0f },
+    { .r = 1.0f, .g = 0, .b = 0, .a = 1.0f },
+};
 
 f32 ui_get_big_icon_size()
 {
@@ -286,6 +312,21 @@ internal void push_window_to_back(U32Array* window_array, const u32 index)
     window_array->data[window_array->size - 1] = temp;
 }
 
+internal void push_window_to_back2(WindowRenderDataArray* window_array, const u32 index)
+{
+    if ((!window_array->size) || (index == (window_array->size - 1)) ||
+        (index >= window_array->size))
+    {
+        return;
+    }
+    WindowRenderData temp = window_array->data[index];
+    for (u32 i = index; i < window_array->size - 1; ++i)
+    {
+        window_array->data[i] = window_array->data[i + 1];
+    }
+    window_array->data[window_array->size - 1] = temp;
+}
+
 internal u32 generate_id(const u32 index, U32Array* free_ids, U32Array* id_to_index)
 {
     u32 id = 0;
@@ -309,8 +350,7 @@ internal u32 get_window_index(const u32 id_index)
 }
 
 internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
-                        const V2 expanded_position, const V2 expanded_size,
-                        u32* index_count)
+                        const V2 expanded_position, const V2 expanded_size, u32* index_count)
 {
     AABB aabb = {
         .min = contracted_position,
@@ -330,35 +370,31 @@ internal b8 set_docking(const V2 contracted_position, const V2 contracted_size,
     return result;
 }
 
-internal i32 display_docking(const AABB* dock_aabb, const V2 top_position,
-                             const V2 right_position, const V2 bottom_position,
-                             const V2 left_position, const b8 should_have_middle)
+internal i32 display_docking(const AABB* dock_aabb, const V2 top_position, const V2 right_position,
+                             const V2 bottom_position, const V2 left_position,
+                             const b8 should_have_middle)
 {
     const V2 docking_size_top_bottom = v2f(50.0f, 30.0f);
     const V2 docking_size_left_right = v2f(30.0f, 50.0f);
 
-    const V2 expanded_size_top_bottom =
-        v2f(dock_aabb->size.width, dock_aabb->size.height * 0.5f);
-    const V2 expanded_size_left_right =
-        v2f(dock_aabb->size.width * 0.5f, dock_aabb->size.height);
+    const V2 expanded_size_top_bottom = v2f(dock_aabb->size.width, dock_aabb->size.height * 0.5f);
+    const V2 expanded_size_left_right = v2f(dock_aabb->size.width * 0.5f, dock_aabb->size.height);
 
     i32 index = -1;
-    if (set_docking(top_position, docking_size_top_bottom, dock_aabb->min,
-                    expanded_size_top_bottom, &ui_context.extra_index_count))
+    if (set_docking(top_position, docking_size_top_bottom, dock_aabb->min, expanded_size_top_bottom,
+                    &ui_context.extra_index_count))
     {
         index = 0;
     }
-    if (set_docking(
-            right_position, docking_size_left_right,
-            v2f(dock_aabb->min.x + expanded_size_left_right.width, dock_aabb->min.y),
-            expanded_size_left_right, &ui_context.extra_index_count))
+    if (set_docking(right_position, docking_size_left_right,
+                    v2f(dock_aabb->min.x + expanded_size_left_right.width, dock_aabb->min.y),
+                    expanded_size_left_right, &ui_context.extra_index_count))
     {
         index = 1;
     }
-    if (set_docking(
-            bottom_position, docking_size_top_bottom,
-            v2f(dock_aabb->min.x, dock_aabb->min.y + expanded_size_top_bottom.height),
-            expanded_size_top_bottom, &ui_context.extra_index_count))
+    if (set_docking(bottom_position, docking_size_top_bottom,
+                    v2f(dock_aabb->min.x, dock_aabb->min.y + expanded_size_top_bottom.height),
+                    expanded_size_top_bottom, &ui_context.extra_index_count))
     {
         index = 2;
     }
@@ -370,16 +406,14 @@ internal i32 display_docking(const AABB* dock_aabb, const V2 top_position,
     if (should_have_middle)
     {
         const V2 docking_size_middle = v2i(50.0f);
-        const f32 x =
-            middle((right_position.x + docking_size_left_right.width) - left_position.x,
-                   docking_size_middle.width);
-        const f32 y =
-            middle((bottom_position.y + docking_size_top_bottom.height) - top_position.y,
-                   docking_size_middle.height);
+        const f32 x = middle((right_position.x + docking_size_left_right.width) - left_position.x,
+                             docking_size_middle.width);
+        const f32 y = middle((bottom_position.y + docking_size_top_bottom.height) - top_position.y,
+                             docking_size_middle.height);
 
         const V2 middle_position = v2f(left_position.x + x, top_position.y + y);
-        if (set_docking(middle_position, docking_size_middle, dock_aabb->min,
-                        dock_aabb->size, &ui_context.extra_index_count))
+        if (set_docking(middle_position, docking_size_middle, dock_aabb->min, dock_aabb->size,
+                        &ui_context.extra_index_count))
         {
             index = 4;
         }
@@ -423,8 +457,8 @@ internal DockNode* dock_node_create_multiple_windows(NodeType type, SplitAxis sp
     return node;
 }
 
-internal void dock_node_set_split(DockNode* split_node, DockNode* parent,
-                                  SplitAxis split_axis, b8 animate_window)
+internal void dock_node_set_split(DockNode* split_node, DockNode* parent, SplitAxis split_axis,
+                                  b8 animate_window)
 {
     if (split_axis == SPLIT_HORIZONTAL)
     {
@@ -464,10 +498,8 @@ internal void dock_node_set_split(DockNode* split_node, DockNode* parent,
         }
         else
         {
-            ui_window_start_position_animation(left_window, left_window->position,
-                                               left->aabb.min);
-            ui_window_start_size_animation(left_window, left_window->size,
-                                           left->aabb.size);
+            ui_window_start_position_animation(left_window, left_window->position, left->aabb.min);
+            ui_window_start_size_animation(left_window, left_window->size, left->aabb.size);
         }
     }
     DockNode* right = split_node->children[1];
@@ -483,8 +515,7 @@ internal void dock_node_set_split(DockNode* split_node, DockNode* parent,
         {
             ui_window_start_position_animation(right_window, right_window->position,
                                                right->aabb.min);
-            ui_window_start_size_animation(right_window, right_window->size,
-                                           right->aabb.size);
+            ui_window_start_size_animation(right_window, right_window->size, right->aabb.size);
         }
     }
 }
@@ -504,8 +535,8 @@ internal void dock_node_resize_traverse(DockNode* split_node, b8 animate_window)
     }
 }
 
-internal void dock_node_dock_window(DockNode* root, DockNode* window,
-                                    SplitAxis split_axis, u8 where)
+internal void dock_node_dock_window(DockNode* root, DockNode* window, SplitAxis split_axis,
+                                    u8 where)
 {
     DockNode* copy_node = root->children[0];
     DockNode* split_node = root;
@@ -527,8 +558,7 @@ internal void dock_node_dock_window(DockNode* root, DockNode* window,
     }
     else if (root->type == NODE_LEAF)
     {
-        copy_node =
-            dock_node_create_multiple_windows(NODE_LEAF, SPLIT_NONE, root->windows);
+        copy_node = dock_node_create_multiple_windows(NODE_LEAF, SPLIT_NONE, root->windows);
         copy_node->window_in_focus = root->window_in_focus;
         update_window_dock_nodes(copy_node);
     }
@@ -566,8 +596,7 @@ internal void dock_node_dock_window(DockNode* root, DockNode* window,
     root->windows.data = NULL;
 }
 
-internal void dock_node_resize_from_root(DockNode* root, const AABB* aabb,
-                                         b8 animate_window)
+internal void dock_node_resize_from_root(DockNode* root, const AABB* aabb, b8 animate_window)
 {
     root->aabb = *aabb;
     DockNode* left = root->children[0];
@@ -637,8 +666,7 @@ internal void dock_node_remove_node(DockNode* root, DockNode* node_to_remove)
         }
         free(right);
     }
-    else if (right->type == NODE_LEAF &&
-             right->windows.data == node_to_remove->windows.data)
+    else if (right->type == NODE_LEAF && right->windows.data == node_to_remove->windows.data)
     {
         node_before->type = left->type;
         node_before->split_axis = left->split_axis;
@@ -675,8 +703,7 @@ internal u32 remove_window_from_shared_dock_space(const u32 window_index,
     window_to_remove->closing = true;
     window_to_remove->hide = false;
     window_to_remove->docked = false;
-    window_to_remove->dock_node =
-        dock_node_create(NODE_LEAF, SPLIT_NONE, window_to_remove->id);
+    window_to_remove->dock_node = dock_node_create(NODE_LEAF, SPLIT_NONE, window_to_remove->id);
 
     if (focused_window)
     {
@@ -695,23 +722,20 @@ internal i32 root_display_docking(DockNode* dock_node)
     const V2 docking_size_top_bottom = v2f(50.0f, 30.0f);
     const V2 docking_size_left_right = v2f(30.0f, 50.0f);
 
-    const V2 middle_top_bottom =
-        v2f(dock_node->aabb.min.x +
-                middle(dock_node->aabb.size.width, docking_size_top_bottom.width),
-            dock_node->aabb.min.y +
-                middle(dock_node->aabb.size.height, docking_size_top_bottom.height));
+    const V2 middle_top_bottom = v2f(
+        dock_node->aabb.min.x + middle(dock_node->aabb.size.width, docking_size_top_bottom.width),
+        dock_node->aabb.min.y +
+            middle(dock_node->aabb.size.height, docking_size_top_bottom.height));
 
-    const V2 middle_left_right =
-        v2f(dock_node->aabb.min.x +
-                middle(dock_node->aabb.size.width, docking_size_left_right.width),
-            dock_node->aabb.min.y +
-                middle(dock_node->aabb.size.height, docking_size_left_right.height));
+    const V2 middle_left_right = v2f(
+        dock_node->aabb.min.x + middle(dock_node->aabb.size.width, docking_size_left_right.width),
+        dock_node->aabb.min.y +
+            middle(dock_node->aabb.size.height, docking_size_left_right.height));
 
     const V2 top_position = v2f(middle_top_bottom.x, dock_node->aabb.min.y + 10.0f);
 
-    const V2 right_position =
-        v2f(dock_node->aabb.size.width - (docking_size_left_right.width + 10.0f),
-            middle_left_right.y);
+    const V2 right_position = v2f(
+        dock_node->aabb.size.width - (docking_size_left_right.width + 10.0f), middle_left_right.y);
 
     const V2 bottom_position =
         v2f(middle_top_bottom.x, (dock_node->aabb.min.y + dock_node->aabb.size.height) -
@@ -719,8 +743,8 @@ internal i32 root_display_docking(DockNode* dock_node)
 
     const V2 left_position = v2f(dock_node->aabb.min.x + 10.0f, middle_left_right.y);
 
-    i32 index = display_docking(&dock_node->aabb, top_position, right_position,
-                                bottom_position, left_position, false);
+    i32 index = display_docking(&dock_node->aabb, top_position, right_position, bottom_position,
+                                left_position, false);
     if (index != -1) ui_context.dock_hit_node = dock_node;
     return index;
 }
@@ -730,36 +754,30 @@ internal i32 leaf_display_docking(DockNode* dock_node)
     const V2 docking_size_top_bottom = v2f(50.0f, 30.0f);
     const V2 docking_size_left_right = v2f(30.0f, 50.0f);
 
-    const V2 middle_top_bottom =
-        v2f(dock_node->aabb.min.x +
-                middle(dock_node->aabb.size.width, docking_size_top_bottom.width),
-            dock_node->aabb.min.y +
-                middle(dock_node->aabb.size.height, docking_size_top_bottom.height));
+    const V2 middle_top_bottom = v2f(
+        dock_node->aabb.min.x + middle(dock_node->aabb.size.width, docking_size_top_bottom.width),
+        dock_node->aabb.min.y +
+            middle(dock_node->aabb.size.height, docking_size_top_bottom.height));
 
-    const V2 middle_left_right =
-        v2f(dock_node->aabb.min.x +
-                middle(dock_node->aabb.size.width, docking_size_left_right.width),
-            dock_node->aabb.min.y +
-                middle(dock_node->aabb.size.height, docking_size_left_right.height));
+    const V2 middle_left_right = v2f(
+        dock_node->aabb.min.x + middle(dock_node->aabb.size.width, docking_size_left_right.width),
+        dock_node->aabb.min.y +
+            middle(dock_node->aabb.size.height, docking_size_left_right.height));
 
     const V2 top_position =
-        v2f(middle_top_bottom.x,
-            middle_top_bottom.y - (docking_size_top_bottom.height + 20.0f));
+        v2f(middle_top_bottom.x, middle_top_bottom.y - (docking_size_top_bottom.height + 20.0f));
 
     const V2 right_position =
-        v2f(middle_left_right.x + (docking_size_left_right.width + 20.0f),
-            middle_left_right.y);
+        v2f(middle_left_right.x + (docking_size_left_right.width + 20.0f), middle_left_right.y);
 
     const V2 bottom_position =
-        v2f(middle_top_bottom.x,
-            middle_top_bottom.y + (docking_size_top_bottom.height + 20.0f));
+        v2f(middle_top_bottom.x, middle_top_bottom.y + (docking_size_top_bottom.height + 20.0f));
 
     const V2 left_position =
-        v2f(middle_left_right.x - (docking_size_left_right.width + 20.0f),
-            middle_left_right.y);
+        v2f(middle_left_right.x - (docking_size_left_right.width + 20.0f), middle_left_right.y);
 
-    i32 index = display_docking(&dock_node->aabb, top_position, right_position,
-                                bottom_position, left_position, true);
+    i32 index = display_docking(&dock_node->aabb, top_position, right_position, bottom_position,
+                                left_position, true);
     if (index != -1) ui_context.dock_hit_node = dock_node;
     return index;
 }
@@ -871,8 +889,7 @@ void ui_window_start_size_animation(UiWindow* window, V2 start_size, V2 end_size
     window->size_animation_on = true;
 }
 
-void ui_window_start_position_animation(UiWindow* window, V2 start_position,
-                                        V2 end_position)
+void ui_window_start_position_animation(UiWindow* window, V2 start_position, V2 end_position)
 {
     window->position_animation_precent = 0.0f;
     window->position_before_animation = start_position;
@@ -1065,8 +1082,8 @@ internal f32 gamma_correct(f32 value, f32 gamma)
     return powf(value, 1.0f / gamma);
 }
 
-internal void get_window_resize_aabbs(UiWindow* window, AABB* left, AABB* top,
-                                      AABB* right, AABB* bottom)
+internal void get_window_resize_aabbs(UiWindow* window, AABB* left, AABB* top, AABB* right,
+                                      AABB* bottom)
 {
     const f32 size = 6.0f;
     const f32 half_size = size * 0.5f;
@@ -1168,6 +1185,8 @@ void ui_context_create()
     array_create(&ui_context.id_to_index, 100);
     array_create(&ui_context.free_indices, 100);
 
+    array_create(&ui_context.generated_textures, 10);
+
     array_create(&ui_context.last_frame_windows, 10);
     array_create(&ui_context.current_frame_windows, 10);
 
@@ -1196,8 +1215,7 @@ void ui_context_create()
 
     u32 shader = shader_create("res/shaders/vertex.glsl", "res/shaders/fragment.glsl");
 
-    u32 frosted_shader =
-        shader_create("res/shaders/vertex.glsl", "res/shaders/fragment_blur.glsl");
+    u32 frosted_shader = shader_create("res/shaders/vertex.glsl", "res/shaders/fragment_blur.glsl");
 
     ftic_assert(shader);
     ftic_assert(frosted_shader);
@@ -1210,8 +1228,7 @@ void ui_context_create()
 
     // TODO: make all of these icons into a sprite sheet.
     u32 default_texture = create_default_texture();
-    u32 arrow_icon_texture =
-        load_icon_as_white_resize("res/icons/arrow_sprite_sheet.png", 72, 24);
+    u32 arrow_icon_texture = load_icon_as_white_resize("res/icons/arrow_sprite_sheet.png", 72, 24);
     u32 list_icon_texture = load_icon_as_white("res/icons/list.png");
     u32 grid_icon_texture = load_icon_as_white("res/icons/grid.png");
 
@@ -1237,6 +1254,21 @@ void ui_context_create()
 
     u32 file_obj_icon_texture = load_icon("res/icons/obj.png");
 
+    TextureProperties texture_properties = {
+        .bytes = calloc(28, sizeof(u8)),
+        .channels = 4,
+        .width = 1,
+        .height = 7,
+    };
+    for (u32 i = 0, j = 0; i < 7; ++i)
+    {
+        texture_properties.bytes[j++] = (u8)(color_picker_spectrum_colors[i].r * 255.0f);
+        texture_properties.bytes[j++] = (u8)(color_picker_spectrum_colors[i].g * 255.0f);
+        texture_properties.bytes[j++] = (u8)(color_picker_spectrum_colors[i].b * 255.0f);
+        texture_properties.bytes[j++] = (u8)(color_picker_spectrum_colors[i].a * 255.0f);
+    }
+    u32 color_picker_texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
+
     U32Array textures = { 0 };
     array_create(&textures, 100);
     array_push(&textures, default_texture);
@@ -1246,6 +1278,7 @@ void ui_context_create()
     array_push(&textures, grid_icon_texture);
 
     array_push(&textures, circle_texture);
+    array_push(&textures, color_picker_texture);
 
     array_push(&textures, folder_icon_texture);
     array_push(&textures, file_icon_texture);
@@ -1268,8 +1301,7 @@ void ui_context_create()
 
     array_create(&ui_context.render.vertices, 100 * 4);
     u32 vertex_buffer_id = vertex_buffer_create();
-    vertex_buffer_orphan(vertex_buffer_id,
-                         ui_context.render.vertices.capacity * sizeof(Vertex),
+    vertex_buffer_orphan(vertex_buffer_id, ui_context.render.vertices.capacity * sizeof(Vertex),
                          GL_STREAM_DRAW, NULL);
     ui_context.render.vertex_buffer_capacity = ui_context.render.vertices.capacity;
 
@@ -1280,8 +1312,8 @@ void ui_context_create()
                         GL_STATIC_DRAW, ui_context.render.indices.data);
     free(ui_context.render.indices.data);
 
-    ui_context.render.render = render_create(shader, textures, &vertex_buffer_layout,
-                                             vertex_buffer_id, index_buffer_id);
+    ui_context.render.render =
+        render_create(shader, textures, &vertex_buffer_layout, vertex_buffer_id, index_buffer_id);
 
     ui_context.default_textures_offset = textures.size;
 
@@ -1292,8 +1324,7 @@ void ui_context_create()
         ui_context.frosted_blur_amount_location =
             glGetUniformLocation(frosted_shader, "blurAmount");
         ftic_assert(ui_context.frosted_blur_amount_location != -1);
-        ui_context.frosted_samples_location =
-            glGetUniformLocation(frosted_shader, "samples");
+        ui_context.frosted_samples_location = glGetUniformLocation(frosted_shader, "samples");
         ftic_assert(ui_context.frosted_samples_location != -1);
 
         U32Array frosted_textures = { 0 };
@@ -1311,8 +1342,8 @@ void ui_context_create()
         generate_indicies(&ui_context.frosted_render.indices, 0, 10);
         u32 frosted_index_buffer_id = index_buffer_create();
         index_buffer_orphan(frosted_index_buffer_id,
-                            ui_context.frosted_render.indices.size * sizeof(u32),
-                            GL_STATIC_DRAW, ui_context.frosted_render.indices.data);
+                            ui_context.frosted_render.indices.size * sizeof(u32), GL_STATIC_DRAW,
+                            ui_context.frosted_render.indices.data);
         free(ui_context.frosted_render.indices.data);
 
         ui_context.frosted_render.render =
@@ -1320,9 +1351,8 @@ void ui_context_create()
                           frosted_vertex_buffer_id, frosted_index_buffer_id);
     }
 
-    ui_context.docking_color =
-        v4f(global_get_secondary_color().r, global_get_secondary_color().g,
-            global_get_secondary_color().b, 0.4f);
+    ui_context.docking_color = v4f(global_get_secondary_color().r, global_get_secondary_color().g,
+                                   global_get_secondary_color().b, 0.4f);
 
     particle_buffer_create(&ui_context.particles, 1000);
 }
@@ -1333,8 +1363,7 @@ internal u8 look_for_window_resize(UiWindow* window)
     get_window_resize_aabbs(window, &left, &top, &right, &bottom);
 
     const V2 mouse_position = event_get_mouse_position();
-    const b8 mouse_button_pressed_once =
-        event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT);
+    const b8 mouse_button_pressed_once = event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT);
 
     u8 result = RESIZE_NONE;
     if (collision_point_in_aabb(mouse_position, &left))
@@ -1377,8 +1406,7 @@ internal b8 check_window_collisions(const u32 window_index, const u32 i)
 {
     const b8 mouse_button_clicked = event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT);
     const MouseButtonEvent* mouse_button_event = event_get_mouse_button_event();
-    const b8 mouse_button_pressed =
-        event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT);
+    const b8 mouse_button_pressed = event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT);
     const V2 mouse_position = event_get_mouse_position();
 
     UiWindow* window = ui_context.windows.data + window_index;
@@ -1473,8 +1501,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
 
     ui_context.delta_time = clampf64_low(clampf64_high(delta_time, 0.5), 0.0);
 
-    ui_context.mvp.projection =
-        ortho(0.0f, dimensions.width, dimensions.height, 0.0f, -1.0f, 1.0f);
+    ui_context.mvp.projection = ortho(0.0f, dimensions.width, dimensions.height, 0.0f, -1.0f, 1.0f);
     ui_context.mvp.view = m4d();
     ui_context.mvp.model = m4d();
 
@@ -1485,10 +1512,14 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
     ui_context.row_current = 0;
     ui_context.row_padding = 0.0f;
 
+    for (u32 i = 0; i < ui_context.generated_textures.size; ++i)
+    {
+        texture_delete(ui_context.generated_textures.data[i]);
+    }
+
     for (u32 i = 0; i < ui_context.window_hover_clicked_indices.size; ++i)
     {
-        ui_context.window_hover_clicked_indices.data[i] =
-            (HoverClickedIndex){ .index = -1 };
+        ui_context.window_hover_clicked_indices.data[i] = (HoverClickedIndex){ .index = -1 };
     }
     ui_context.any_window_top_bar_hold = false;
     ui_context.any_window_hold = false;
@@ -1496,8 +1527,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
     i32 index_window_dragging = -1;
     for (u32 i = 0; i < ui_context.last_frame_windows.size; ++i)
     {
-        u32 window_index =
-            ui_context.id_to_index.data[ui_context.last_frame_windows.data[i]];
+        u32 window_index = ui_context.id_to_index.data[ui_context.last_frame_windows.data[i]];
         UiWindow* window = ui_context.windows.data + window_index;
         window->rendering_index_count = 0;
         window->rendering_index_offset = 0;
@@ -1512,7 +1542,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
     for (u32 i = 0; i < ui_context.last_frame_overlay_windows.size; ++i)
     {
         u32 window_index =
-            ui_context.id_to_index.data[ui_context.last_frame_overlay_windows.data[i]];
+            ui_context.id_to_index.data[ui_context.last_frame_overlay_windows.data[i].id];
         UiWindow* window = ui_context.windows.data + window_index;
         window->rendering_index_count = 0;
         window->rendering_index_offset = 0;
@@ -1529,8 +1559,8 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
     {
         for (i32 i = ((i32)ui_context.last_frame_overlay_windows.size) - 1; i >= 0; --i)
         {
-            u32 window_index = ui_context.id_to_index
-                                   .data[ui_context.last_frame_overlay_windows.data[i]];
+            u32 window_index =
+                ui_context.id_to_index.data[ui_context.last_frame_overlay_windows.data[i].id];
             if (check_window_collisions(window_index, i))
             {
                 goto collision_check_done;
@@ -1556,26 +1586,26 @@ internal void check_if_window_should_be_docked()
     UiWindow* focused_window = ui_context.windows.data + ui_context.window_in_focus;
     if (ui_context.dock_side_hit == 0)
     {
-        dock_node_dock_window(ui_context.dock_hit_node, focused_window->dock_node,
-                              SPLIT_HORIZONTAL, DOCK_SIDE_TOP);
+        dock_node_dock_window(ui_context.dock_hit_node, focused_window->dock_node, SPLIT_HORIZONTAL,
+                              DOCK_SIDE_TOP);
         any_hit = true;
     }
     else if (ui_context.dock_side_hit == 1)
     {
-        dock_node_dock_window(ui_context.dock_hit_node, focused_window->dock_node,
-                              SPLIT_VERTICAL, DOCK_SIDE_RIGHT);
+        dock_node_dock_window(ui_context.dock_hit_node, focused_window->dock_node, SPLIT_VERTICAL,
+                              DOCK_SIDE_RIGHT);
         any_hit = true;
     }
     else if (ui_context.dock_side_hit == 2)
     {
-        dock_node_dock_window(ui_context.dock_hit_node, focused_window->dock_node,
-                              SPLIT_HORIZONTAL, DOCK_SIDE_BOTTOM);
+        dock_node_dock_window(ui_context.dock_hit_node, focused_window->dock_node, SPLIT_HORIZONTAL,
+                              DOCK_SIDE_BOTTOM);
         any_hit = true;
     }
     else if (ui_context.dock_side_hit == 3)
     {
-        dock_node_dock_window(ui_context.dock_hit_node, focused_window->dock_node,
-                              SPLIT_VERTICAL, DOCK_SIDE_LEFT);
+        dock_node_dock_window(ui_context.dock_hit_node, focused_window->dock_node, SPLIT_VERTICAL,
+                              DOCK_SIDE_LEFT);
         any_hit = true;
     }
     else if (ui_context.dock_side_hit == 4)
@@ -1679,8 +1709,7 @@ internal void emit_aabb_particles(const AABB* aabb, const V4 color, const V2 siz
         particle->velocity = v2f(random_f32s(random_seed, -20.0f, 20.0f),
                                  random_f32s(random_seed + 1, -20.0f, 20.0f));
         particle->acceleration = v2f(particle->velocity.x, particle->velocity.y);
-        particle->dimension =
-            v2i(random_f32s(random_seed + 2, size_min_max.min, size_min_max.max));
+        particle->dimension = v2i(random_f32s(random_seed + 2, size_min_max.min, size_min_max.max));
         particle->life = v2i(random_f32s(random_seed + 3, 0.6f, 0.8f));
         particle->color = color;
         particle->alpha_change = false;
@@ -1725,8 +1754,7 @@ internal void check_dock_space_resize()
                 }
                 const V4 color = v4_s_multi(global_get_secondary_color(), 0.8f);
 
-                emit_aabb_particles(&ui_context.dock_resize_aabb, color, v2f(2.0f, 4.0f),
-                                    10);
+                emit_aabb_particles(&ui_context.dock_resize_aabb, color, v2f(2.0f, 4.0f), 10);
                 quad(&ui_context.render.vertices, ui_context.dock_resize_aabb.min,
                      ui_context.dock_resize_aabb.size, color, 0.0f);
                 ui_context.extra_index_count += 6;
@@ -1758,16 +1786,13 @@ internal void check_and_display_mouse_drag_box()
         ui_context.mouse_drag_box_point = event_get_mouse_position();
     }
 
-    if (event_is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT) &&
-        event_get_key_event()->alt_pressed)
+    if (event_is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT) && event_get_key_event()->alt_pressed)
     {
         const V2 mouse_position = event_get_mouse_position();
-        const V2 min_point =
-            v2f(min(ui_context.mouse_drag_box_point.x, mouse_position.x),
-                min(ui_context.mouse_drag_box_point.y, mouse_position.y));
-        const V2 max_point =
-            v2f(max(ui_context.mouse_drag_box_point.x, mouse_position.x),
-                max(ui_context.mouse_drag_box_point.y, mouse_position.y));
+        const V2 min_point = v2f(min(ui_context.mouse_drag_box_point.x, mouse_position.x),
+                                 min(ui_context.mouse_drag_box_point.y, mouse_position.y));
+        const V2 max_point = v2f(max(ui_context.mouse_drag_box_point.x, mouse_position.x),
+                                 max(ui_context.mouse_drag_box_point.y, mouse_position.y));
 
         AABB mouse_drag_box = {
             .min = min_point,
@@ -1780,9 +1805,8 @@ internal void check_and_display_mouse_drag_box()
 
         V4 drag_border_color = ui_context.docking_color;
         drag_border_color.a = 0.9f;
-        quad_border(&ui_context.render.vertices, &ui_context.extra_index_count,
-                    mouse_drag_box.min, mouse_drag_box.size, drag_border_color, 1.0f,
-                    0.0f);
+        quad_border(&ui_context.render.vertices, &ui_context.extra_index_count, mouse_drag_box.min,
+                    mouse_drag_box.size, drag_border_color, 1.0f, 0.0f);
 
         ui_context.mouse_drag_box = mouse_drag_box;
         ui_context.mouse_box_is_dragging = true;
@@ -1826,6 +1850,39 @@ internal void sync_current_frame_windows(U32Array* current_frame, U32Array* last
     current_frame->size = 0;
 }
 
+internal void sync_current_frame_windows2(WindowRenderDataArray* current_frame,
+                                          WindowRenderDataArray* last_frame)
+{
+    // TODO: can be very expensive. Consider a more efficient way.
+    for (u32 i = 0; i < last_frame->size; ++i)
+    {
+        u32 id = last_frame->data[i].id;
+        b8 exist = false;
+        for (u32 j = 0; j < current_frame->size; ++j)
+        {
+            if (current_frame->data[j].id == id)
+            {
+                last_frame->data[i] = current_frame->data[j];
+                push_window_to_back2(current_frame, j--);
+                current_frame->size--;
+                exist = true;
+                break;
+            }
+        }
+        if (!exist)
+        {
+            push_window_to_back2(last_frame, i--);
+            last_frame->size--;
+        }
+    }
+
+    for (u32 i = 0; i < current_frame->size; ++i)
+    {
+        array_push(last_frame, current_frame->data[i]);
+    }
+    current_frame->size = 0;
+}
+
 internal DockNodePtrArray get_active_dock_spaces()
 {
     DockNodePtrArray dock_spaces = { 0 };
@@ -1851,13 +1908,12 @@ internal DockNodePtrArray get_active_dock_spaces()
     return dock_spaces;
 }
 
-internal u32 display_text_and_truncate_if_necissary(const V2 position,
-                                                    const f32 total_width,
+internal u32 display_text_and_truncate_if_necissary(const V2 position, const f32 total_width,
                                                     const f32 alpha, char* text)
 {
     const u32 text_len = (u32)strlen(text);
-    const i32 i = text_check_length_within_boundary(ui_context.font.chars, text, text_len,
-                                                    1.0f, total_width);
+    const i32 i =
+        text_check_length_within_boundary(ui_context.font.chars, text, text_len, 1.0f, total_width);
     const b8 too_long = i >= 3;
     char saved_name[4] = "...";
     if (too_long)
@@ -1865,10 +1921,9 @@ internal u32 display_text_and_truncate_if_necissary(const V2 position,
         i32 j = i - 3;
         string_swap(text + j, saved_name); // Truncate
     }
-    u32 index_count = text_generation_color(ui_context.font.chars, text, UI_FONT_TEXTURE,
-                                            position, 1.0f, ui_context.font.pixel_height,
-                                            v4a(global_get_text_color(), alpha), NULL,
-                                            NULL, NULL, &ui_context.render.vertices);
+    u32 index_count = text_generation_color(
+        ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f, ui_context.font.pixel_height,
+        v4a(global_get_text_color(), alpha), NULL, NULL, NULL, &ui_context.render.vertices);
     if (too_long)
     {
         memcpy(text + (i - 3), saved_name, sizeof(saved_name));
@@ -1891,9 +1946,8 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
     TabChange tab_change = { 0 };
     const V2 mouse_position = event_get_mouse_position();
     const b8 should_check_collision =
-        ui_context.check_collisions && !ui_context.dock_resize_hover &&
-        !ui_context.dock_resize && !ui_context.any_window_top_bar_hold &&
-        !ui_context.any_window_hold;
+        ui_context.check_collisions && !ui_context.dock_resize_hover && !ui_context.dock_resize &&
+        !ui_context.any_window_top_bar_hold && !ui_context.any_window_hold;
 
     const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
 
@@ -1902,14 +1956,12 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
     for (i32 i = ((i32)dock_spaces->size) - 1; i >= 0; --i)
     {
         DockNode* dock_space = dock_spaces->data[i];
-        UiWindow* window =
-            ui_window_get(dock_space->windows.data[dock_space->window_in_focus]);
+        UiWindow* window = ui_window_get(dock_space->windows.data[dock_space->window_in_focus]);
         UU32 index_offset_and_count = {
             .first = ui_context.current_index_offset,
         };
-        const b8 in_focus =
-            ui_context.id_to_index.data[window->id] == ui_context.window_in_focus &&
-            !ui_context.highlight_fucused_window_off;
+        const b8 in_focus = ui_context.id_to_index.data[window->id] == ui_context.window_in_focus &&
+                            !ui_context.highlight_fucused_window_off;
         V4 window_border_color = global_get_border_color();
 
         const f32 min_tab_width = window->size.width / dock_space->windows.size;
@@ -1928,11 +1980,10 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
         if (window->top_bar)
         {
             const V2 top_bar_dimensions = v2f(window->size.width, top_bar_height);
-            const V4 top_bar_color =
-                v4a(v4_s_multi(global_get_clear_color(), 1.2f), 1.0f);
-            const AABB aabb = quad_gradiant_t_b(
-                &ui_context.render.vertices, window->position, top_bar_dimensions,
-                top_bar_color, global_get_clear_color(), 0.0f);
+            const V4 top_bar_color = v4a(v4_s_multi(global_get_clear_color(), 1.2f), 1.0f);
+            const AABB aabb =
+                quad_gradiant_t_b(&ui_context.render.vertices, window->position, top_bar_dimensions,
+                                  top_bar_color, global_get_clear_color(), 0.0f);
             index_offset_and_count.second += 6;
 
             V2 tab_position = window->position;
@@ -1943,9 +1994,8 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                 const V2 button_size = v2i(top_bar_dimensions.height - 4.0f);
 
                 const f32 tab_padding = 8.0f;
-                V2 tab_dimensions =
-                    v2f(100.0f + (tab_padding * 2.0f) + button_size.width + 8.0f,
-                        top_bar_dimensions.height);
+                V2 tab_dimensions = v2f(100.0f + (tab_padding * 2.0f) + button_size.width + 8.0f,
+                                        top_bar_dimensions.height);
 
                 tab_dimensions.width = min(tab_dimensions.width, min_tab_width);
 
@@ -1987,8 +2037,7 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                     tab_collided = true;
                 }
 
-                quad(&ui_context.render.vertices, tab_position, tab_dimensions, tab_color,
-                     0.0f);
+                quad(&ui_context.render.vertices, tab_position, tab_dimensions, tab_color, 0.0f);
                 index_offset_and_count.second += 6;
 
                 V2 button_position =
@@ -2005,10 +2054,9 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                 f32 title_advance = 0.0f;
                 if (tab_window->title.size)
                 {
-                    index_offset_and_count.second +=
-                        display_text_and_truncate_if_necissary(
-                            text_position, button_position.x - text_position.x,
-                            tab_window->alpha, tab_window->title.data);
+                    index_offset_and_count.second += display_text_and_truncate_if_necissary(
+                        text_position, button_position.x - text_position.x, tab_window->alpha,
+                        tab_window->title.data);
                 }
 
                 b8 collided = collision_point_in_aabb(mouse_position, &button_aabb);
@@ -2034,20 +2082,18 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                     button_color = v4ic(0.4f);
                 }
 
-                quad(&ui_context.render.vertices, button_position, button_size,
-                     button_color, 0.0f);
+                quad(&ui_context.render.vertices, button_position, button_size, button_color, 0.0f);
                 index_offset_and_count.second += 6;
 
                 tab_position.x += tab_dimensions.width;
             }
 
             quad_border(&ui_context.render.vertices, &index_offset_and_count.second,
-                        window->position, top_bar_dimensions, global_get_border_color(),
-                        1.0f, 0.0f);
+                        window->position, top_bar_dimensions, global_get_border_color(), 1.0f,
+                        0.0f);
 
             if (should_check_collision && window->area_hit && !tab_change.close_tab &&
-                !any_tab_hit && !any_hit &&
-                collision_point_in_aabb(mouse_position, &aabb) &&
+                !any_tab_hit && !any_hit && collision_point_in_aabb(mouse_position, &aabb) &&
                 event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
             {
                 window->top_bar_offset = event_get_mouse_position();
@@ -2056,8 +2102,8 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
                 any_hit = true;
             }
         }
-        quad_border(&ui_context.render.vertices, &index_offset_and_count.second,
-                    window->position, window->size, window_border_color, 1.0f, 0.0f);
+        quad_border(&ui_context.render.vertices, &index_offset_and_count.second, window->position,
+                    window->size, window_border_color, 1.0f, 0.0f);
         dock_spaces_index_offsets_and_counts->data[i] = index_offset_and_count;
         ui_context.current_index_offset =
             index_offset_and_count.first + index_offset_and_count.second;
@@ -2065,8 +2111,7 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
     return tab_change;
 }
 
-internal void add_frosted_background(V2 position, const V2 size,
-                                     const u32 frosted_texture_index)
+internal void add_frosted_background(V2 position, const V2 size, const u32 frosted_texture_index)
 {
     V2 saved_position = position;
     position.y = ui_context.dimensions.y - (position.y + size.height);
@@ -2075,8 +2120,8 @@ internal void add_frosted_background(V2 position, const V2 size,
     texture_coordinates.coordinates[0] =
         v2f(position.x / ui_context.dimensions.width,
             (position.y + size.height) / ui_context.dimensions.height);
-    texture_coordinates.coordinates[1] = v2f(position.x / ui_context.dimensions.width,
-                                             position.y / ui_context.dimensions.height);
+    texture_coordinates.coordinates[1] =
+        v2f(position.x / ui_context.dimensions.width, position.y / ui_context.dimensions.height);
     texture_coordinates.coordinates[2] =
         v2f((position.x + size.width) / ui_context.dimensions.width,
             position.y / ui_context.dimensions.height);
@@ -2084,8 +2129,8 @@ internal void add_frosted_background(V2 position, const V2 size,
         v2f((position.x + size.width) / ui_context.dimensions.width,
             (position.y + size.height) / ui_context.dimensions.height);
 
-    set_up_verticies(&ui_context.frosted_render.vertices, saved_position, size,
-                     v4ic(1.0f), (f32)frosted_texture_index, texture_coordinates);
+    set_up_verticies(&ui_context.frosted_render.vertices, saved_position, size, v4ic(1.0f),
+                     (f32)frosted_texture_index, texture_coordinates);
 }
 
 internal void render_ui(const DockNodePtrArray* dock_spaces,
@@ -2094,8 +2139,8 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
     const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
     AABB whole_screen_scissor = { .size = ui_context.dimensions };
 
-    render_begin_draw(&ui_context.render.render,
-                      ui_context.render.render.shader_properties.shader, &ui_context.mvp);
+    render_begin_draw(&ui_context.render.render, ui_context.render.render.shader_properties.shader,
+                      &ui_context.mvp);
     for (u32 i = 0; i < dock_spaces->size; ++i)
     {
         DockNode* node = dock_spaces->data[i];
@@ -2105,22 +2150,18 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
         if (ui_context.dimensions.y)
         {
             scissor.min.x = window->position.x;
-            scissor.min.y =
-                ui_context.dimensions.y - (window->position.y + window->size.height);
+            scissor.min.y = ui_context.dimensions.y - (window->position.y + window->size.height);
             scissor.size = window->size;
             scissor.size.height -= (window->top_bar * top_bar_height);
             scissor.size.height = clampf32_low(scissor.size.height, 0.0f);
         }
-        render_draw(window->rendering_index_offset, window->rendering_index_count,
-                    &scissor);
+        render_draw(window->rendering_index_offset, window->rendering_index_count, &scissor);
 
         scissor.size = window->size;
         UU32 index_offset_and_count = dock_spaces_index_offsets_and_counts->data[i];
-        render_draw(index_offset_and_count.first, index_offset_and_count.second,
-                    &scissor);
+        render_draw(index_offset_and_count.first, index_offset_and_count.second, &scissor);
     }
-    render_draw(ui_context.extra_index_offset, ui_context.extra_index_count,
-                &whole_screen_scissor);
+    render_draw(ui_context.extra_index_offset, ui_context.extra_index_count, &whole_screen_scissor);
 
     render_draw(ui_context.particles_index_offset, ui_context.particles.size * 6,
                 &whole_screen_scissor);
@@ -2131,22 +2172,21 @@ internal void render_ui(const DockNodePtrArray* dock_spaces,
 internal void render_overlay_ui(const u32 index_offset, const u32 index_count)
 {
     AABB whole_screen_scissor = { .size = ui_context.dimensions };
-    render_begin_draw(&ui_context.render.render,
-                      ui_context.render.render.shader_properties.shader, &ui_context.mvp);
+    render_begin_draw(&ui_context.render.render, ui_context.render.render.shader_properties.shader,
+                      &ui_context.mvp);
     for (u32 i = 0, j = 0; i < ui_context.last_frame_overlay_windows.size; ++i)
     {
-        UiWindow* window = ui_window_get(ui_context.last_frame_overlay_windows.data[i]);
-
+        const WindowRenderData* render_data = ui_context.last_frame_overlay_windows.data + i;
         AABB scissor = { 0 };
         if (ui_context.dimensions.y)
         {
-            scissor.min.x = window->position.x;
+            scissor.min.x = render_data->aabb.min.x;
             scissor.min.y =
-                ui_context.dimensions.y - (window->position.y + window->size.height);
-            scissor.size = window->size;
+                ui_context.dimensions.y - (render_data->aabb.min.y + render_data->aabb.size.height);
+            scissor.size = render_data->aabb.size;
         }
 
-        if (ui_frosted_glass && window->frosted_background)
+        if (ui_frosted_glass)
         {
             const u32 shader = ui_context.frosted_render.render.shader_properties.shader;
             render_begin_draw(&ui_context.frosted_render.render, shader, &ui_context.mvp);
@@ -2154,13 +2194,9 @@ internal void render_overlay_ui(const u32 index_offset, const u32 index_count)
             render_end_draw(&ui_context.frosted_render.render);
 
             render_begin_draw(&ui_context.render.render,
-                              ui_context.render.render.shader_properties.shader,
-                              &ui_context.mvp);
+                              ui_context.render.render.shader_properties.shader, &ui_context.mvp);
         }
-
-        render_draw(window->rendering_index_offset, window->rendering_index_count,
-                    &scissor);
-
+        render_draw(render_data->index_offset, render_data->index_count, &scissor);
         render_draw(index_offset + (index_count * i), index_count, &scissor);
     }
     render_end_draw(&ui_context.render.render);
@@ -2212,29 +2248,26 @@ void ui_context_end()
 #endif
     check_and_display_mouse_drag_box();
 
-    ui_context.current_index_offset =
-        ui_context.extra_index_offset + ui_context.extra_index_count;
+    ui_context.current_index_offset = ui_context.extra_index_offset + ui_context.extra_index_count;
 
-    sync_current_frame_windows(&ui_context.current_frame_windows,
-                               &ui_context.last_frame_windows);
+    sync_current_frame_windows(&ui_context.current_frame_windows, &ui_context.last_frame_windows);
 
-    sync_current_frame_windows(&ui_context.current_frame_overlay_windows,
-                               &ui_context.last_frame_overlay_windows);
+    sync_current_frame_windows2(&ui_context.current_frame_overlay_windows,
+                                &ui_context.last_frame_overlay_windows);
 
     DockNodePtrArray dock_spaces = get_active_dock_spaces();
 
     UU32Array dock_spaces_index_offsets_and_counts = { 0 };
     array_create(&dock_spaces_index_offsets_and_counts, dock_spaces.size);
-    TabChange tab_change =
-        update_tabs(&dock_spaces, &dock_spaces_index_offsets_and_counts);
+    TabChange tab_change = update_tabs(&dock_spaces, &dock_spaces_index_offsets_and_counts);
 
     ui_context.particles_index_offset = ui_context.current_index_offset;
     particle_buffer_update(&ui_context.particles, ui_context.delta_time);
     for (u32 i = 0; i < ui_context.particles.size; ++i)
     {
         Particle* particle = ui_context.particles.data + i;
-        quad(&ui_context.render.vertices, particle->position, particle->dimension,
-             particle->color, UI_CIRCLE_TEXTURE);
+        quad(&ui_context.render.vertices, particle->position, particle->dimension, particle->color,
+             UI_CIRCLE_TEXTURE);
     }
     ui_context.current_index_offset += ui_context.particles.size * 6;
 
@@ -2242,13 +2275,11 @@ void ui_context_end()
     u32 overlay_index_count = 0;
     for (u32 i = 0; i < ui_context.last_frame_overlay_windows.size; ++i)
     {
-        UiWindow* window = ui_window_get(ui_context.last_frame_overlay_windows.data[i]);
-
         // const f32 roundness = 15.0f / max(window->size.height, 1.0f);
-
+        const AABB* window_aabb = &ui_context.last_frame_overlay_windows.data[i].aabb;
         overlay_index_count = 0;
-        quad_border(&ui_context.render.vertices, &overlay_index_count, window->position,
-                    window->size, global_get_secondary_color(), 1.0f, 0.0f);
+        quad_border(&ui_context.render.vertices, &overlay_index_count, window_aabb->min,
+                    window_aabb->size, global_get_secondary_color(), 1.0f, 0.0f);
     }
 
     ui_context.current_index_offset +=
@@ -2274,13 +2305,11 @@ void ui_context_end()
         glGenTextures(1, &fbo_texture);
         glBindTexture(GL_TEXTURE_2D, fbo_texture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)ui_context.dimensions.width,
-                     (GLsizei)ui_context.dimensions.height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                     NULL);
+                     (GLsizei)ui_context.dimensions.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                               fbo_texture, 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbo_texture, 0);
 
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
         {
@@ -2299,22 +2328,16 @@ void ui_context_end()
             ui_context.frosted_render.render.textures.data[0] = fbo_texture;
             for (u32 i = 0; i < ui_context.last_frame_overlay_windows.size; ++i)
             {
-                UiWindow* window =
-                    ui_window_get(ui_context.last_frame_overlay_windows.data[i]);
-                if (window->frosted_background)
-                {
-                    add_frosted_background(window->position, window->size, 0);
-                }
+                const AABB* window_aabb = &ui_context.last_frame_overlay_windows.data[i].aabb;
+                add_frosted_background(window_aabb->min, window_aabb->size, 0);
             }
-            buffer_set_sub_data(ui_context.frosted_render.render.vertex_buffer_id,
-                                GL_ARRAY_BUFFER, 0,
-                                sizeof(Vertex) * ui_context.frosted_render.vertices.size,
+            buffer_set_sub_data(ui_context.frosted_render.render.vertex_buffer_id, GL_ARRAY_BUFFER,
+                                0, sizeof(Vertex) * ui_context.frosted_render.vertices.size,
                                 ui_context.frosted_render.vertices.data);
         }
 
         shader_bind(ui_context.frosted_render.render.shader_properties.shader);
-        glUniform1f(ui_context.frosted_blur_amount_location,
-                    ui_context.frosted_blur_amount);
+        glUniform1f(ui_context.frosted_blur_amount_location, ui_context.frosted_blur_amount);
         glUniform1i(ui_context.frosted_samples_location, ui_context.frosted_samples);
         shader_unbind();
     }
@@ -2344,13 +2367,11 @@ void ui_context_end()
         f32 new_ratio = 0.0f;
         if (ui_context.dock_hit_node->split_axis == SPLIT_HORIZONTAL)
         {
-            new_ratio =
-                relative_mouse_position.y / ui_context.dock_hit_node->aabb.size.height;
+            new_ratio = relative_mouse_position.y / ui_context.dock_hit_node->aabb.size.height;
         }
         else // SPLIT_VERTICAL
         {
-            new_ratio =
-                relative_mouse_position.x / ui_context.dock_hit_node->aabb.size.width;
+            new_ratio = relative_mouse_position.x / ui_context.dock_hit_node->aabb.size.width;
         }
         if (closed_interval(0.1f, new_ratio, 0.9f))
         {
@@ -2388,8 +2409,8 @@ void ui_context_set_highlight_focused_window(b8 on)
 
 u32 ui_window_create()
 {
-    u32 id = generate_id(ui_context.windows.size, &ui_context.free_indices,
-                         &ui_context.id_to_index);
+    u32 id =
+        generate_id(ui_context.windows.size, &ui_context.free_indices, &ui_context.id_to_index);
 
     for (u32 i = 0; i < ui_context.windows.size; ++i)
     {
@@ -2438,9 +2459,8 @@ internal void window_animate(UiWindow* window)
         }
         else
         {
-            window->size =
-                v2_lerp(window->size_before_animation, window->size_after_animation,
-                        ease_out_cubic(window->size_animation_precent));
+            window->size = v2_lerp(window->size_before_animation, window->size_after_animation,
+                                   ease_out_cubic(window->size_animation_precent));
         }
         window->size_animation_precent +=
             clampf32_low((f32)ui_context.delta_time, 0.0f) * animation_speed;
@@ -2462,9 +2482,9 @@ internal void window_animate(UiWindow* window)
         }
         else
         {
-            window->position = v2_lerp(
-                window->position_before_animation, window->position_after_animation,
-                ease_out_cubic(window->position_animation_precent));
+            window->position =
+                v2_lerp(window->position_before_animation, window->position_after_animation,
+                        ease_out_cubic(window->position_animation_precent));
         }
         window->position_animation_precent +=
             clampf32_low((f32)ui_context.delta_time, 0.0f) * animation_speed;
@@ -2485,8 +2505,7 @@ internal V2 directory_item_animate_position(DirectoryItem* item)
         position = v2_lerp(item->before_animation, item->after_animation,
                            ease_out_cubic(item->animation_precent));
 
-        item->animation_precent +=
-            clampf32_low((f32)ui_context.delta_time, 0.0f) * animation_speed;
+        item->animation_precent += clampf32_low((f32)ui_context.delta_time, 0.0f) * animation_speed;
     }
     return position;
 }
@@ -2498,12 +2517,12 @@ internal void handle_window_top_bar_events(UiWindow* window)
     {
         window->position = v2_add(event_get_mouse_position(), window->top_bar_offset);
 
-        window->position.y = clampf32_high(
-            window->position.y, ui_context.dimensions.height - window->size.height);
+        window->position.y =
+            clampf32_high(window->position.y, ui_context.dimensions.height - window->size.height);
         window->position.y = clampf32_low(window->position.y, 0.0f);
 
-        window->position.x = clampf32_high(
-            window->position.x, ui_context.dimensions.width - window->size.width);
+        window->position.x =
+            clampf32_high(window->position.x, ui_context.dimensions.width - window->size.width);
         window->position.x = clampf32_low(window->position.x, 0.0f);
 
         window->dock_node->aabb.min = window->position;
@@ -2563,10 +2582,8 @@ internal void handle_window_top_bar_events(UiWindow* window)
     }
 }
 
-internal void resize_where_position_change(const f32 mouse_position,
-                                           const f32 size_offset,
-                                           const f32 position_offset, f32* position,
-                                           f32* size)
+internal void resize_where_position_change(const f32 mouse_position, const f32 size_offset,
+                                           const f32 position_offset, f32* position, f32* size)
 {
     *size = size_offset + position_offset;
     if (*size > 200.0f)
@@ -2580,8 +2597,8 @@ internal void resize_where_position_change(const f32 mouse_position,
     }
 }
 
-internal void resize_where_only_size_change(const f32 size_offset,
-                                            const f32 position_offset, f32* size)
+internal void resize_where_only_size_change(const f32 size_offset, const f32 position_offset,
+                                            f32* size)
 {
     *size = size_offset - position_offset;
     if (*size < 200.0f)
@@ -2596,8 +2613,8 @@ internal void handle_window_resize_events(UiWindow* window)
     const V2 offset = v2_sub(window->resize_pointer_offset, mouse_position);
     if (check_bit(window->resize_dragging, RESIZE_LEFT))
     {
-        resize_where_position_change(mouse_position.x, window->resize_size_offset.width,
-                                     offset.x, &window->position.x, &window->size.width);
+        resize_where_position_change(mouse_position.x, window->resize_size_offset.width, offset.x,
+                                     &window->position.x, &window->size.width);
     }
     else if (check_bit(window->resize_dragging, RESIZE_RIGHT))
     {
@@ -2607,8 +2624,8 @@ internal void handle_window_resize_events(UiWindow* window)
 
     if (check_bit(window->resize_dragging, RESIZE_TOP))
     {
-        resize_where_position_change(mouse_position.y, window->resize_size_offset.height,
-                                     offset.y, &window->position.y, &window->size.height);
+        resize_where_position_change(mouse_position.y, window->resize_size_offset.height, offset.y,
+                                     &window->position.y, &window->size.height);
     }
     else if (check_bit(window->resize_dragging, RESIZE_BOTTOM))
     {
@@ -2649,22 +2666,6 @@ b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
         window->scroll_bar.dragging = false;
         window->scroll_bar_width.dragging = false;
         window->release_from_dock_space = false;
-    }
-
-    if (!window->closing || window->size_animation_on || window->position_animation_on)
-    {
-        if (window->overlay)
-        {
-            array_push(&ui_context.current_frame_overlay_windows, window->id);
-        }
-        else
-        {
-            array_push(&ui_context.current_frame_windows, window->id);
-        }
-        if (window->top_bar)
-        {
-            array_push(&ui_context.current_frame_top_bar_windows, window->id);
-        }
     }
 
     if (title)
@@ -2711,15 +2712,17 @@ b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
 
     if (window->hide) return false;
 
+    window->position = round_v2(window->position);
+    window->size = round_v2(window->size);
+
     if (window->frosted_background)
     {
         const f32 alpha = 0.8f + (0.2f * !ui_frosted_glass);
         window->top_color.a = alpha;
         window->bottom_color.a = alpha;
     }
-    array_push(aabbs, quad_gradiant_t_b(&ui_context.render.vertices, window->position,
-                                        window->size, window->top_color,
-                                        window->bottom_color, 0.0f));
+    array_push(aabbs, quad_gradiant_t_b(&ui_context.render.vertices, window->position, window->size,
+                                        window->top_color, window->bottom_color, 0.0f));
     window->rendering_index_count += 6;
 
     return true;
@@ -2729,8 +2732,7 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
                                     HoverClickedIndex hover_clicked_index)
 {
     const f32 scroll_bar_width = 8.0f;
-    V2 position =
-        v2f(window->position.x + window->size.width, window->first_item_position.y);
+    V2 position = v2f(window->position.x + window->size.width, window->first_item_position.y);
     position.x -= scroll_bar_width;
 
     const f32 area_height = window->size.height;
@@ -2768,9 +2770,8 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
         }
         else
         {
-            quad_gradiant_t_b(&ui_context.render.vertices, position,
-                              scroll_bar_dimensions, global_get_lighter_color(),
-                              v4ic(0.45f), 0.0f);
+            quad_gradiant_t_b(&ui_context.render.vertices, position, scroll_bar_dimensions,
+                              global_get_lighter_color(), v4ic(0.45f), 0.0f);
             window->rendering_index_count += 6;
         }
 
@@ -2778,8 +2779,7 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
         {
             window->any_holding = true;
             window->scroll_bar.dragging = true;
-            window->scroll_bar.mouse_pointer_offset =
-                scroll_bar_aabb.min.y - mouse_position.y;
+            window->scroll_bar.mouse_pointer_offset = scroll_bar_aabb.min.y - mouse_position.y;
         }
 
         if (hover_clicked_index.clicked)
@@ -2796,14 +2796,12 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
             // Clipping
             if (new_y < initial_y)
             {
-                window->scroll_bar.mouse_pointer_offset =
-                    scroll_bar_aabb.min.y - mouse_position.y;
+                window->scroll_bar.mouse_pointer_offset = scroll_bar_aabb.min.y - mouse_position.y;
                 new_y = initial_y;
             }
             if (new_y > end_position_y)
             {
-                window->scroll_bar.mouse_pointer_offset =
-                    scroll_bar_aabb.min.y - mouse_position.y;
+                window->scroll_bar.mouse_pointer_offset = scroll_bar_aabb.min.y - mouse_position.y;
                 new_y = end_position_y;
             }
 
@@ -2861,9 +2859,8 @@ internal void add_scroll_bar_width(UiWindow* window, AABBArray* aabbs,
         }
         else
         {
-            quad_gradiant_t_b(&ui_context.render.vertices, position,
-                              scroll_bar_dimensions, global_get_lighter_color(),
-                              v4ic(0.45f), 0.0f);
+            quad_gradiant_t_b(&ui_context.render.vertices, position, scroll_bar_dimensions,
+                              global_get_lighter_color(), v4ic(0.45f), 0.0f);
             window->rendering_index_count += 6;
         }
 
@@ -2912,8 +2909,6 @@ b8 ui_window_end()
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
 
-    if (window->hide) return false;
-
     AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
 
     const V2 top_bar_dimensions = v2f(window->size.width, 20.0f);
@@ -2927,14 +2922,37 @@ b8 ui_window_end()
     {
         if (event_get_mouse_wheel_event()->activated && window->area_hit)
         {
-            window->end_scroll_offset = set_scroll_offset(
-                window->total_height, window->size.y, window->end_scroll_offset);
+            window->end_scroll_offset =
+                set_scroll_offset(window->total_height, window->size.y, window->end_scroll_offset);
         }
         if (ui_context.delta_time < 0.5f)
         {
             window->current_scroll_offset =
                 smooth_scroll(ui_context.delta_time, window->end_scroll_offset, 12.0f,
                               window->current_scroll_offset);
+        }
+    }
+
+    if (!window->closing || window->size_animation_on || window->position_animation_on)
+    {
+        if (window->overlay)
+        {
+            AABB window_aabb = { .min = window->position, .size = window->size };
+            WindowRenderData render_data = {
+                .id = window->id,
+                .aabb = window_aabb,
+                .index_offset = window->rendering_index_offset,
+                .index_count = window->rendering_index_count,
+            };
+            array_push(&ui_context.current_frame_overlay_windows, render_data);
+        }
+        else
+        {
+            array_push(&ui_context.current_frame_windows, window->id);
+        }
+        if (window->top_bar)
+        {
+            array_push(&ui_context.current_frame_top_bar_windows, window->id);
         }
     }
 
@@ -2949,9 +2967,8 @@ b8 ui_window_end()
     }
     if (window->overlay)
     {
-        return !window->area_hit &&
-               (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
-                event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
+        return !window->area_hit && (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
+                                     event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
     }
     return false;
 }
@@ -3038,14 +3055,13 @@ b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color,
 
     if (hover && event_get_mouse_button_event()->action == FTIC_RELEASE)
     {
-        quad(&ui_context.render.vertices, button_aabb.min, button_aabb.size, hover_color,
-             0.0f);
+        quad(&ui_context.render.vertices, button_aabb.min, button_aabb.size, hover_color, 0.0f);
         window->rendering_index_count += 6;
     }
 
     V2 icon_size = v2_s_multi(button_aabb.size, 0.7f);
-    V2 icon_position = v2_add(position, v2f(middle(size.width, icon_size.width),
-                                            middle(size.height, icon_size.height)));
+    V2 icon_position = v2_add(
+        position, v2f(middle(size.width, icon_size.width), middle(size.height, icon_size.height)));
 
     quad_co(&ui_context.render.vertices, icon_position, icon_size, button_color,
             texture_coordinates, texture_index);
@@ -3064,8 +3080,7 @@ internal void input_buffer_select_char(InputBuffer* input, u32 index)
     array_push(&input->chars_selected, input->chars.data[index]);
 }
 
-internal u32 render_input(const f64 delta_time, const V2 text_position,
-                          InputBuffer* input)
+internal u32 render_input(const f64 delta_time, const V2 text_position, InputBuffer* input)
 {
     u32 index_count = 0;
     // Blinking cursor
@@ -3092,8 +3107,8 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
         input->time += delta_time;
         if (input->time >= 0.4f)
         {
-            const f32 x_advance = text_x_advance(
-                ui_context.font.chars, input->buffer.data, input->input_index, 1.0f);
+            const f32 x_advance =
+                text_x_advance(ui_context.font.chars, input->buffer.data, input->input_index, 1.0f);
 
             quad(&ui_context.render.vertices,
                  v2f(text_position.x + x_advance + 1.0f, text_position.y + 2.0f),
@@ -3109,8 +3124,7 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
         index_count += text_generation(
             ui_context.font.chars, input->buffer.data, UI_FONT_TEXTURE,
             v2f(text_position.x, text_position.y + ui_context.font.pixel_height), 1.0f,
-            ui_context.font.line_height, NULL, NULL, &input->chars,
-            &ui_context.render.vertices);
+            ui_context.font.line_height, NULL, NULL, &input->chars, &ui_context.render.vertices);
     }
     if (event_is_mouse_button_pressed(FTIC_MOUSE_BUTTON_LEFT))
     {
@@ -3128,8 +3142,7 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
             for (u32 i = 0; i < input->chars.size; ++i)
             {
                 const AABB* current_aabb = &input->chars.data[i].aabb;
-                const f32 middle_point =
-                    current_aabb->min.x + (current_aabb->size.width * 0.5f);
+                const f32 middle_point = current_aabb->min.x + (current_aabb->size.width * 0.5f);
 
                 if (mouse_position.x > middle_point)
                 {
@@ -3162,8 +3175,7 @@ internal u32 render_input(const f64 delta_time, const V2 text_position,
         const AABB* last_char = &array_back(&input->chars_selected)->aabb;
         const f32 size_width = (last_char->min.x + last_char->size.width) - position_x;
         quad(&ui_context.render.vertices, v2f(position_x, text_position.y),
-             v2f(size_width, ui_context.font.pixel_height + 5.0f),
-             ui_context.docking_color, 0.0f);
+             v2f(size_width, ui_context.font.pixel_height + 5.0f), ui_context.docking_color, 0.0f);
         index_count += 6;
     }
     return index_count;
@@ -3179,8 +3191,8 @@ internal b8 add_from_key_buffer(const f32 width, InputBuffer* input)
         if (closed_interval(0, (current_char - 32), 96))
         {
             array_push(&input->buffer, current_char);
-            f32 x_advance = text_x_advance(ui_context.font.chars, input->buffer.data,
-                                           input->buffer.size, 1.0f);
+            f32 x_advance =
+                text_x_advance(ui_context.font.chars, input->buffer.data, input->buffer.size, 1.0f);
 
             input->buffer.data[--input->buffer.size] = '\0';
             if (x_advance >= width)
@@ -3261,8 +3273,8 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
     {
         input->active = hover_clicked_index.index == (i32)aabbs->size;
     }
-    array_push(aabbs, quad(&ui_context.render.vertices, position, size,
-                           global_get_clear_color(), 0.0f));
+    array_push(aabbs,
+               quad(&ui_context.render.vertices, position, size, global_get_clear_color(), 0.0f));
     window->rendering_index_count += 6;
 
     b8 typed = false;
@@ -3286,8 +3298,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
                     for (u32 i = 0; i < clip_board_length; ++i)
                     {
                         array_push(&input->buffer, clip_board[i]);
-                        for (i32 j = ((i32)input->buffer.size) - 1;
-                             j > input->input_index; --j)
+                        for (i32 j = ((i32)input->buffer.size) - 1; j > input->input_index; --j)
                         {
                             input->buffer.data[j] = input->buffer.data[j - 1];
                         }
@@ -3311,23 +3322,20 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input)
     }
 
     V2 text_position =
-        v2f(position.x + 5.0f,
-            position.y + (middle(size.y, ui_context.font.pixel_height) * 0.8f));
-    window->rendering_index_count +=
-        render_input(ui_context.delta_time, text_position, input);
+        v2f(position.x + 5.0f, position.y + (middle(size.y, ui_context.font.pixel_height) * 0.8f));
+    window->rendering_index_count += render_input(ui_context.delta_time, text_position, input);
 
-    quad_border_rounded(&ui_context.render.vertices, &window->rendering_index_count,
-                        position, size, global_get_border_color(), 1.0f, 0.4f, 3, 0.0f);
+    quad_border_rounded(&ui_context.render.vertices, &window->rendering_index_count, position, size,
+                        global_get_border_color(), 1.0f, 0.4f, 3, 0.0f);
 
     return typed;
 }
 
-internal b8 item_in_view(const f32 position_y, const f32 height,
-                         const f32 window_position_y, const f32 window_height)
+internal b8 item_in_view(const f32 position_y, const f32 height, const f32 window_position_y,
+                         const f32 window_height)
 {
     const f32 value = position_y + height;
-    return closed_interval(window_position_y, value,
-                           window_position_y + window_height + height);
+    return closed_interval(window_position_y, value, window_position_y + window_height + height);
 }
 
 internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensions,
@@ -3352,15 +3360,12 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
     const b8 alt_pressed = event_get_key_event()->alt_pressed;
 
     AABB aabb = { .min = starting_position, .size = item_dimensions };
-    const b8 hit =
-        (hover_clicked_index.index == (i32)aabbs->size) ||
-        (collision_aabb_in_aabb(&ui_context.mouse_drag_box, &aabb) && alt_pressed);
+    const b8 hit = (hover_clicked_index.index == (i32)aabbs->size) ||
+                   (collision_aabb_in_aabb(&ui_context.mouse_drag_box, &aabb) && alt_pressed);
 
-    const b8 mouse_button_clicked_right =
-        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT);
+    const b8 mouse_button_clicked_right = event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT);
     const b8 mouse_button_clicked =
-        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) ||
-        mouse_button_clicked_right;
+        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) || mouse_button_clicked_right;
 
     if (event_is_ctrl_and_key_pressed(FTIC_KEY_R) && check_if_selected)
     {
@@ -3389,8 +3394,7 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
                     directory_clear_selected_items(&list->selected_item_values);
                 }
                 char* path = string_copy(item->path, path_length, 2);
-                hash_table_insert_guid(&list->selected_item_values.selected_items,
-                                       item->id, path);
+                hash_table_insert_guid(&list->selected_item_values.selected_items, item->id, path);
                 array_push(&list->selected_item_values.paths, path);
             }
             else if (!ctrl_pressed)
@@ -3399,8 +3403,8 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
                 {
                     directory_clear_selected_items(&list->selected_item_values);
                     char* path = string_copy(item->path, path_length, 2);
-                    hash_table_insert_guid(&list->selected_item_values.selected_items,
-                                           item->id, path);
+                    hash_table_insert_guid(&list->selected_item_values.selected_items, item->id,
+                                           path);
                     array_push(&list->selected_item_values.paths, path);
                 }
             }
@@ -3441,8 +3445,7 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
             }
             else
             {
-                list->selected_item_values.last_selected =
-                    string_copy(item->name, name_length, 0);
+                list->selected_item_values.last_selected = string_copy(item->name, name_length, 0);
                 item->rename = false;
             }
 
@@ -3487,8 +3490,7 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
     return hit;
 }
 
-internal f32 get_file_icon_based_on_extension(const f32 icon_index,
-                                              DirectoryItemType type)
+internal f32 get_file_icon_based_on_extension(const f32 icon_index, DirectoryItemType type)
 {
     b8 small = icon_index == UI_FILE_ICON_TEXTURE;
     if (small || icon_index == UI_FILE_ICON_BIG_TEXTURE)
@@ -3554,10 +3556,8 @@ internal void animate_based_on_selection(const b8 selected, const b8 hit, const 
     }
 }
 
-internal void directory_item_update_position_and_background(DirectoryItem* item,
-                                                            const b8 hit,
-                                                            const b8 selected,
-                                                            V2* position,
+internal void directory_item_update_position_and_background(DirectoryItem* item, const b8 hit,
+                                                            const b8 selected, V2* position,
                                                             V2* item_dimensions)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
@@ -3573,9 +3573,8 @@ internal void directory_item_update_position_and_background(DirectoryItem* item,
     {
         V4 color = selected ? v4ic(0.45f) : v4ic(0.3f);
         color = v4a(color, window->alpha);
-        quad_gradiant_l_r(&ui_context.render.vertices, back_drop_aabb.min,
-                          back_drop_aabb.size, v4a(color, window->alpha),
-                          global_get_clear_color(), 0.0f);
+        quad_gradiant_l_r(&ui_context.render.vertices, back_drop_aabb.min, back_drop_aabb.size,
+                          v4a(color, window->alpha), global_get_clear_color(), 0.0f);
         window->rendering_index_count += 6;
     }
 
@@ -3596,8 +3595,8 @@ internal AABB directory_item_render_icon(const V2 position, const V2 size, f32 i
     const V2 icon_size = v2i(24.0f);
     AABB icon_aabb =
         quad(&ui_context.render.vertices,
-             v2f(position.x + 5.0f, position.y + middle(size.height, icon_size.height)),
-             icon_size, v4a(v4i(1.0f), window->alpha), icon_index);
+             v2f(position.x + 5.0f, position.y + middle(size.height, icon_size.height)), icon_size,
+             v4a(v4i(1.0f), window->alpha), icon_index);
     window->rendering_index_count += 6;
 
     return icon_aabb;
@@ -3612,14 +3611,14 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions, f32 icon_in
         ui_context.window_hover_clicked_indices.data[window_index];
 
     b8 selected = false;
-    b8 hit = check_directory_item_collision(starting_position, item_dimensions, item,
-                                            &selected, list);
+    b8 hit =
+        check_directory_item_collision(starting_position, item_dimensions, item, &selected, list);
 
     directory_item_update_position_and_background(item, hit, selected, &starting_position,
                                                   &item_dimensions);
 
-    AABB icon_aabb = directory_item_render_icon(starting_position, item_dimensions,
-                                                icon_index, item->type);
+    AABB icon_aabb =
+        directory_item_render_icon(starting_position, item_dimensions, icon_index, item->type);
 
     V2 text_position = v2_s_add(starting_position, ui_context.font.pixel_height + 5.0f);
 
@@ -3630,15 +3629,13 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions, f32 icon_in
     {
         char buffer[100] = { 0 };
         file_format_size(item->size, buffer, 100);
-        x_advance =
-            text_x_advance(ui_context.font.chars, buffer, (u32)strlen(buffer), 1.0f);
+        x_advance = text_x_advance(ui_context.font.chars, buffer, (u32)strlen(buffer), 1.0f);
         V2 size_text_position = text_position;
-        size_text_position.x =
-            starting_position.x + item_dimensions.width - x_advance - 5.0f;
+        size_text_position.x = starting_position.x + item_dimensions.width - x_advance - 5.0f;
         window->rendering_index_count += text_generation_color(
             ui_context.font.chars, buffer, UI_FONT_TEXTURE, size_text_position, 1.0f,
-            ui_context.font.pixel_height, v4a(global_get_text_color(), window->alpha),
-            NULL, NULL, NULL, &ui_context.render.vertices);
+            ui_context.font.pixel_height, v4a(global_get_text_color(), window->alpha), NULL, NULL,
+            NULL, &ui_context.render.vertices);
     }
     window->rendering_index_count += display_text_and_truncate_if_necissary(
         text_position, (item_dimensions.width - icon_aabb.size.x - 20.0f - x_advance),
@@ -3648,10 +3645,8 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions, f32 icon_in
 }
 
 internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 icon_index,
-                                ThreadTaskQueue* task_queue,
-                                SafeIdTexturePropertiesArray* textures,
-                                SafeObjectThumbnailArray* objects, DirectoryItem* item,
-                                List* list)
+                                ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures,
+                                SafeObjectThumbnailArray* objects, DirectoryItem* item, List* list)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
@@ -3660,8 +3655,8 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
         ui_context.window_hover_clicked_indices.data[window_index];
 
     b8 selected = false;
-    b8 hit = check_directory_item_collision(starting_position, item_dimensions, item,
-                                            &selected, list);
+    b8 hit =
+        check_directory_item_collision(starting_position, item_dimensions, item, &selected, list);
 
     const V2 animated = directory_item_animate_position(item);
     animate_based_on_selection(selected, hit, animated, item);
@@ -3689,11 +3684,9 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
         array_push(&ui_context.render.render.textures, item->texture_id);
         i32 new_width = (i32)icon_size.width;
         i32 new_height = (i32)icon_size.height;
-        if (item->texture_width > icon_size.width ||
-            item->texture_height > icon_size.height)
+        if (item->texture_width > icon_size.width || item->texture_height > icon_size.height)
         {
-            texture_scale_down(item->texture_width, item->texture_height, &new_width,
-                               &new_height);
+            texture_scale_down(item->texture_width, item->texture_height, &new_width, &new_height);
         }
         else
         {
@@ -3754,8 +3747,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
                                            flip_texture_coordinates() };
 
     set_up_verticies(&ui_context.render.vertices, icon_aabb.min, icon_size,
-                     v4a(v4i(1.0f), window->alpha), icon_index,
-                     coords[item->type == FILE_OBJ]);
+                     v4a(v4i(1.0f), window->alpha), icon_index, coords[item->type == FILE_OBJ]);
     window->rendering_index_count += 6;
 
     const f32 total_available_width_for_text = item_dimensions.width;
@@ -3776,9 +3768,8 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
     return hit && hover_clicked_index.double_clicked;
 }
 
-i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index,
-                                      const f32 item_height, DirectoryItemArray* items,
-                                      List* list)
+i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index, const f32 item_height,
+                                      DirectoryItemArray* items, List* list)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
@@ -3789,7 +3780,7 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index,
     position.x += window->current_scroll_offset_width;
 
     V2 item_dimensions = v2f(window->size.width - relative_position.x, item_height);
-    
+
     const b8 enter_presssed = event_is_key_pressed_once(FTIC_KEY_ENTER);
     const b8 scroll = event_get_mouse_wheel_event()->activated;
 
@@ -3810,21 +3801,18 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index,
                 InputBuffer* input = list->inputs.data + list->input_index;
                 input->active = !scroll;
                 const f32 icon_size = 24.0f;
-                V2 input_field_position =
-                    v2f(relative_position.x + icon_size + 20.0f,
-                        relative_position.y + window->current_scroll_offset);
-                ui_window_add_input_field(
-                    input_field_position,
-                    v2f((item_dimensions.width * 0.9f) - (icon_size + 20.0f),
-                        item_dimensions.height),
-                    input);
+                V2 input_field_position = v2f(relative_position.x + icon_size + 20.0f,
+                                              relative_position.y + window->current_scroll_offset);
+                ui_window_add_input_field(input_field_position,
+                                          v2f((item_dimensions.width * 0.9f) - (icon_size + 20.0f),
+                                              item_dimensions.height),
+                                          input);
 
                 item->rename = input->active;
 
                 if (enter_presssed)
                 {
-                    platform_rename_file(item->path, input->buffer.data,
-                                         input->buffer.size);
+                    file_rename(item->path, input->buffer.data, input->buffer.size);
                     input->active = false;
                     item->rename = false;
                 }
@@ -3838,17 +3826,17 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index,
     return double_clicked_index;
 }
 
-internal void
-display_grid_item(const V2 position, const i32 index, const DirectoryItemArray* folders,
-                  const DirectoryItemArray* files, const V2 item_dimensions,
-                  ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures,
-                  SafeObjectThumbnailArray* objects, II32* hit_index, List* list)
+internal void display_grid_item(const V2 position, const i32 index,
+                                const DirectoryItemArray* folders, const DirectoryItemArray* files,
+                                const V2 item_dimensions, ThreadTaskQueue* task_queue,
+                                SafeIdTexturePropertiesArray* textures,
+                                SafeObjectThumbnailArray* objects, II32* hit_index, List* list)
 {
     if (index < (i32)folders->size)
     {
         DirectoryItem* item = folders->data + index;
-        if (directory_item_grid(position, item_dimensions, UI_FOLDER_ICON_BIG_TEXTURE,
-                                task_queue, textures, objects, item, list))
+        if (directory_item_grid(position, item_dimensions, UI_FOLDER_ICON_BIG_TEXTURE, task_queue,
+                                textures, objects, item, list))
         {
             hit_index->first = 0;
             hit_index->second = index;
@@ -3858,8 +3846,8 @@ display_grid_item(const V2 position, const i32 index, const DirectoryItemArray* 
     {
         const i32 new_index = index - folders->size;
         DirectoryItem* item = files->data + new_index;
-        if (directory_item_grid(position, item_dimensions, UI_FILE_ICON_BIG_TEXTURE,
-                                task_queue, textures, objects, item, list))
+        if (directory_item_grid(position, item_dimensions, UI_FILE_ICON_BIG_TEXTURE, task_queue,
+                                textures, objects, item, list))
         {
             hit_index->first = 1;
             hit_index->second = new_index;
@@ -3868,8 +3856,7 @@ display_grid_item(const V2 position, const i32 index, const DirectoryItemArray* 
 }
 
 II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders,
-                                       const DirectoryItemArray* files,
-                                       ThreadTaskQueue* task_queue,
+                                       const DirectoryItemArray* files, ThreadTaskQueue* task_queue,
                                        SafeIdTexturePropertiesArray* textures,
                                        SafeObjectThumbnailArray* objects, List* list)
 {
@@ -3887,8 +3874,7 @@ II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* fo
     const u32 item_count = folders->size + files->size;
     const f32 grid_padding = 10.0f + ui_list_padding;
     const f32 total_area_space = window->size.width - relative_position.x;
-    const i32 columns =
-        max((i32)(total_area_space / (item_dimensions.width + grid_padding)), 1);
+    const i32 columns = max((i32)(total_area_space / (item_dimensions.width + grid_padding)), 1);
     const i32 rows = item_count / columns;
     const i32 last_row = item_count % columns;
 
@@ -3908,8 +3894,8 @@ II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* fo
             for (i32 column = 0; column < columns; ++column)
             {
                 const i32 index = (row * columns) + column;
-                display_grid_item(position, index, folders, files, item_dimensions,
-                                  task_queue, textures, objects, &hit_index, list);
+                display_grid_item(position, index, folders, files, item_dimensions, task_queue,
+                                  textures, objects, &hit_index, list);
                 position.x += item_dimensions.width + grid_padding_width;
             }
             position.x = start_x;
@@ -3917,14 +3903,13 @@ II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* fo
         position.y += item_dimensions.height + grid_padding;
         relative_position.y += item_dimensions.height + grid_padding;
     }
-    if (item_in_view(position.y, item_dimensions.height, window->position.y,
-                     window->size.height))
+    if (item_in_view(position.y, item_dimensions.height, window->position.y, window->size.height))
     {
         for (i32 column = 0; column < last_row; ++column)
         {
             const i32 index = (rows * columns) + column;
-            display_grid_item(position, index, folders, files, item_dimensions,
-                              task_queue, textures, objects, &hit_index, list);
+            display_grid_item(position, index, folders, files, item_dimensions, task_queue,
+                              textures, objects, &hit_index, list);
             position.x += item_dimensions.width + grid_padding_width;
         }
     }
@@ -3936,12 +3921,11 @@ II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* fo
     return hit_index;
 }
 
-b8 ui_window_add_folder_list(V2 position, const f32 item_height,
-                             DirectoryItemArray* items, List* list,
-                             i32* double_clicked_index)
+b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items,
+                             List* list, i32* double_clicked_index)
 {
-    i32 result = ui_window_add_directory_item_list(position, UI_FOLDER_ICON_TEXTURE,
-                                                   item_height, items, list);
+    i32 result = ui_window_add_directory_item_list(position, UI_FOLDER_ICON_TEXTURE, item_height,
+                                                   items, list);
     if (double_clicked_index) *double_clicked_index = result;
     return result != -1;
 }
@@ -3949,14 +3933,13 @@ b8 ui_window_add_folder_list(V2 position, const f32 item_height,
 b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items,
                            List* list, i32* double_clicked_index)
 {
-    i32 result = ui_window_add_directory_item_list(position, UI_FILE_ICON_TEXTURE,
-                                                   item_height, items, list);
+    i32 result =
+        ui_window_add_directory_item_list(position, UI_FILE_ICON_TEXTURE, item_height, items, list);
     if (double_clicked_index) *double_clicked_index = result;
     return result != -1;
 }
 
-b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
-                                void* option_data)
+b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data)
 {
     const u32 drop_down_item_count = drop_down_menu->options.size;
     if (drop_down_item_count == 0) return true;
@@ -3983,8 +3966,7 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
         &ui_context.render.vertices, &window->rendering_index_count,
         v2f(position.x - drop_down_border_width, position.y - drop_down_border_width),
         v2f(drop_down_width + border_extra_padding, current_y + border_extra_padding),
-        global_get_lighter_color(), global_get_lighter_color(), drop_down_border_width,
-        0.0f);
+        global_get_lighter_color(), global_get_lighter_color(), drop_down_border_width, 0.0f);
 
     b8 in_focus = window_index == ui_context.window_in_focus;
     if (in_focus && event_is_key_pressed_repeat(FTIC_KEY_TAB))
@@ -4033,8 +4015,7 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
         window->rendering_index_count += 6;
 
         V2 promt_item_text_position = promt_item_position;
-        promt_item_text_position.y +=
-            ui_context.font.pixel_height + promt_item_text_padding + 3.0f;
+        promt_item_text_position.y += ui_context.font.pixel_height + promt_item_text_padding + 3.0f;
         promt_item_text_position.x += promt_item_text_padding;
 
         V4 text_color = global_get_text_color();
@@ -4042,9 +4023,9 @@ b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu,
             i, drop_down_item_hit, should_close, item_clicked, &text_color, option_data);
 
         window->rendering_index_count += text_generation_color(
-            ui_context.font.chars, drop_down_menu->options.data[i], 1.0f,
-            promt_item_text_position, 1.0f, ui_context.font.pixel_height * precent,
-            text_color, NULL, NULL, NULL, &ui_context.render.vertices);
+            ui_context.font.chars, drop_down_menu->options.data[i], 1.0f, promt_item_text_position,
+            1.0f, ui_context.font.pixel_height * precent, text_color, NULL, NULL, NULL,
+            &ui_context.render.vertices);
 
         promt_item_position.y += size.y;
     }
@@ -4077,10 +4058,9 @@ void ui_window_add_text_c(V2 position, V4 color, const char* text, b8 scrolling)
 
     u32 new_lines = 0;
     f32 x_advance = 0.0f;
-    window->rendering_index_count +=
-        text_generation_color(ui_context.font.chars, text, UI_FONT_TEXTURE, position,
-                              1.0f, ui_context.font.line_height, color, &new_lines,
-                              &x_advance, NULL, &ui_context.render.vertices);
+    window->rendering_index_count += text_generation_color(
+        ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f, ui_context.font.line_height,
+        color, &new_lines, &x_advance, NULL, &ui_context.render.vertices);
 
     if (ui_context.column || ui_context.row)
     {
@@ -4090,8 +4070,8 @@ void ui_window_add_text_c(V2 position, V4 color, const char* text, b8 scrolling)
         }
         else
         {
-            ui_context.column_current += ((new_lines + 1) * ui_context.font.line_height) +
-                                         ui_context.column_padding;
+            ui_context.column_current +=
+                ((new_lines + 1) * ui_context.font.line_height) + ui_context.column_padding;
         }
     }
 
@@ -4101,8 +4081,7 @@ void ui_window_add_text_c(V2 position, V4 color, const char* text, b8 scrolling)
             max(window->total_height,
                 relative_position.y + (++new_lines * ui_context.font.line_height));
 
-        window->total_width =
-            max(window->total_width, relative_position.x + x_advance + 20.0f);
+        window->total_width = max(window->total_width, relative_position.x + x_advance + 20.0f);
     }
 }
 
@@ -4111,8 +4090,7 @@ void ui_window_add_text(V2 position, const char* text, b8 scrolling)
     ui_window_add_text_c(position, v4ic(1.0f), text, scrolling);
 }
 
-void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text,
-                                b8 scrolling)
+void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text, b8 scrolling)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
@@ -4131,9 +4109,8 @@ void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text,
     u32 new_lines = 0;
     f32 x_advance = 0.0f;
     window->rendering_index_count += text_generation_colored_char(
-        ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f,
-        ui_context.font.line_height, &new_lines, &x_advance, NULL,
-        &ui_context.render.vertices);
+        ui_context.font.chars, text, UI_FONT_TEXTURE, position, 1.0f, ui_context.font.line_height,
+        &new_lines, &x_advance, NULL, &ui_context.render.vertices);
 
     if (ui_context.row)
     {
@@ -4146,8 +4123,7 @@ void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text,
             max(window->total_height,
                 relative_position.y + (++new_lines * ui_context.font.line_height));
 
-        window->total_width =
-            max(window->total_width, relative_position.x + x_advance + 20.0f);
+        window->total_width = max(window->total_width, relative_position.x + x_advance + 20.0f);
     }
 }
 
@@ -4165,15 +4141,12 @@ void ui_window_add_image(V2 position, V2 image_dimensions, u32 image)
     f32 texture_index = (f32)ui_context.render.render.textures.size;
     array_push(&ui_context.render.render.textures, image);
 
-    quad(&ui_context.render.vertices, position, image_dimensions, v4i(1.0f),
-         texture_index);
+    quad(&ui_context.render.vertices, position, image_dimensions, v4i(1.0f), texture_index);
     window->rendering_index_count += 6;
 
-    window->total_height =
-        max(window->total_height, relative_position.y + image_dimensions.height);
+    window->total_height = max(window->total_height, relative_position.y + image_dimensions.height);
 
-    window->total_width =
-        max(window->total_width, relative_position.x + image_dimensions.width);
+    window->total_width = max(window->total_width, relative_position.x + image_dimensions.width);
 }
 
 V2 ui_window_get_button_dimensions(V2 dimensions, const char* text, f32* x_advance_out)
@@ -4227,8 +4200,7 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char
         else
         {
             position.y += ui_context.column_current;
-            ui_context.column_current +=
-                end_dimensions.height + ui_context.column_padding;
+            ui_context.column_current += end_dimensions.height + ui_context.column_padding;
         }
     }
 
@@ -4241,8 +4213,7 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char
         button_color.a = 1.0f;
         if (!color)
         {
-            quad(&ui_context.render.vertices, position, end_dimensions, button_color,
-                 0.0f);
+            quad(&ui_context.render.vertices, position, end_dimensions, button_color, 0.0f);
             window->rendering_index_count += 6;
         }
     }
@@ -4284,13 +4255,12 @@ i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item)
     {
         V2 current_dimensions = v2d();
         const f32 current_x_position = ui_context.row_current;
-        if (ui_window_add_button(window->position, &current_dimensions, NULL,
-                                 values->data[i]))
+        if (ui_window_add_button(window->position, &current_dimensions, NULL, values->data[i]))
         {
             if (position_of_clicked_item)
             {
-                *position_of_clicked_item = v2f(
-                    current_x_position, window->position.y + current_dimensions.height);
+                *position_of_clicked_item =
+                    v2f(current_x_position, window->position.y + current_dimensions.height);
             }
             index = i;
         }
@@ -4357,8 +4327,8 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x)
         *x = 0.0f;
     }
 
-    AABB aabb = quad(&ui_context.render.vertices, position, size,
-                     global_get_highlight_color(), 0.0f);
+    AABB aabb =
+        quad(&ui_context.render.vertices, position, size, global_get_highlight_color(), 0.0f);
     array_push(aabbs, aabb);
     window->rendering_index_count += 6;
 
@@ -4367,19 +4337,18 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x)
 
     if (*selected)
     {
-        t_position =
-            v2_lerp(aabb.min, v2f(aabb.min.x + (aabb.size.width * 0.5f), aabb.min.y),
-                    ease_out_cubic(*x));
+        t_position = v2_lerp(aabb.min, v2f(aabb.min.x + (aabb.size.width * 0.5f), aabb.min.y),
+                             ease_out_cubic(*x));
         *x = clampf32_high(*x + (f32)ui_context.delta_time * 5.0f, 1.0f);
     }
     else
     {
-        t_position = v2_lerp(v2f(aabb.min.x + (aabb.size.width * 0.5f), aabb.min.y),
-                             aabb.min, ease_out_cubic(*x));
+        t_position = v2_lerp(v2f(aabb.min.x + (aabb.size.width * 0.5f), aabb.min.y), aabb.min,
+                             ease_out_cubic(*x));
         *x = clampf32_high(*x + (f32)ui_context.delta_time * 5.0f, 1.0f);
     }
-    quad(&ui_context.render.vertices, t_position,
-         v2f(aabb.size.width * 0.5f, aabb.size.height), color, 0.0f);
+    quad(&ui_context.render.vertices, t_position, v2f(aabb.size.width * 0.5f, aabb.size.height),
+         color, 0.0f);
     window->rendering_index_count += 6;
 }
 
@@ -4424,16 +4393,15 @@ void ui_window_close(u32 window_id)
             }
         }
         ftic_assert(i != dock_space->windows.size);
-        u32 focused_window_id =
-            remove_window_from_shared_dock_space(i, window, dock_space);
+        u32 focused_window_id = remove_window_from_shared_dock_space(i, window, dock_space);
         ui_context.window_in_focus = ui_context.id_to_index.data[focused_window_id];
 
         window->release_from_dock_space = false;
     }
 }
 
-f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 max_value,
-                         f32 value, b8* pressed)
+f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 max_value, f32 value,
+                         b8* pressed)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
@@ -4491,15 +4459,15 @@ f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 ma
     const f32 p = (value - min_value) / (max_value - min_value);
     slider_position.x = lerp_f32(start_x, end_x, p);
 
-    array_push(aabbs, quad(&ui_context.render.vertices, slider_position, slider_size,
-                           slider_color, 0.0f));
+    array_push(aabbs,
+               quad(&ui_context.render.vertices, slider_position, slider_size, slider_color, 0.0f));
     window->rendering_index_count += 6;
 
     return value;
 }
 
-internal void render_movable_item(UiWindow* window, DirectoryItem* item, V2 position,
-                                  V2 size, const b8 hit, const b8 selected)
+internal void render_movable_item(UiWindow* window, DirectoryItem* item, V2 position, V2 size,
+                                  const b8 hit, const b8 selected)
 {
     directory_item_update_position_and_background(item, hit, selected, &position, &size);
 
@@ -4583,13 +4551,11 @@ b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableLis
 
         if (list->hold && selected)
         {
-            list->hold_position =
-                v2_add(event_get_mouse_position(), list->pressed_offset);
+            list->hold_position = v2_add(event_get_mouse_position(), list->pressed_offset);
         }
         else
         {
-            if (list->hold &&
-                collision_point_in_aabb(event_get_mouse_position(), &item_aabb))
+            if (list->hold && collision_point_in_aabb(event_get_mouse_position(), &item_aabb))
             {
                 hold_index = i;
 
@@ -4609,8 +4575,7 @@ b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableLis
     {
         const u32 hold_aabb_index = aabbs->size;
         DirectoryItem* item = items->data + list->selected_item;
-        render_movable_item(window, item, list->hold_position, item_dimensions, false,
-                            true);
+        render_movable_item(window, item, list->hold_position, item_dimensions, false, true);
         if (mouse_released)
         {
             hold_index -= (hold_index > list->selected_item);
@@ -4646,7 +4611,192 @@ b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableLis
         list->pressed = false;
     }
 
-    window->total_height =
-        max(window->total_height, relative_position.y + item_dimensions.height);
+    window->total_height = max(window->total_height, relative_position.y + item_dimensions.height);
     return any_hit && hover_clicked_index.double_clicked;
+}
+
+internal V4 texture_interpolate_colors(const V2 p, const f32 width, const f32 height,
+                                       const V4* colors)
+{
+    f32 texture_x = p.x * (width - 1);
+    f32 texture_y = p.y * (height - 1);
+
+    u32 x0 = (u32)texture_x;
+    u32 y0 = (u32)texture_y;
+
+    f32 x_fraction = texture_x - x0;
+    f32 y_fraction = texture_y - y0;
+
+    u32 index_tl = y0 * (u32)width + x0;
+    u32 index_tr = y0 * (u32)width + x0 + 1;
+    u32 index_bl = (y0 + 1) * (u32)width + x0;
+    u32 index_br = (y0 + 1) * (u32)width + x0 + 1;
+
+    if (x0 >= (u32)width - 1) x0 = (u32)width - 1;
+    if (y0 >= (u32)height - 1) y0 = (u32)height - 1;
+    if (index_tr >= (u32)width * (u32)height) index_tr = index_tl;
+    if (index_bl >= (u32)width * (u32)height) index_bl = index_tl;
+    if (index_br >= (u32)width * (u32)height) index_br = index_tl;
+
+    V4 color_tl = colors[index_tl];
+    V4 color_tr = colors[index_tr];
+    V4 color_bl = colors[index_bl];
+    V4 color_br = colors[index_br];
+
+    V4 color_top = v4_lerp(color_tl, color_tr, x_fraction);
+    V4 color_bottom = v4_lerp(color_bl, color_br, x_fraction);
+    return v4_lerp(color_top, color_bottom, y_fraction);
+}
+
+#if 0
+internal V2 find_texture_coordinates(const V4 target_color, const f32 width, const f32 height,
+                                     const V2 size, const V4* colors)
+{
+    u32 closest_index = 0;
+    f32 closest_distance = INFINITY;
+
+    for (u32 i = 0; i < (u32)(width * height); ++i)
+    {
+        V4 current_color = colors[i];
+        f32 distance =
+            v4_distance_squared(target_color, current_color);
+
+        if (distance < closest_distance)
+        {
+            closest_distance = distance;
+            closest_index = i;
+        }
+    }
+
+    u32 x = closest_index % (u32)width;
+    u32 y = closest_index / (u32)width;
+
+    V2 texture_coordinates;
+    texture_coordinates.x = (f32)x / (width - 1);
+    texture_coordinates.y = (f32)y / (height - 1);
+
+    return texture_coordinates;
+}
+#endif
+
+V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker)
+{
+    const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+    HoverClickedIndex hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data[window_index];
+
+    v2_add_equal(&position, window->first_item_position);
+
+    position = v2f(round_f32(position.x), round_f32(position.y));
+    size = v2f(round_f32(size.x), round_f32(size.y));
+
+    if (event_get_mouse_button_event()->action == FTIC_RELEASE)
+    {
+        picker->hold = false;
+        picker->spectrum_hold = false;
+    }
+
+    b8 hover = hover_clicked_index.index == (i32)aabbs->size;
+
+    AABB color_spectrum_aabb = {
+        .min = v2f(position.x + size.x + 10.0f, position.y),
+        .size = v2f(30.0f, size.height),
+    };
+    array_push(aabbs, color_spectrum_aabb);
+
+    if (hover && hover_clicked_index.pressed)
+    {
+        picker->spectrum_hold = true;
+    }
+    if (picker->spectrum_hold)
+    {
+        const f32 rel_mouse_position_y = event_get_mouse_position().y - position.y;
+        picker->spectrum_at = rel_mouse_position_y;
+        picker->spectrum_at = clampf32_high(picker->spectrum_at, size.height);
+        picker->spectrum_at = clampf32_low(picker->spectrum_at, 0.0f);
+    }
+
+    const f32 position_p = picker->spectrum_at / size.height;
+    f32 color_p = position_p * 6.0f;
+    const u32 index_start = (u32)color_p;
+    const u32 index_end = (index_start + 1) < 7 ? index_start + 1 : index_start;
+    color_p -= index_start;
+    V4 color_start = color_picker_spectrum_colors[index_start];
+    V4 color_end = color_picker_spectrum_colors[index_end];
+    V4 color = v4_lerp(color_start, color_end, color_p);
+
+    const V4 colors[] = { v4ic(1.0f), color, v4ic(0.0f), v4ic(0.0f) };
+    TextureProperties texture_properties = {
+        .bytes = calloc(16, sizeof(u8)),
+        .channels = 4,
+        .width = 2,
+        .height = 2,
+    };
+    for (u32 i = 0, j = 0; i < 4; ++i)
+    {
+        texture_properties.bytes[j++] = (u8)(colors[i].r * 255.0f);
+        texture_properties.bytes[j++] = (u8)(colors[i].g * 255.0f);
+        texture_properties.bytes[j++] = (u8)(colors[i].b * 255.0f);
+        texture_properties.bytes[j++] = (u8)(colors[i].a * 255.0f);
+    }
+    const u32 texture = texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
+    free(texture_properties.bytes);
+    array_push(&ui_context.generated_textures, texture);
+
+    const f32 texture_index = (f32)ui_context.render.render.textures.size;
+    array_push(&ui_context.render.render.textures, texture);
+
+    hover = hover_clicked_index.index == (i32)aabbs->size;
+
+    AABB color_picker_aabb = {
+        .min = position,
+        .size = size,
+    };
+    array_push(aabbs, color_picker_aabb);
+
+    if (hover && hover_clicked_index.pressed)
+    {
+        picker->hold = true;
+    }
+
+    if (picker->hold)
+    {
+        V2 rel_mouse_position = v2_sub(event_get_mouse_position(), position);
+        rel_mouse_position = v2_clamp_high_low(rel_mouse_position, v2d(), size);
+        picker->at = rel_mouse_position;
+    }
+    const V2 picker_p = v2_div(picker->at, size);
+    const V4 picker_color = texture_interpolate_colors(picker_p, 2.0f, 2.0f, colors);
+
+    const V2 cirle_size = v2i(12.0f + (8.0f * (f32)(picker->hold)));
+    const V2 cirle_position = v2_sub(v2_add(position, picker->at), v2_s_multi(cirle_size, 0.5f));
+
+    quad_co(&ui_context.render.vertices, color_picker_aabb.min, color_picker_aabb.size, v4ic(1.0f),
+            quad_get_gradiant_texture_coordinates(), texture_index);
+    window->rendering_index_count += 6;
+
+    quad(&ui_context.render.vertices, cirle_position, cirle_size, picker_color, UI_CIRCLE_TEXTURE);
+    window->rendering_index_count += 6;
+
+    quad_border_rounded(&ui_context.render.vertices, &window->rendering_index_count,
+                        v2_sub(cirle_position, v2i(2.0f)), v2_add(cirle_size, v2i(4.0f)),
+                        v4ic(0.0f), 2.0f, 1.0f, 4, UI_DEFAULT_TEXTURE);
+
+    quad(&ui_context.render.vertices, color_spectrum_aabb.min, color_spectrum_aabb.size, v4ic(1.0f),
+         UI_COLOR_PICKER_TEXTURE);
+    window->rendering_index_count += 6;
+
+    quad(&ui_context.render.vertices,
+         v2f(position.x + size.x + 10.0f, position.y + picker->spectrum_at),
+         v2f(color_spectrum_aabb.size.width, 3.0f), v4ic(0.0f), UI_DEFAULT_TEXTURE);
+    window->rendering_index_count += 6;
+
+    quad(&ui_context.render.vertices,
+         v2f(color_spectrum_aabb.min.x + color_spectrum_aabb.size.width + 10.0f, position.y),
+         v2i(40.0f), picker_color, UI_DEFAULT_TEXTURE);
+    window->rendering_index_count += 6;
+
+    return picker_color;
 }

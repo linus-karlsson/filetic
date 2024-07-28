@@ -19,3 +19,11 @@ void global_set_bright_color(V4 v);
 void global_set_secondary_color(V4 v);
 void global_set_text_color(V4 v);
 void global_set_border_width(f32 v);
+
+void global_set_default_text_color();
+void global_set_default_secondary_color();
+void global_set_default_bright_color();
+void global_set_default_lighter_color();
+void global_set_default_border_color();
+void global_set_default_highlight_color();
+void global_set_default_clear_color();

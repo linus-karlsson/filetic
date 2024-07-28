@@ -196,6 +196,7 @@ float v2_len(V2 v2);
 float v2_len_squared(V2 v2);
 float v3_len_squared(V3 v3);
 float v3_len(V3 v3);
+float v4_len_squared(V4 v4);
 V3 v3_lerp(V3 v1, V3 v2, float t);
 float v2_dot(V2 v1, V2 v2);
 float v3_dot(V3 v1, V3 v2);
@@ -210,6 +211,8 @@ V3 v3_rotate(V3 v3, float rad, V3 normal);
 float v2_distance(V2 v1, V2 v2);
 float v3_distance_squared(V3 v1, V3 v2);
 float v3_distance(V3 v1, V3 v2);
+float v4_distance_squared(V4 v1, V4 v2);
+V2 v2_clamp_high_low(V2 value, V2 low, V2 high);
 
 M2 m2i(float i);
 M2 m2d(void);
@@ -708,6 +711,11 @@ float v3_len(V3 v3)
     return sqrtf((v3.x * v3.x) + (v3.y * v3.y) + (v3.z * v3.z));
 }
 
+float v4_len_squared(V4 v4)
+{
+    return (v4.x * v4.x) + (v4.y * v4.y) + (v4.z * v4.z);
+}
+
 V3 v3_lerp(V3 v1, V3 v2, float t)
 {
     return v3_add(v1, v3_s_multi(v3_sub(v2, v1), t));
@@ -796,6 +804,32 @@ float v3_distance_squared(V3 v1, V3 v2)
 float v3_distance(V3 v1, V3 v2)
 {
     return v3_len(v3_sub(v1, v2));
+}
+
+float v4_distance_squared(V4 v1, V4 v2)
+{
+    return v4_len_squared(v4_sub(v1, v2));
+}
+
+V2 v2_clamp_high_low(V2 value, V2 low, V2 high)
+{
+    if(value.x < low.x)
+    {
+        value.x = low.x;
+    }
+    else if(value.x > high.x)
+    {
+        value.x = high.x;
+    }
+    if(value.y < low.y)
+    {
+        value.y = low.y;
+    }
+    else if(value.y > high.y)
+    {
+        value.y = high.y;
+    }
+    return value;
 }
 
 M2 m2i(float i)

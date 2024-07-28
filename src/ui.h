@@ -15,25 +15,26 @@
 #define UI_GRID_ICON_TEXTURE 4.0f
 
 #define UI_CIRCLE_TEXTURE 5.0f
+#define UI_COLOR_PICKER_TEXTURE 6.0f
 
-#define UI_FOLDER_ICON_TEXTURE 6.0f
-#define UI_FILE_ICON_TEXTURE 7.0f
-#define UI_FILE_PNG_ICON_TEXTURE 8.0f
-#define UI_FILE_JPG_ICON_TEXTURE 9.0f
-#define UI_FILE_PDF_ICON_TEXTURE 10.0f
-#define UI_FILE_JAVA_ICON_TEXTURE 11.0f
-#define UI_FILE_CPP_ICON_TEXTURE 12.0f
-#define UI_FILE_C_ICON_TEXTURE 13.0f
+#define UI_FOLDER_ICON_TEXTURE 7.0f
+#define UI_FILE_ICON_TEXTURE 8.0f
+#define UI_FILE_PNG_ICON_TEXTURE 9.0f
+#define UI_FILE_JPG_ICON_TEXTURE 10.0f
+#define UI_FILE_PDF_ICON_TEXTURE 11.0f
+#define UI_FILE_JAVA_ICON_TEXTURE 12.0f
+#define UI_FILE_CPP_ICON_TEXTURE 13.0f
+#define UI_FILE_C_ICON_TEXTURE 14.0f
 
-#define UI_FOLDER_ICON_BIG_TEXTURE 14.0f
-#define UI_FILE_ICON_BIG_TEXTURE 15.0f
-#define UI_FILE_PNG_ICON_BIG_TEXTURE 16.0f
-#define UI_FILE_JPG_ICON_BIG_TEXTURE 17.0f
-#define UI_FILE_PDF_ICON_BIG_TEXTURE 18.0f
-#define UI_FILE_JAVA_ICON_BIG_TEXTURE 19.0f
-#define UI_FILE_CPP_ICON_BIG_TEXTURE 20.0f
-#define UI_FILE_C_ICON_BIG_TEXTURE 21.0f
-#define UI_FILE_OBJ_ICON_TEXTURE 22.0f
+#define UI_FOLDER_ICON_BIG_TEXTURE 15.0f
+#define UI_FILE_ICON_BIG_TEXTURE 16.0f
+#define UI_FILE_PNG_ICON_BIG_TEXTURE 17.0f
+#define UI_FILE_JPG_ICON_BIG_TEXTURE 18.0f
+#define UI_FILE_PDF_ICON_BIG_TEXTURE 19.0f
+#define UI_FILE_JAVA_ICON_BIG_TEXTURE 20.0f
+#define UI_FILE_CPP_ICON_BIG_TEXTURE 21.0f
+#define UI_FILE_C_ICON_BIG_TEXTURE 22.0f
+#define UI_FILE_OBJ_ICON_TEXTURE 23.0f
 
 typedef struct ScrollBar
 {
@@ -208,6 +209,14 @@ typedef struct MovableList
     b8 selected;
 } MovableList;
 
+typedef struct ColorPicker
+{
+    V2 at;
+    f32 spectrum_at;
+    b8 hold;
+    b8 spectrum_hold;
+} ColorPicker;
+
 #define UI_WINDOW_NONE 0
 #define UI_WINDOW_TOP_BAR BIT_1
 #define UI_WINDOW_RESIZEABLE BIT_2
@@ -285,3 +294,4 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x);
 b8 ui_window_add_drop_down(V2 position, b8* open);
 f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 max_value, f32 value, b8* pressed);
 b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list);
+V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker);

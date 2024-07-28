@@ -173,6 +173,18 @@ void file_format_size(u64 size_in_bytes, char* output, size_t output_size)
     }
 }
 
+void file_rename(const char* full_path, const char* new_name, const u32 name_length)
+{
+    u32 path_length = get_path_length(full_path, (u32)strlen(full_path));
+
+    char* to = string_copy(full_path, path_length, name_length + 2);
+    memcpy(to + path_length, new_name, name_length);
+
+    rename(full_path, to);
+
+    free(to);
+}
+
 f32 lerp_f32(const f32 a, const f32 b, const f32 t)
 {
     return a + (t * (b - a));
@@ -358,6 +370,11 @@ f32 abs_f32(f32 in)
 f32 round_f32(f32 value)
 {
     return (f32)((int)(value + (0.5f - (f32)(value < 0.0f))));
+}
+
+V2 round_v2(V2 v2)
+{
+    return v2f(round_f32(v2.x), round_f32(v2.y));
 }
 
 internal void mesh_3d_aabb_check_min_max(const V3 vertex_position, AABB3D* aabb,

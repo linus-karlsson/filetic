@@ -109,9 +109,9 @@ void render_draw(const u32 index_offset, const u32 index_count,
     if (index_count)
     {
         glEnable(GL_SCISSOR_TEST);
-        glScissor((int)roundf(scissor->min.x), (int)roundf(scissor->min.y),
-                  (int)roundf(scissor->size.width),
-                  (int)roundf(scissor->size.height));
+        glScissor((int)round_f32(scissor->min.x), (int)round_f32(scissor->min.y),
+                  (int)round_f32(scissor->size.width),
+                  (int)round_f32(scissor->size.height));
 
         GLintptr offset = index_offset * sizeof(u32);
         glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT,

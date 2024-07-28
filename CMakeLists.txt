@@ -47,7 +47,7 @@ target_include_directories(${EXE}
 target_link_libraries(${EXE} glfw)
 
 IF (WIN32)
-    target_link_options(${EXE} PRIVATE "/SUBSYSTEM:CONSOLE" PRIVATE "/ENTRY:mainCRTStartup") 
+    target_link_options(${EXE} PRIVATE "/SUBSYSTEM:WINDOWS" PRIVATE "/ENTRY:mainCRTStartup") 
     # For gcc and g++, clang
     #target_link_options(${EXE} PRIVATE "-mwindows") 
     target_link_libraries(${EXE} user32 Winmm opengl32)

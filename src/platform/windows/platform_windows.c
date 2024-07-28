@@ -215,10 +215,10 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_par
 void platform_set_executable_directory()
 {
     u32 size = GetModuleFileName(NULL, executable_dir, (DWORD)sizeof(executable_dir));
-    for(i32 i = size; i >= 0; --i)
+    for (i32 i = size; i >= 0; --i)
     {
         const char current_char = executable_dir[i];
-        if(current_char == '\\' || current_char == '/')
+        if (current_char == '\\' || current_char == '/')
         {
             executable_dir[i + 1] = '\0';
             executable_dir_length = i + 1;
@@ -317,8 +317,7 @@ void platform_init(const char* title, u16 width, u16 height, Platform** platform
         log_last_error();
         ftic_assert(false);
     }
-    SetWindowLongPtrA(platform_internal->window, GWLP_USERDATA,
-                      (LONG_PTR)platform_internal);
+    SetWindowLongPtrA(platform_internal->window, GWLP_USERDATA, (LONG_PTR)platform_internal);
     *platform = (Platform*)platform_internal;
 }
 
@@ -363,8 +362,7 @@ char* platform_get_last_error()
     char* message = "";
 
     DWORD size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         0, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*)&message, 0, NULL);
 
     return message;
@@ -424,8 +422,7 @@ void platform_opengl_init(Platform* platform)
         ftic_assert(false);
     }
 
-    platform_internal->opengl_properties =
-        (OpenGLProperties){ .hdc = hdc, .context = context };
+    platform_internal->opengl_properties = (OpenGLProperties){ .hdc = hdc, .context = context };
 }
 
 void platform_opengl_clean(Platform* platform)
@@ -462,22 +459,19 @@ void platform_event_set_on_key_pressed(Platform* platform, OnKeyPressedCallback 
     platform_internal->callbacks.on_key_pressed = callback;
 }
 
-void platform_event_set_on_key_released(Platform* platform,
-                                        OnKeyReleasedCallback callback)
+void platform_event_set_on_key_released(Platform* platform, OnKeyReleasedCallback callback)
 {
     WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_key_released = callback;
 }
 
-void platform_event_set_on_button_pressed(Platform* platform,
-                                          OnButtonPressedCallback callback)
+void platform_event_set_on_button_pressed(Platform* platform, OnButtonPressedCallback callback)
 {
     WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_button_pressed = callback;
 }
 
-void platform_event_set_on_button_released(Platform* platform,
-                                           OnButtonReleasedCallback callback)
+void platform_event_set_on_button_released(Platform* platform, OnButtonReleasedCallback callback)
 {
     WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_button_released = callback;
@@ -495,15 +489,13 @@ void platform_event_set_on_mouse_wheel(Platform* platform, OnMouseWheelCallback_
     platform_internal->callbacks.on_mouse_wheel = callback;
 }
 
-void platform_event_set_on_window_focused(Platform* platform,
-                                          OnWindowFocusedCallback callback)
+void platform_event_set_on_window_focused(Platform* platform, OnWindowFocusedCallback callback)
 {
     WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_window_focused = callback;
 }
 
-void platform_event_set_on_window_resize(Platform* platform,
-                                         OnWindowResizeCallback callback)
+void platform_event_set_on_window_resize(Platform* platform, OnWindowResizeCallback callback)
 {
     WindowsPlatformInternal* platform_internal = (WindowsPlatformInternal*)platform;
     platform_internal->callbacks.on_window_resize = callback;
@@ -544,19 +536,18 @@ b8 platform_directory_exists(const char* directory_path)
 }
 
 internal void insert_directory_item(const u32 directory_len, const u64 size,
-                                    const u64 last_write_time,
-                                    const DirectoryItemType type, char* path,
-                                    DirectoryItemArray* items)
+                                    const u64 last_write_time, const DirectoryItemType type,
+                                    char* path, DirectoryItemArray* items)
 {
-    HANDLE h = CreateFile(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                          NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    HANDLE h = CreateFile(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                          OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
     if (h != INVALID_HANDLE_VALUE)
     {
         FILE_OBJECTID_BUFFER buffer;
         DWORD cb_out;
 
-        if (DeviceIoControl(h, FSCTL_CREATE_OR_GET_OBJECT_ID, NULL, 0, &buffer,
-                            sizeof(buffer), &cb_out, NULL))
+        if (DeviceIoControl(h, FSCTL_CREATE_OR_GET_OBJECT_ID, NULL, 0, &buffer, sizeof(buffer),
+                            &cb_out, NULL))
         {
             DirectoryItem item = {
                 .size = size,
@@ -578,8 +569,7 @@ void platform_show_hidden_files(b8 show)
     show_hidden_files = show;
 }
 
-internal DirectoryItemType get_file_type_based_on_extension(const char* name,
-                                                            const u32 name_length)
+internal DirectoryItemType get_file_type_based_on_extension(const char* name, const u32 name_length)
 {
     const char* extension = file_get_extension(name, (u32)strlen(name));
     if (extension)
@@ -629,8 +619,8 @@ Directory platform_get_directory(const char* directory_path, const u32 directory
         do
         {
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM ||
-                (!show_hidden_files && ((ffd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) ||
-                                        ffd.cFileName[0] == '.')))
+                (!show_hidden_files &&
+                 ((ffd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) || ffd.cFileName[0] == '.')))
             {
                 continue;
             }
@@ -643,24 +633,23 @@ Directory platform_get_directory(const char* directory_path, const u32 directory
             }
 
             const u32 name_length = (u32)strlen(ffd.cFileName);
-            char* path = concatinate(directory_path, directory_len - 1, ffd.cFileName,
-                                     name_length, 0, 2, NULL);
+            char* path = concatinate(directory_path, directory_len - 1, ffd.cFileName, name_length,
+                                     0, 2, NULL);
 
-            u64 last_write_time = ((u64)ffd.ftLastWriteTime.dwHighDateTime << 32) |
-                                  ffd.ftLastWriteTime.dwLowDateTime;
+            u64 last_write_time =
+                ((u64)ffd.ftLastWriteTime.dwHighDateTime << 32) | ffd.ftLastWriteTime.dwLowDateTime;
 
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
-                insert_directory_item(directory_len, 0, last_write_time, FOLDER_DEFAULT,
-                                      path, &directory.sub_directories);
+                insert_directory_item(directory_len, 0, last_write_time, FOLDER_DEFAULT, path,
+                                      &directory.sub_directories);
             }
             else
             {
                 DirectoryItemType type =
                     get_file_type_based_on_extension(ffd.cFileName, name_length);
                 insert_directory_item(directory_len,
-                                      (ffd.nFileSizeHigh * (MAXDWORD + 1)) +
-                                          ffd.nFileSizeLow,
+                                      (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
                                       last_write_time, type, path, &directory.files);
             }
 
@@ -734,9 +723,9 @@ void platform_semaphore_destroy(FTicSemaphore* sem)
     CloseHandle(*sem);
 }
 
-FTicThreadHandle
-platform_thread_create(void* data, thread_return_value (*thread_function)(void* data),
-                       unsigned long creation_flag, unsigned long* thread_id)
+FTicThreadHandle platform_thread_create(void* data,
+                                        thread_return_value (*thread_function)(void* data),
+                                        unsigned long creation_flag, unsigned long* thread_id)
 {
     return CreateThread(0, 0, thread_function, data, creation_flag, thread_id);
 }
@@ -935,6 +924,70 @@ b8 platform_clipboard_is_empty()
     return result;
 }
 
+internal IFileOperation* file_operation_object_create(DWORD operation_flags)
+{
+    HRESULT hr;
+    IFileOperation* pfo;
+
+    hr = CoInitialize(NULL);
+    if (FAILED(hr))
+    {
+        return NULL;
+    }
+
+    hr =
+        CoCreateInstance(&CLSID_FileOperation, NULL, CLSCTX_ALL, &IID_IFileOperation, (void**)&pfo);
+    if (FAILED(hr))
+    {
+        CoUninitialize();
+        return NULL;
+    }
+
+    hr = pfo->lpVtbl->SetOperationFlags(pfo, operation_flags);
+    if (FAILED(hr))
+    {
+        pfo->lpVtbl->Release(pfo);
+        CoUninitialize();
+        return NULL;
+    }
+    return pfo;
+}
+
+internal IShellItem* shell_item_object_create(const wchar_t* path)
+{
+    IShellItem* psi;
+    HRESULT hr = SHCreateItemFromParsingName(path, NULL, &IID_IShellItem, (void**)&psi);
+    if (FAILED(hr)) return NULL;
+    return psi;
+}
+
+DWORD CALLBACK copy_progress_routine(LARGE_INTEGER TotalFileSize,
+                                     LARGE_INTEGER TotalBytesTransferred, LARGE_INTEGER StreamSize,
+                                     LARGE_INTEGER StreamBytesTransferred, DWORD dwStreamNumber,
+                                     DWORD dwCallbackReason, HANDLE hSourceFile,
+                                     HANDLE hDestinationFile, LPVOID lpData)
+{
+    f32 percent = (f32)TotalBytesTransferred.QuadPart / TotalFileSize.QuadPart * 100;
+    log_f32("Copy progress: ", percent);
+    return PROGRESS_CONTINUE;
+}
+
+#if 1
+void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path)
+{
+    for (u32 i = 0; i < paths->size; ++i)
+    {
+        const char* path = paths->data[i];
+        SHFILEOPSTRUCT file_op = {
+            .wFunc = FO_COPY,
+            .pFrom = path,
+            .pTo = directory_path,
+            .fFlags = FOF_ALLOWUNDO,
+        };
+        int result = SHFileOperation(&file_op);
+    }
+}
+#elif 0
 void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path)
 {
 
@@ -964,22 +1017,48 @@ void platform_paste_to_directory(const CharPtrArray* paths, const char* director
         char* destination_path = (char*)calloc(destination_path_length + 2, sizeof(char));
         memcpy(destination_path, directory_path, directory_path_length);
         destination_path[directory_path_length] = '\\';
-        memcpy(destination_path + directory_path_length + 1,
-               source_path + source_parent_length, name_length);
+        memcpy(destination_path + directory_path_length + 1, source_path + source_parent_length,
+               name_length);
 
-        SHFILEOPSTRUCT file_op = {
-            .wFunc = FO_COPY,
-            .pFrom = source_path,
-            .pTo = destination_path,
-            .fFlags = FOF_NOCONFIRMMKDIR, // TODO(Linus): FOF_ALLOWUNDO
-        };
-
-        int result = SHFileOperation(&file_op);
+        CopyFileEx(source_path, destination_path, copy_progress_routine, NULL, NULL, 0);
 
         free(destination_path);
     }
 }
+#else
+void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path)
+{
+    IFileOperation* pfo = file_operation_object_create(FOF_ALLOWUNDO);
+    if (pfo == NULL) return;
 
+    wchar_t* w_directory_path = char_to_wchar(directory_path, strlen(directory_path) + 1);
+    if (w_directory_path == NULL) return;
+    IShellItem* directory_psi = shell_item_object_create(w_directory_path);
+    free(w_directory_path);
+    if (directory_psi == NULL) return;
+
+    for (u32 i = 0; i < paths->size; ++i)
+    {
+        char* path = paths->data[i];
+        wchar_t* w_path = char_to_wchar(path, strlen(path) + 1);
+        if (w_path == NULL) continue;
+
+        IShellItem* file_psi = shell_item_object_create(w_path);
+        free(w_path);
+        if (file_psi == NULL) continue;
+
+        pfo->lpVtbl->CopyItem(pfo, file_psi, directory_psi, NULL, NULL);
+        file_psi->lpVtbl->Release(file_psi);
+    }
+
+    directory_psi->lpVtbl->Release(directory_psi);
+    pfo->lpVtbl->PerformOperations(pfo);
+    pfo->lpVtbl->Release(pfo);
+    CoUninitialize();
+}
+#endif
+
+#if 1
 void platform_delete_files(const CharPtrArray* paths)
 {
     for (u32 i = 0; i < paths->size; ++i)
@@ -989,12 +1068,38 @@ void platform_delete_files(const CharPtrArray* paths)
         SHFILEOPSTRUCT file_op = {
             .wFunc = FO_DELETE,
             .pFrom = path,
-            .fFlags = FOF_ALLOWUNDO,
+            .fFlags = FOF_ALLOWUNDO | FOF_NO_UI,
         };
 
         int result = SHFileOperation(&file_op);
     }
 }
+
+#else
+
+void platform_delete_files(const CharPtrArray* paths)
+{
+    IFileOperation* pfo = file_operation_object_create(FOF_ALLOWUNDO | FOF_NO_UI);
+    if (pfo == NULL) return;
+
+    for (unsigned int i = 0; i < paths->size; ++i)
+    {
+        const char* path = paths->data[i];
+        wchar_t* w_path = char_to_wchar(path, strlen(path) + 1);
+        if (w_path == NULL) continue;
+
+        IShellItem* psi = shell_item_object_create(w_path);
+        free(w_path);
+        if (psi == NULL) continue;
+
+        pfo->lpVtbl->DeleteItem(pfo, psi, NULL);
+        psi->lpVtbl->Release(psi);
+    }
+    pfo->lpVtbl->PerformOperations(pfo);
+    pfo->lpVtbl->Release(pfo);
+    CoUninitialize();
+}
+#endif
 
 void platform_rename_file(const char* path, char* new_name, const u32 name_length)
 {
@@ -1040,7 +1145,6 @@ void platform_listen_to_directory_change(void* data)
 }
 */
 
-
 typedef struct DataObject
 {
     IDataObjectVtbl* vtbl;
@@ -1054,8 +1158,8 @@ ULONG STDMETHODCALLTYPE data_object_add_ref(IDataObject* data_object)
     return InterlockedIncrement(&object->reference_count);
 }
 
-HRESULT STDMETHODCALLTYPE data_object_query_interface(IDataObject* data_object,
-                                                      REFIID riid, void** ppv)
+HRESULT STDMETHODCALLTYPE data_object_query_interface(IDataObject* data_object, REFIID riid,
+                                                      void** ppv)
 {
     DataObject* object = (DataObject*)data_object;
     if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IDataObject))
@@ -1080,8 +1184,8 @@ ULONG STDMETHODCALLTYPE data_object_release(IDataObject* data_object)
     return count;
 }
 
-HRESULT STDMETHODCALLTYPE data_object_get_data(IDataObject* data_object,
-                                               FORMATETC* format_etc, STGMEDIUM* medium)
+HRESULT STDMETHODCALLTYPE data_object_get_data(IDataObject* data_object, FORMATETC* format_etc,
+                                               STGMEDIUM* medium)
 {
     CLIPFORMAT cfShellIDList = (CLIPFORMAT)RegisterClipboardFormat(CFSTR_SHELLIDLIST);
 
@@ -1104,8 +1208,7 @@ HRESULT STDMETHODCALLTYPE data_object_get_data(IDataObject* data_object,
     return DV_E_FORMATETC;
 }
 
-HRESULT STDMETHODCALLTYPE data_object_get_data_here(IDataObject* data_object,
-                                                    FORMATETC* format_etc,
+HRESULT STDMETHODCALLTYPE data_object_get_data_here(IDataObject* data_object, FORMATETC* format_etc,
                                                     STGMEDIUM* medium)
 {
     return E_NOTIMPL;
@@ -1132,29 +1235,25 @@ HRESULT STDMETHODCALLTYPE data_object_get_canonical_format_etc(IDataObject* data
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE data_object_set_data(IDataObject* data_object,
-                                               FORMATETC* format_etc, STGMEDIUM* medium,
-                                               BOOL release)
+HRESULT STDMETHODCALLTYPE data_object_set_data(IDataObject* data_object, FORMATETC* format_etc,
+                                               STGMEDIUM* medium, BOOL release)
 {
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE data_object_enum_format_etc(IDataObject* data_object,
-                                                      DWORD direction,
+HRESULT STDMETHODCALLTYPE data_object_enum_format_etc(IDataObject* data_object, DWORD direction,
                                                       IEnumFORMATETC** enum_format_etc)
 {
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE data_object_d_advise(IDataObject* data_object,
-                                               FORMATETC* format_etc, DWORD advf,
-                                               IAdviseSink* adv_sink, DWORD* connection)
+HRESULT STDMETHODCALLTYPE data_object_d_advise(IDataObject* data_object, FORMATETC* format_etc,
+                                               DWORD advf, IAdviseSink* adv_sink, DWORD* connection)
 {
     return OLE_E_ADVISENOTSUPPORTED;
 }
 
-HRESULT STDMETHODCALLTYPE data_object_d_unadvise(IDataObject* data_object,
-                                                 DWORD connection)
+HRESULT STDMETHODCALLTYPE data_object_d_unadvise(IDataObject* data_object, DWORD connection)
 {
     return OLE_E_ADVISENOTSUPPORTED;
 }
@@ -1204,8 +1303,8 @@ ULONG STDMETHODCALLTYPE drop_source_add_reference(IDropSource* drop_source)
     return InterlockedIncrement(&object->reference_count);
 }
 
-HRESULT STDMETHODCALLTYPE drop_source_query_interface(IDropSource* drop_source,
-                                                      REFIID riid, void** ppv)
+HRESULT STDMETHODCALLTYPE drop_source_query_interface(IDropSource* drop_source, REFIID riid,
+                                                      void** ppv)
 {
     if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IDropSource))
     {
@@ -1230,8 +1329,7 @@ ULONG STDMETHODCALLTYPE drop_source_release(IDropSource* drop_source)
 }
 
 HRESULT STDMETHODCALLTYPE drop_source_query_continue_drag(IDropSource* drop_source,
-                                                          BOOL escape_pressed,
-                                                          DWORD grf_key_state)
+                                                          BOOL escape_pressed, DWORD grf_key_state)
 {
     if (escape_pressed)
     {
@@ -1244,15 +1342,13 @@ HRESULT STDMETHODCALLTYPE drop_source_query_continue_drag(IDropSource* drop_sour
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE drop_source_give_feedback(IDropSource* drop_source,
-                                                    DWORD effect)
+HRESULT STDMETHODCALLTYPE drop_source_give_feedback(IDropSource* drop_source, DWORD effect)
 {
     return DRAGDROP_S_USEDEFAULTCURSORS;
 }
 
-IDropSourceVtbl drop_source_vtbl = { drop_source_query_interface,
-                                     drop_source_add_reference, drop_source_release,
-                                     drop_source_query_continue_drag,
+IDropSourceVtbl drop_source_vtbl = { drop_source_query_interface, drop_source_add_reference,
+                                     drop_source_release, drop_source_query_continue_drag,
                                      drop_source_give_feedback };
 
 DropSource* drop_source_create()
@@ -1282,12 +1378,10 @@ void platform_start_drag_drop(const CharPtrArray* paths)
 char* wchar_to_char(const wchar_t* w_buffer)
 {
     size_t w_len = wcslen(w_buffer);
-    size_t c_len =
-        WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, NULL, 0, NULL, NULL);
+    size_t c_len = WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, NULL, 0, NULL, NULL);
 
     char* c_buffer = (char*)calloc(c_len + 1, sizeof(char));
-    WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, c_buffer, (int)c_len, NULL,
-                        NULL);
+    WideCharToMultiByte(CP_UTF8, 0, w_buffer, (int)w_len, c_buffer, (int)c_len, NULL, NULL);
 
     return c_buffer;
 }
@@ -1333,8 +1427,7 @@ internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
 
                 u8* pixels = (u8*)calloc(bi.biSizeImage, sizeof(u8));
 
-                GetDIBits(hdc, h_bitmap, 0, bitmap.bmHeight, pixels, &bmi,
-                          DIB_RGB_COLORS);
+                GetDIBits(hdc, h_bitmap, 0, bitmap.bmHeight, pixels, &bmi, DIB_RGB_COLORS);
 
                 ReleaseDC(NULL, hdc);
             }
@@ -1376,8 +1469,8 @@ void platform_context_menu_create(ContextMenu* menu, const char* path)
     }
 
     IContextMenu* pcm = NULL;
-    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child, &IID_IContextMenu,
-                                      NULL, (void**)&pcm);
+    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child, &IID_IContextMenu, NULL,
+                                      (void**)&pcm);
     if (FAILED(hr))
     {
         log_last_error();
@@ -1450,8 +1543,8 @@ void platform_open_context(void* window, const char* path)
     }
 
     IContextMenu* pcm = NULL;
-    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child, &IID_IContextMenu,
-                                      NULL, (void**)&pcm);
+    psf_parent->lpVtbl->GetUIObjectOf(psf_parent, NULL, 1, &pidl_child, &IID_IContextMenu, NULL,
+                                      (void**)&pcm);
     if (FAILED(hr))
     {
         log_last_error();
@@ -1471,8 +1564,7 @@ void platform_open_context(void* window, const char* path)
 
         POINT pt;
         GetCursorPos(&pt);
-        cmd = TrackPopupMenu(h_menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd,
-                             NULL);
+        cmd = TrackPopupMenu(h_menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, NULL);
         if (cmd)
         {
             CMINVOKECOMMANDINFOEX cmi = { 0 };
@@ -1501,8 +1593,7 @@ void platform_open_context(void* window, const char* path)
 
 void* directory_listen_to_directory_changes(const char* path)
 {
-    HANDLE handle =
-        FindFirstChangeNotification(path, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME);
+    HANDLE handle = FindFirstChangeNotification(path, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME);
     return handle;
 }
 
