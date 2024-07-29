@@ -284,26 +284,6 @@ void string_swap(char* first, char* second)
     memcpy(second, temp, length);
 }
 
-f32 clampf32_low(f32 value, f32 low)
-{
-    return value < low ? low : value;
-}
-
-f32 clampf32_high(f32 value, f32 high)
-{
-    return value > high ? high : value;
-}
-
-f64 clampf64_low(f64 value, f64 low)
-{
-    return value < low ? low : value;
-}
-
-f64 clampf64_high(f64 value, f64 high)
-{
-    return value > high ? high : value;
-}
-
 f32 middle(const f32 area_size, const f32 object_size)
 {
     return (area_size * 0.5f) - (object_size * 0.5f);

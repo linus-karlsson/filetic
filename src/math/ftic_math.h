@@ -1,16 +1,16 @@
 #pragma once
 
-#define V2_FMT(v) "(x: %f, y: %f)\n", (v).x, (v).y
-#define V3_FMT(v) "(x: %f, y: %f, z: %f)\n", (v).x, (v).y, (v).z
-#define V4_FMT(v) "(x: %f, y: %f, z: %f, w: %f)\n", (v).x, (v).y, (v).z, (v).w
+#define V2_FMT(v) "(x: %f, y: %f)", (v).x, (v).y
+#define V3_FMT(v) "(x: %f, y: %f, z: %f)", (v).x, (v).y, (v).z
+#define V4_FMT(v) "(x: %f, y: %f, z: %f, w: %f)", (v).x, (v).y, (v).z, (v).w
 
 #define M3_FMT(m)                                                              \
-    "|%f,%f,%f|\n|%f,%f,%f|\n|%f,%f,%f|\n\n", (m).data[0][0], (m).data[1][0],  \
+    "|%f,%f,%f|\n|%f,%f,%f|\n|%f,%f,%f|\n", (m).data[0][0], (m).data[1][0],  \
         (m).data[2][0], (m).data[0][1], (m).data[1][1], (m).data[2][1],        \
         (m).data[0][2], (m).data[1][2], (m).data[2][2]
 
 #define M4_FMT(m)                                                              \
-    "|%f,%f,%f,%f|\n|%f,%f,%f,%f|\n|%f,%f,%f,%f|\n|%f,%f,%f,%f|\n\n",          \
+    "|%f,%f,%f,%f|\n|%f,%f,%f,%f|\n|%f,%f,%f,%f|\n|%f,%f,%f,%f|\n",          \
         (m).data[0][0], (m).data[1][0], (m).data[2][0], (m).data[3][0],        \
         (m).data[0][1], (m).data[1][1], (m).data[2][1], (m).data[3][1],        \
         (m).data[0][2], (m).data[1][2], (m).data[2][2], (m).data[3][2],        \

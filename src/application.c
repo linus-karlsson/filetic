@@ -6,6 +6,7 @@
 #include "object_load.h"
 #include "random.h"
 #include "globals.h"
+#include "theme.h"
 #include <stdio.h>
 #include <string.h>
 #include <glad/glad.h>
@@ -60,59 +61,51 @@ global const V4 png_icon_co = icon_4_co(512.0f, 128.0f);
 
 typedef struct DropDownLayout
 {
+    UiLayout ui_layout;
     f32 width;
-    f32 row_height;
     f32 switch_x;
     f32 text_y_offset;
-    V2 at;
 } DropDownLayout;
 
-internal DropDownLayout drop_down_layout_create(const f32 width, const f32 row_height, const V2 at)
+internal DropDownLayout drop_down_layout_create(const f32 width, const V2 at)
 {
     DropDownLayout layout = {
         .width = width,
-        .row_height = row_height,
-        .at = at,
     };
+    layout.ui_layout = ui_layout_create(at);
     const V2 switch_size = ui_window_get_switch_size();
-    layout.switch_x = layout.width - switch_size.width - layout.at.x;
+    layout.switch_x = layout.width - switch_size.width - layout.ui_layout.at.x;
     return layout;
-}
-
-internal void drop_down_layout_row(DropDownLayout* layout)
-{
-    layout->at.y += layout->row_height;
 }
 
 internal V2 drop_down_layout_text_position(DropDownLayout* layout)
 {
-    return v2f(layout->at.x, layout->at.y + layout->text_y_offset);
+    return v2f(layout->ui_layout.at.x, layout->ui_layout.at.y + layout->text_y_offset);
 }
 
 internal V2 drop_down_layout_switch_right_align_position(DropDownLayout* layout)
 {
-    return v2f(layout->switch_x, layout->at.y);
+    return v2f(layout->switch_x, layout->ui_layout.at.y);
 }
 
 internal V2 drop_down_layout_right_align_position(DropDownLayout* layout, const f32 item_width)
 {
-    const f32 x_position = layout->width - item_width - layout->at.x;
-    return v2f(x_position, layout->at.y);
+    const f32 x_position = layout->width - item_width - layout->ui_layout.at.x;
+    return v2f(x_position, layout->ui_layout.at.y);
 }
 
 internal void drop_down_layout_add_switch_with_text(DropDownLayout* layout, const char* text,
                                                     b8* selected, f32* x)
 {
-    drop_down_layout_row(layout);
-    ui_window_add_text(drop_down_layout_text_position(layout), text, false);
-    ui_window_add_switch(drop_down_layout_switch_right_align_position(layout), selected, x);
+    ui_window_add_text(drop_down_layout_text_position(layout), text, false, &layout->ui_layout);
+    ui_window_add_switch(drop_down_layout_switch_right_align_position(layout), selected, x,
+                         &layout->ui_layout);
+    ui_layout_row(&layout->ui_layout);
 }
 
 internal u32 drop_down_layout_add_increment_width_text(DropDownLayout* layout, const char* text,
                                                        const V4 button_color, const u32 value)
 {
-    drop_down_layout_row(layout);
-
     u32 result = 0;
 
     const V2 button1_dim = ui_window_get_button_dimensions(v2d(), "-", NULL);
@@ -123,28 +116,38 @@ internal u32 drop_down_layout_add_increment_width_text(DropDownLayout* layout, c
 
     const FontTTF* ui_font = ui_context_get_font();
     const f32 x_advance = text_x_advance(ui_font->chars, buffer, (u32)strlen(buffer), 1.0f);
-    const f32 row_padding = 20.0f;
+    const f32 row_padding = 10.0f;
     const f32 total_width =
-        button1_dim.width - button2_dim.width - x_advance - (row_padding * 2.0f);
+        button1_dim.width + button2_dim.width + x_advance + (row_padding * 2.0f);
 
     V2 text_position = drop_down_layout_text_position(layout);
-    ui_window_add_text(text_position, text, false);
+    ui_window_add_text(text_position, text, false, &layout->ui_layout);
 
-    const V2 right_align_position = drop_down_layout_right_align_position(layout, total_width);
-
-    ui_window_row_begin(row_padding);
-    if (ui_window_add_button(right_align_position, NULL, &button_color, "-"))
+    layout->ui_layout.at = drop_down_layout_right_align_position(layout, total_width);
+    if (ui_window_add_button(layout->ui_layout.at, NULL, &button_color, "-", &layout->ui_layout))
     {
         result = 1;
     }
-    text_position.x = right_align_position.x;
-    ui_window_add_text(text_position, buffer, false);
-    if (ui_window_add_button(right_align_position, NULL, &button_color, "+"))
+    ui_layout_column(&layout->ui_layout);
+    text_position.x = layout->ui_layout.at.x;
+    ui_window_add_text(text_position, buffer, false, &layout->ui_layout);
+    ui_layout_column(&layout->ui_layout);
+    if (ui_window_add_button(layout->ui_layout.at, NULL, &button_color, "+", &layout->ui_layout))
     {
         result = 2;
     }
-    ui_window_row_end();
+
+    ui_layout_row(&layout->ui_layout);
+    ui_layout_reset_column(&layout->ui_layout);
     return result;
+}
+
+internal void drop_down_layout_add_line(DropDownLayout* layout)
+{
+    ui_window_add_rectangle(layout->ui_layout.at,
+                            v2f(layout->width - (2.0f * layout->ui_layout.start_x), 1.0f),
+                            global_get_border_color(), &layout->ui_layout);
+    ui_layout_row(&layout->ui_layout);
 }
 
 typedef enum DebugLogLevel
@@ -357,13 +360,14 @@ internal void set_sorting_buttons(const SortBy sort_by, DirectoryTab* tab)
     directory_reload(directory_current(&tab->directory_history));
 }
 
-internal void add_move_in_history_button(const AABB* aabb, const V4 icon_co, const b8 disable,
+internal void add_move_in_history_button(UiLayout* layout, const V4 icon_co, const b8 disable,
                                          const int mouse_button, const i32 history_add,
                                          SelectedItemValues* selected_item_values,
                                          DirectoryHistory* directory_history)
 {
-    if (ui_window_add_icon_button(aabb->min, aabb->size, global_get_highlight_color(), icon_co,
-                                  UI_ARROW_ICON_TEXTURE, disable))
+    if (ui_window_add_icon_button(layout->at, v2i(layout->column_width),
+                                  global_get_highlight_color(), icon_co, UI_ARROW_ICON_TEXTURE,
+                                  disable, layout))
     {
         directory_move_in_history(history_add, selected_item_values, directory_history);
     }
@@ -382,18 +386,19 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
         platform_mutex_lock(&page->search_result_file_array.mutex);
         platform_mutex_lock(&page->search_result_folder_array.mutex);
 
-        V2 list_position = v2f(10.0f, 10.0f);
+        UiLayout layout = { .at = v2f(10.0f, 10.0f) };
         i32 selected_item = -1;
-        if (ui_window_add_folder_list(list_position, list_item_height,
-                                      &page->search_result_folder_array.array, NULL,
-                                      &selected_item))
+        if (ui_window_add_folder_list(layout.at, list_item_height,
+                                      &page->search_result_folder_array.array, NULL, &selected_item,
+                                      &layout))
         {
             directory_open_folder(page->search_result_folder_array.array.data[selected_item].path,
                                   directory_history);
         }
-        list_position.y += list_item_height * page->search_result_folder_array.array.size;
-        if (ui_window_add_file_list(list_position, list_item_height,
-                                    &page->search_result_file_array.array, NULL, &selected_item))
+        ui_layout_row(&layout);
+        if (ui_window_add_file_list(layout.at, list_item_height,
+                                    &page->search_result_file_array.array, NULL, &selected_item,
+                                    &layout))
         {
             platform_open_file(page->search_result_file_array.array.data[selected_item].path);
         }
@@ -691,11 +696,11 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
 
         tab->directory_list.item_selected = false;
 
-        V2 list_position = v2f(10.0f, position.y + button_size.height + 5.0f);
+        UiLayout layout = ui_layout_create(v2f(10.0f, position.y + button_size.height + 5.0f));
         if (current->grid_view)
         {
             II32 result = ui_window_add_directory_item_grid(
-                v2f(0.0f, list_position.y), &current->directory.sub_directories,
+                v2f(0.0f, layout.at.y), &current->directory.sub_directories,
                 &current->directory.files, task_queue, &tab->textures, &tab->objects,
                 &tab->directory_list);
 
@@ -716,9 +721,9 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
         else
         {
             i32 selected_item = -1;
-            if (ui_window_add_folder_list(list_position, list_item_height,
+            if (ui_window_add_folder_list(layout.at, list_item_height,
                                           &current->directory.sub_directories, &tab->directory_list,
-                                          &selected_item))
+                                          &selected_item, &layout))
             {
                 directory_open_folder(current->directory.sub_directories.data[selected_item].path,
                                       &tab->directory_history);
@@ -728,10 +733,9 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                 recent_panel_add_item(recent,
                                       current->directory.sub_directories.data[selected_item].path);
             }
-            list_position.y += (list_item_height + ui_get_list_padding()) *
-                               current->directory.sub_directories.size;
-            if (ui_window_add_file_list(list_position, list_item_height, &current->directory.files,
-                                        &tab->directory_list, &selected_item))
+            ui_layout_row(&layout);
+            if (ui_window_add_file_list(layout.at, list_item_height, &current->directory.files,
+                                        &tab->directory_list, &selected_item, &layout))
             {
                 platform_open_file(current->directory.files.data[selected_item].path);
             }
@@ -746,20 +750,22 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
         }
         V4 color = global_get_clear_color();
         color.a = 0.95f;
-        ui_window_row_begin(0.0f);
-        if (ui_window_add_button(position, &button_size, &color, "Name"))
+        layout.at = position;
+        layout.row_height = 0.0f;
+        if (ui_window_add_button(layout.at, &button_size, &color, "Name", &layout))
         {
             set_sorting_buttons(SORT_NAME, tab);
         }
-        if (ui_window_add_button(position, &button_size, &color, "Date"))
+        ui_layout_column(&layout);
+        if (ui_window_add_button(layout.at, &button_size, &color, "Date", &layout))
         {
             set_sorting_buttons(SORT_DATE, tab);
         }
-        if (ui_window_add_button(position, &button_size, &color, "Size"))
+        ui_layout_column(&layout);
+        if (ui_window_add_button(layout.at, &button_size, &color, "Size", &layout))
         {
             set_sorting_buttons(SORT_SIZE, tab);
         }
-        ui_window_row_end();
         return ui_window_end();
     }
     return false;
@@ -772,7 +778,7 @@ internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu, const b8 icons,
     if (drop_down_item_count == 0) return true;
 
     drop_down_menu->x += (f32)(application->delta_time * 5.0);
-    drop_down_menu->x = clampf32_high(drop_down_menu->x, 1.0f);
+    drop_down_menu->x = ftic_clamp_high(drop_down_menu->x, 1.0f);
 
     const f32 drop_down_item_height = 40.0f;
     const f32 end_height = drop_down_item_count * drop_down_item_height;
@@ -1773,18 +1779,12 @@ u8* application_initialize(ApplicationContext* app)
 
     app->color_picker_window = app->windows.data[window_index++];
 
+    theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker, &app->text_color_picker,
+                   &app->tab_color_picker);
     app->secondary_color = global_get_secondary_color();
-    app->secondary_color_picker.at = v2f(200.0f, 0.0f);
-    app->secondary_color_picker.spectrum_at = 114.0f;
-
     app->clear_color = global_get_clear_color();
-    app->clear_color_picker.at = v2f(0.0f, 180.0f);
-
     app->text_color = global_get_text_color();
-    app->text_color_picker.at = v2i(0.0f);
-
     app->tab_color = global_get_tab_color();
-    app->tab_color_picker.at = v2f(0.0f, 150.0f);
 
     app->parent_directory_input = ui_input_buffer_create();
 
@@ -2085,17 +2085,17 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
     presist f32 ui_frosted_x = 0.0f;
 
     {
-        V2 text_position = v2f(layout.at.x, layout.at.y + 2.0f);
-        ui_window_add_text(text_position, "Font:", false);
+        V2 text_position = drop_down_layout_text_position(&layout);
+        ui_window_add_text(text_position, "Font:", false, &layout.ui_layout);
 
         const char* font_path = ui_context_get_font_path();
         const u32 path_length = get_path_length(font_path, (u32)strlen(font_path));
 
         const V2 button_dim = ui_window_get_button_dimensions(v2d(), font_path + path_length, NULL);
 
-        const f32 x_position = layout.width - button_dim.width - layout.at.x;
-        if (ui_window_add_button(v2f(x_position, layout.at.y), NULL, &button_color,
-                                 font_path + path_length))
+        const f32 x_position = layout.width - button_dim.width - layout.ui_layout.at.x;
+        if (ui_window_add_button(v2f(x_position, layout.ui_layout.at.y), NULL, &button_color,
+                                 font_path + path_length, &layout.ui_layout))
         {
             if (app->font_change_directory.parent)
             {
@@ -2123,11 +2123,11 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
             }
             app->open_font_change_window = true;
         }
+        ui_layout_row(&layout.ui_layout);
     }
 
     const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
     const i32 add_table[] = { 0, -1, 1 };
-
     {
         u32 result = drop_down_layout_add_increment_width_text(&layout, "Font size:", button_color,
                                                                (u32)ui_font_pixel_height);
@@ -2166,63 +2166,59 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
              closed_interval(0.0f, ui_list_padding + (f32)add_table[result], 15.0f)));
     }
 
-    drop_down_layout_add_switch_with_text(&layout, "Animation on:", &animation_on_selected,
-                                          &animation_x);
-    ui_context_set_animation(animation_on_selected);
+    drop_down_layout_add_line(&layout);
 
-    drop_down_layout_add_switch_with_text(&layout, "Highlight focused window:",
-                                          &highlight_fucused_window_selected, &focused_window_x);
-    ui_context_set_highlight_focused_window(highlight_fucused_window_selected);
-
-    b8 before = app->show_hidden_files;
-    drop_down_layout_add_switch_with_text(&layout, "Show hidden files:", &app->show_hidden_files,
-                                          &hidden_files_x);
-    platform_show_hidden_files(app->show_hidden_files);
-    if (before != app->show_hidden_files)
     {
-        for (u32 i = 0; i < app->tabs.size; ++i)
+        drop_down_layout_add_switch_with_text(&layout, "Animation on:", &animation_on_selected,
+                                              &animation_x);
+        ui_context_set_animation(animation_on_selected);
+    }
+    {
+        drop_down_layout_add_switch_with_text(
+            &layout, "Highlight focused window:", &highlight_fucused_window_selected,
+            &focused_window_x);
+        ui_context_set_highlight_focused_window(highlight_fucused_window_selected);
+    }
+    {
+        b8 before = app->show_hidden_files;
+        drop_down_layout_add_switch_with_text(
+            &layout, "Show hidden files:", &app->show_hidden_files, &hidden_files_x);
+        platform_show_hidden_files(app->show_hidden_files);
+        if (before != app->show_hidden_files)
         {
-            directory_reload(directory_current(&app->tabs.data[i].directory_history));
+            for (u32 i = 0; i < app->tabs.size; ++i)
+            {
+                directory_reload(directory_current(&app->tabs.data[i].directory_history));
+            }
         }
     }
-
-    drop_down_layout_add_switch_with_text(&layout, "Dark mode:", &dark_mode_selected, &dark_mode_x);
-    if (dark_mode_selected)
     {
-        global_set_clear_color(v4ic(0.09f));
-        global_set_text_color(v4ic(1.0f));
+        drop_down_layout_add_switch_with_text(&layout, "Frosted glass:", &ui_frosted_glass_selected,
+                                              &ui_frosted_x);
+        ui_set_frosted_glass(ui_frosted_glass_selected);
     }
-    else
-    {
-        global_set_clear_color(v4ic(0.8f));
-        global_set_text_color(v4ic(0.0f));
-    }
-
-    drop_down_layout_add_switch_with_text(&layout, "Frosted glass:", &ui_frosted_glass_selected,
-                                          &ui_frosted_x);
-    ui_set_frosted_glass(ui_frosted_glass_selected);
-
     if (ui_frosted_glass_selected)
     {
-        drop_down_layout_row(&layout);
         {
-            ui_window_add_text(layout.at, "Blur amount:", false);
+            ui_window_add_text(layout.ui_layout.at, "Blur amount:", false, &layout.ui_layout);
             const V2 slider_size =
                 v2f(78.0f + (ui_font_pixel_height * 2), -3.0f + (ui_font_pixel_height * 0.5f));
-            const f32 slider_x = layout.width - slider_size.width - layout.at.x;
+            const f32 slider_x = layout.width - slider_size.width - layout.ui_layout.at.x;
             presist b8 pressed = false;
-            ui_set_frosted_blur_amount(
-                ui_window_add_slider(v2f(slider_x, layout.at.y + 8.0f), slider_size, 0.0002f,
-                                     0.003f, ui_get_frosted_blur_amount(), &pressed));
+            ui_set_frosted_blur_amount(ui_window_add_slider(
+                v2f(slider_x, layout.ui_layout.at.y + 8.0f), slider_size, 0.0002f, 0.003f,
+                ui_get_frosted_blur_amount(), &pressed, &layout.ui_layout));
         }
+        ui_layout_row(&layout.ui_layout);
     }
 
-    drop_down_layout_row(&layout);
+    drop_down_layout_add_line(&layout);
     {
         const char* text = "Reset to default";
         const V2 button_dim = ui_window_get_button_dimensions(v2d(), text, NULL);
         const f32 x_position = middle(layout.width, button_dim.width);
-        if (ui_window_add_button(v2f(x_position, layout.at.y), NULL, &button_color, text))
+        if (ui_window_add_button(v2f(x_position, layout.ui_layout.at.y), NULL, &button_color, text,
+                                 &layout.ui_layout))
         {
             ui_context_set_font_path("C:/Windows/Fonts/arial.ttf");
             ui_context_change_font_pixel_height(16);
@@ -2244,6 +2240,7 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
             ui_set_frosted_blur_amount(0.00132f);
             ui_set_list_padding(0.0f);
         }
+        ui_layout_row(&layout.ui_layout);
     }
 
     if (ui_window_end() && !app->open_font_change_window && app->open_menu_window)
@@ -2255,20 +2252,15 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
         ui_frosted_x = 0.0f;
         app->open_menu_window = false;
     }
-
-    drop_down_layout_row(&layout);
     top_bar_menu->size.width = layout.width;
-    top_bar_menu->size.height = layout.at.y;
+    top_bar_menu->size.height = layout.ui_layout.at.y;
 }
 
-internal void window_open_menu_item_add(WindowOpenMenuItem* item, const V2 position,
-                                        const f32 switch_position_x, const char* text,
-                                        const V2 dimensions)
+internal void window_open_menu_item_add(WindowOpenMenuItem* item, DropDownLayout* layout,
+                                        const char* text, const V2 dimensions)
 {
-    ui_window_add_text(position, text, false);
-    b8 selected_before = item->switch_on;
-    ui_window_add_switch(v2f(switch_position_x, position.y), &item->switch_on, &item->switch_x);
-
+    const b8 selected_before = item->switch_on;
+    drop_down_layout_add_switch_with_text(layout, text, &item->switch_on, &item->switch_x);
     if (item->switch_on)
     {
         if (!item->show)
@@ -2286,39 +2278,23 @@ internal void window_open_menu_item_add(WindowOpenMenuItem* item, const V2 posit
     }
 }
 
-internal void application_open_windows_window(ApplicationContext* app, const f32 drop_down_width,
+internal void application_open_windows_window(ApplicationContext* app, DropDownLayout layout,
                                               const V4 button_color)
 {
     if (ui_window_begin(app->windows_window, NULL, UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
     {
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
-        AABB row = {
-            .min = v2i(10.0f),
-            .size = v2f(200.0f, 40.0f),
-        };
-
-        const V2 switch_size = ui_window_get_switch_size();
-        const f32 switch_x = drop_down_width - switch_size.width - row.min.x;
-
-        window_open_menu_item_add(&app->quick_access.menu_item, row.min, switch_x,
+        window_open_menu_item_add(&app->quick_access.menu_item, &layout,
                                   "Quick access:", app->dimensions);
-
-        row.min.y += ui_font_pixel_height + 20.0f;
-
-        window_open_menu_item_add(&app->recent.panel.menu_item, row.min, switch_x,
+        window_open_menu_item_add(&app->recent.panel.menu_item, &layout,
                                   "Recent:", app->dimensions);
-
-        row.min.y += ui_font_pixel_height + 20.0f;
-
-        window_open_menu_item_add(&app->search_result_window_item, row.min, switch_x,
+        window_open_menu_item_add(&app->search_result_window_item, &layout,
                                   "Search result:", app->dimensions);
 
-        row.min.y += ui_font_pixel_height + 20.0f;
         UiWindow* top_bar_windows = ui_window_get(app->windows_window);
-        top_bar_windows->size.width = drop_down_width;
-        top_bar_windows->size.height = row.min.y;
-
+        top_bar_windows->size.width = layout.width;
+        top_bar_windows->size.height = layout.ui_layout.at.y;
         if (ui_window_end() && app->open_windows_window)
         {
             app->quick_access.menu_item.switch_x = 0.0f;
@@ -2336,20 +2312,19 @@ internal void drop_down_layout_add_color_picker_button(DropDownLayout* layout, c
                                                        ColorPicker* color_picker_to_use,
                                                        V4* color_to_change)
 {
-    ui_window_add_text(drop_down_layout_text_position(layout), text, false);
-    const V2 position = v2f(layout->switch_x, layout->at.y);
-
-    if (ui_window_add_button(position, &button_size, &button_color, NULL))
+    ui_window_add_text(drop_down_layout_text_position(layout), text, false, &layout->ui_layout);
+    const V2 position = v2f(layout->switch_x, layout->ui_layout.at.y);
+    if (ui_window_add_button(position, &button_size, &button_color, NULL, &layout->ui_layout))
     {
 
         app->color_picker_to_use = color_picker_to_use;
         app->color_to_change = color_to_change;
         app->open_color_picker_window = true;
-        app->color_picker_position =
-            v2f(window_position.x + layout->at.x + layout->width, window_position.y + layout->at.y);
+        app->color_picker_position = v2f(window_position.x + layout->ui_layout.at.x + layout->width,
+                                         window_position.y + layout->ui_layout.at.y);
     }
     ui_window_add_border(position, button_size, v4ic(1.0f), 1.0f);
-    drop_down_layout_row(layout);
+    ui_layout_row(&layout->ui_layout);
 }
 
 internal void application_open_style_menu_window(ApplicationContext* app, DropDownLayout layout,
@@ -2388,35 +2363,76 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
             global_set_tab_color(app->tab_color);
         }
 
+        drop_down_layout_add_line(&layout);
+
+        {
+            if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Dark Theme",
+                                     &layout.ui_layout))
+            {
+                theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker,
+                               &app->text_color_picker, &app->tab_color_picker);
+                app->secondary_color = global_get_secondary_color();
+                app->clear_color = global_get_clear_color();
+                app->text_color = global_get_text_color();
+                app->tab_color = global_get_tab_color();
+            }
+            ui_layout_column(&layout.ui_layout);
+            if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Light Theme",
+                                     &layout.ui_layout))
+            {
+                theme_set_light(&app->clear_color_picker, &app->secondary_color_picker,
+                               &app->text_color_picker, &app->tab_color_picker);
+                app->secondary_color = global_get_secondary_color();
+                app->clear_color = global_get_clear_color();
+                app->text_color = global_get_text_color();
+                app->tab_color = global_get_tab_color();
+            }
+            ui_layout_column(&layout.ui_layout);
+            if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Tron Theme",
+                                     &layout.ui_layout))
+            {
+                theme_set_tron(&app->clear_color_picker, &app->secondary_color_picker,
+                               &app->text_color_picker, &app->tab_color_picker);
+                app->secondary_color = global_get_secondary_color();
+                app->clear_color = global_get_clear_color();
+                app->text_color = global_get_text_color();
+                app->tab_color = global_get_tab_color();
+            }
+            ui_layout_reset_column(&layout.ui_layout);
+            ui_layout_row(&layout.ui_layout);
+            if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Slime Theme",
+                                     &layout.ui_layout))
+            {
+                theme_set_slime(&app->clear_color_picker, &app->secondary_color_picker,
+                               &app->text_color_picker, &app->tab_color_picker);
+                app->secondary_color = global_get_secondary_color();
+                app->clear_color = global_get_clear_color();
+                app->text_color = global_get_text_color();
+                app->tab_color = global_get_tab_color();
+            }
+            ui_layout_row(&layout.ui_layout);
+        }
+
+        drop_down_layout_add_line(&layout);
+
         {
             const char* text = "Reset to default";
             const V2 button_dim = ui_window_get_button_dimensions(v2d(), text, NULL);
             const f32 x_position = middle(layout.width, button_dim.width);
-            if (ui_window_add_button(v2f(x_position, layout.at.y), NULL, &button_color, text))
+            if (ui_window_add_button(v2f(x_position, layout.ui_layout.at.y), NULL, &button_color,
+                                     text, &layout.ui_layout))
             {
-                app->secondary_color_picker.at = v2f(200.0f, 0.0f);
-                app->secondary_color_picker.spectrum_at = 114.0f;
-                global_set_default_secondary_color();
+                theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker,
+                               &app->text_color_picker, &app->tab_color_picker);
                 app->secondary_color = global_get_secondary_color();
-
-                app->clear_color_picker.at = v2f(0.0f, 180.0f);
-                global_set_default_clear_color();
                 app->clear_color = global_get_clear_color();
-
-                app->text_color_picker.at = v2i(0.0f);
-                global_set_default_text_color();
                 app->text_color = global_get_text_color();
-
-                app->tab_color_picker.at = v2f(0.0f, 150.0f);
-                global_set_default_tab_color();
                 app->tab_color = global_get_tab_color();
             }
         }
-
-        drop_down_layout_row(&layout);
+        ui_layout_row(&layout.ui_layout);
         top_bar_style->size.width = layout.width;
-        top_bar_style->size.height = layout.at.y;
-
+        top_bar_style->size.height = layout.ui_layout.at.y;
         if (ui_window_end() && !app->open_color_picker_window && app->open_style_menu_window)
         {
             app->open_style_menu_window = false;
@@ -2457,12 +2473,12 @@ internal void application_open_context_menu_window(ApplicationContext* app,
                 app->drop_down_tab_index %= CONTEXT_ITEM_COUNT;
             }
         }
-        V2 position = v2i(0.0f);
         V2 item_size = v2f(250.0f, 24.0f + ui_font_pixel_height);
+        UiLayout layout = ui_layout_create(v2d());
         const f32 item_text_padding = 5.0f;
         for (u32 i = 0; i < CONTEXT_ITEM_COUNT; ++i)
         {
-            b8 clicked = ui_window_add_button(position, &item_size, NULL, NULL);
+            b8 clicked = ui_window_add_button(layout.at, &item_size, NULL, NULL, &layout);
 
             MainDropDownSelectionData data = {
                 .window = app->window,
@@ -2472,7 +2488,7 @@ internal void application_open_context_menu_window(ApplicationContext* app,
                 .panel = app->panel_right_clicked,
                 .task_queue = &app->thread_queue.task_queue,
             };
-            V4 text_color = v4ic(1.0f);
+            V4 text_color = global_get_text_color();
             if (main_drop_down_selection(i, clicked, false, clicked, &text_color, &data))
             {
                 tab_clear_selected(current_tab);
@@ -2481,30 +2497,27 @@ internal void application_open_context_menu_window(ApplicationContext* app,
 
             if (i < 3)
             {
-                V2 icon_position = position;
+                V2 icon_position = layout.at;
                 icon_position.x += item_text_padding;
                 icon_position.y += middle(item_size.height, 24.0f);
                 ui_window_add_image(icon_position, v2i(24.0f),
-                                    app->main_render.render.textures.data[2 + i]);
+                                    app->main_render.render.textures.data[2 + i], &layout);
             }
 
-            V2 item_text_position = position;
+            V2 item_text_position = layout.at;
             item_text_position.x += item_text_padding;
             item_text_position.x += 32.0f;
             item_text_position.y += middle(item_size.height, ui_font_pixel_height) - 2.0f;
-
-            ui_window_add_text_c(item_text_position, text_color, options[i], false);
-
-            position.y += item_size.height;
+            ui_window_add_text_c(item_text_position, text_color, options[i], false, &layout);
+            ui_layout_row(&layout);
         }
 
-        const f32 end_height = CONTEXT_ITEM_COUNT * item_size.height;
         UiWindow* window = ui_window_get(app->context_menu_window);
-        window->size.height = ease_out_cubic(app->context_menu_x) * end_height;
+        window->size.height = ease_out_cubic(app->context_menu_x) * layout.at.y;
         window->size.width = item_size.width;
 
         app->context_menu_x += (f32)(app->delta_time * 8.0);
-        app->context_menu_x = clampf32_high(app->context_menu_x, 1.0f);
+        app->context_menu_x = ftic_clamp_high(app->context_menu_x, 1.0f);
 
         if (ui_window_end())
         {
@@ -2516,6 +2529,7 @@ internal void application_open_context_menu_window(ApplicationContext* app,
 
 void application_open_preview(ApplicationContext* app)
 {
+    UiLayout layout = { 0 };
     if (app->preview_index == 0)
     {
         DirectoryPage* current =
@@ -2534,7 +2548,8 @@ void application_open_preview(ApplicationContext* app)
 
         if (ui_window_begin(app->preview_window, NULL, UI_WINDOW_OVERLAY))
         {
-            ui_window_add_image(v2d(), image_dimensions, app->preview_image.textures.data[0]);
+            ui_window_add_image(v2d(), image_dimensions, app->preview_image.textures.data[0],
+                                &layout);
 
             if (ui_window_end()) app->preview_index = -1;
         }
@@ -2566,7 +2581,8 @@ void application_open_preview(ApplicationContext* app)
 
         if (ui_window_begin(app->preview_window, NULL, UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
         {
-            ui_window_add_text_colored(v2f(10.0f, 10.0f), &app->preview_text.file_colored, true);
+            ui_window_add_text_colored(v2f(10.0f, 10.0f), &app->preview_text.file_colored, true,
+                                       &layout);
             if (ui_window_end()) app->preview_index = -1;
         }
     }
@@ -2766,16 +2782,15 @@ void application_run()
 
             const V4 button_color = v4a(v4_s_multi(global_get_clear_color(), 3.0f), 1.0f);
 
-            const f32 drop_down_width = 350.0f;
-            DropDownLayout layout =
-                drop_down_layout_create(drop_down_width, ui_font_pixel_height + 20.0f, v2i(10.0f));
+            DropDownLayout layout = drop_down_layout_create(350.0f, v2i(10.0f));
+            layout.ui_layout.padding = 10.0f;
             if (app.open_menu_window)
             {
                 application_open_menu_window(&app, layout, button_color);
             }
             if (app.open_windows_window)
             {
-                application_open_windows_window(&app, drop_down_width, button_color);
+                application_open_windows_window(&app, layout, button_color);
             }
             if (app.open_style_menu_window)
             {
@@ -2797,7 +2812,7 @@ void application_run()
                     i32 selected_item = -1;
                     if (ui_window_add_file_list(list_position, list_item_height,
                                                 &app.font_change_directory.files, NULL,
-                                                &selected_item))
+                                                &selected_item, NULL))
                     {
                         const char* path = app.font_change_directory.files.data[selected_item].path;
                         ui_context_set_font_path(path);
@@ -2811,22 +2826,27 @@ void application_run()
 
             if (app.open_color_picker_window)
             {
-                UiWindow* color_picker_window = ui_window_get(app.color_picker_window);
-                color_picker_window->size = v2f(310.0f, 220.0f);
-                color_picker_window->position = app.color_picker_position;
                 if (ui_window_begin(app.color_picker_window, NULL,
                                     UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
                 {
+                    UiLayout ui_layout = ui_layout_create(v2i(10.0f));
                     *app.color_to_change = ui_window_add_color_picker(
-                        v2i(10.0f), v2f(200.0f, 200.0f), app.color_picker_to_use);
-#if 0
-                    char buffer[64] = {0};
+                        v2i(10.0f), v2f(200.0f, 200.0f), app.color_picker_to_use, &ui_layout);
+#if 1
+                    char buffer[64] = { 0 };
                     value_to_string(buffer, V2_FMT(app.color_picker_to_use->at));
+                    log_message(buffer, strlen(buffer));
+                    memset(buffer, 0, sizeof(buffer));
+                    value_to_string(buffer, "%f", app.color_picker_to_use->spectrum_at);
                     log_message(buffer, strlen(buffer));
                     memset(buffer, 0, sizeof(buffer));
                     value_to_string(buffer, V3_FMT(*app.color_to_change));
                     log_message(buffer, strlen(buffer));
 #endif
+                    UiWindow* color_picker_window = ui_window_get(app.color_picker_window);
+                    color_picker_window->position = app.color_picker_position;
+                    color_picker_window->size =
+                        v2f(ui_layout.column_width + 20.0f, ui_layout.row_height + 20.0f);
 
                     app.open_color_picker_window = !ui_window_end();
                 }
@@ -2868,46 +2888,47 @@ void application_run()
                     app.open_style_menu_window = true;
                 }
 
-                AABB button_aabb = { 0 };
-                button_aabb.size = v2i(34.4f),
-                button_aabb.min = v2f(10.0f, top_bar_menu_height - 2.0f +
-                                                 middle(top_bar_height, button_aabb.size.height));
-
-                ui_window_row_begin(0.0f);
-
+                const f32 button_size = 32.0f;
+                UiLayout ui_layout = ui_layout_create(
+                    v2f(10.0f, top_bar_menu_height - 2.0f + middle(top_bar_height, button_size)));
+                ui_layout.column_width = button_size;
                 b8 disable = tab->directory_history.current_index <= 0;
                 add_move_in_history_button(
-                    &button_aabb, arrow_back_icon_co, disable, FTIC_MOUSE_BUTTON_4, -1,
+                    &ui_layout, arrow_back_icon_co, disable, FTIC_MOUSE_BUTTON_4, -1,
                     &tab->directory_list.selected_item_values, &tab->directory_history);
 
+                ui_layout_column(&ui_layout);
                 disable =
                     tab->directory_history.history.size <= tab->directory_history.current_index + 1;
                 add_move_in_history_button(
-                    &button_aabb, arrow_right_icon_co, disable, FTIC_MOUSE_BUTTON_4, 1,
+                    &ui_layout, arrow_right_icon_co, disable, FTIC_MOUSE_BUTTON_4, 1,
                     &tab->directory_list.selected_item_values, &tab->directory_history);
 
+                ui_layout_column(&ui_layout);
                 disable = !directory_can_go_up(
                     directory_current(&tab->directory_history)->directory.parent);
-                if (ui_window_add_icon_button(button_aabb.min, button_aabb.size,
+                if (ui_window_add_icon_button(ui_layout.at, v2i(ui_layout.column_width),
                                               global_get_highlight_color(), arrow_up_icon_co,
-                                              UI_ARROW_ICON_TEXTURE, disable))
+                                              UI_ARROW_ICON_TEXTURE, disable, &ui_layout))
                 {
                     directory_go_up(&tab->directory_history);
                 }
 
-                button_aabb.min.x += ui_window_row_end() + 10.0f;
-                button_aabb.size.height = top_bar_height - 10.0f,
-                button_aabb.min.y =
-                    top_bar_menu_height + middle(top_bar_height, button_aabb.size.height);
-                button_aabb.size.width =
-                    (app.dimensions.width - (search_bar_width + 20.0f)) - button_aabb.min.x;
+                ui_layout.padding = 10.0f;
+                ui_layout_column(&ui_layout);
+
+                const V2 bar_size =
+                    v2f((app.dimensions.width - (search_bar_width + 20.0f)) - ui_layout.at.x,
+                        top_bar_height - 10.0f);
+
+                ui_layout.at.y = top_bar_menu_height + middle(top_bar_height, bar_size.height);
 
                 b8 active_before = app.parent_directory_input.active;
-                if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
-                                              &app.parent_directory_input))
+                if (ui_window_add_input_field(ui_layout.at, bar_size, &app.parent_directory_input,
+                                              &ui_layout))
                 {
                     DirectoryPage* current = directory_current(&tab->directory_history);
-                    get_suggestions(button_aabb.min, current, &app.parent_directory_input,
+                    get_suggestions(ui_layout.at, current, &app.parent_directory_input,
                                     &app.suggestions, &app.suggestion_data);
                 }
 
@@ -2964,10 +2985,9 @@ void application_run()
                     }
                 }
 
-                button_aabb.min.x += button_aabb.size.x + 10.0f;
-                button_aabb.size.x = search_bar_width;
-                if (ui_window_add_input_field(button_aabb.min, button_aabb.size,
-                                              &app.search_page.input))
+                ui_layout_column(&ui_layout);
+                if (ui_window_add_input_field(ui_layout.at, v2f(search_bar_width, button_size),
+                                              &app.search_page.input, &ui_layout))
                 {
                     search_page_clear_result(&app.search_page);
                     app.search_page.running_callbacks[app.search_page.last_running_id] = false;
@@ -2980,11 +3000,11 @@ void application_run()
                 }
                 if (app.search_page.running_callbacks[app.search_page.last_running_id])
                 {
+                    ui_layout_column(&ui_layout);
                     V2 dim = v2f(ui_font_pixel_height + 12.0f, ui_font_pixel_height + 10.0f);
-                    if (ui_window_add_button(
-                            v2f(button_aabb.min.x + (button_aabb.size.width - dim.width) - 5.0f,
-                                button_aabb.min.y + middle(button_aabb.size.height, dim.height)),
-                            &dim, &button_color, "X"))
+                    if (ui_window_add_button(v2f(ui_layout.at.x - dim.width - 5.0f,
+                                                 ui_layout.at.y + middle(button_size, dim.height)),
+                                             &dim, &button_color, "X", &ui_layout))
                     {
                         app.search_page.running_callbacks[app.search_page.last_running_id] = false;
                     }
@@ -3010,45 +3030,42 @@ void application_run()
             bottom_bar->size = v2f(app.dimensions.width, bottom_bar_height);
             if (ui_window_begin(app.bottom_bar_window, NULL, UI_WINDOW_NONE))
             {
+                UiLayout ui_layout = ui_layout_create(v2f(10.0f, 2.0f));
                 DirectoryPage* current = directory_current(&tab->directory_history);
                 char buffer[64] = { 0 };
                 sprintf_s(buffer, sizeof(buffer), "Folders: %u  |  Files: %u",
                           current->directory.sub_directories.size, current->directory.files.size);
-                ui_window_add_text(v2f(10.0f, 1.0f), buffer, false);
-
-                const V2 list_grid_icon_position =
-                    v2f(bottom_bar->size.width - (2.0f * bottom_bar_height + 5.0f), 0);
+                ui_window_add_text(ui_layout.at, buffer, false, &ui_layout);
 
                 if (current->grid_view)
                 {
-                    const V2 slider_position =
-                        v2f(list_grid_icon_position.x - 120.0f,
-                            list_grid_icon_position.y + middle(bottom_bar_height, 5.0f));
+                    const f32 list_grid_icon_position =
+                        bottom_bar->size.width - (2.0f * bottom_bar_height + 5.0f);
+                    ui_layout.at =
+                        v2f(list_grid_icon_position - 120.0f, middle(bottom_bar_height, 5.0f));
 
                     const V2 ui_icon_min_max = ui_get_big_icon_min_max();
                     static b8 pressed = false;
                     ui_set_big_icon_size(ui_window_add_slider(
-                        slider_position, v2f(110.0f, 5.0f), ui_icon_min_max.min,
-                        ui_icon_min_max.max, ui_get_big_icon_size(), &pressed));
+                        ui_layout.at, v2f(110.0f, 5.0f), ui_icon_min_max.min, ui_icon_min_max.max,
+                        ui_get_big_icon_size(), &pressed, &ui_layout));
                 }
 
-                ui_window_row_begin(0.0f);
-
-                if (ui_window_add_icon_button(list_grid_icon_position, v2i(bottom_bar_height),
+                ui_layout.at.y = 0.0f;
+                ui_layout_column(&ui_layout);
+                if (ui_window_add_icon_button(ui_layout.at, v2i(bottom_bar_height),
                                               global_get_border_color(), full_icon_co,
-                                              UI_LIST_ICON_TEXTURE, false))
+                                              UI_LIST_ICON_TEXTURE, false, &ui_layout))
                 {
                     current->grid_view = false;
                 }
-                if (ui_window_add_icon_button(list_grid_icon_position, v2i(bottom_bar_height),
+                ui_layout_column(&ui_layout);
+                if (ui_window_add_icon_button(ui_layout.at, v2i(bottom_bar_height),
                                               global_get_border_color(), full_icon_co,
-                                              UI_GRID_ICON_TEXTURE, false))
+                                              UI_GRID_ICON_TEXTURE, false, &ui_layout))
                 {
                     current->grid_view = true;
                 }
-
-                ui_window_row_end();
-
                 ui_window_end();
             }
 

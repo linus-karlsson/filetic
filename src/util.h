@@ -138,11 +138,6 @@ u32 string_span_case_insensitive(const char* first, const char* second);
 b8 string_contains_case_insensitive(const char* string, const char* value);
 b8 string_contains(const char* string, const u32 string_length, const char* value, const u32 value_length);
 void string_swap(char* first, char* second);
-f32 clampf32_low(f32 value, f32 low);
-f32 clampf32_high(f32 value, f32 high);
-
-f64 clampf64_low(f64 value, f64 low);
-f64 clampf64_high(f64 value, f64 high);
 
 f32 middle(const f32 area_size, const f32 object_size);
 

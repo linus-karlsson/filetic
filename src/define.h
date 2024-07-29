@@ -16,76 +16,78 @@
 #define syscanf(...) sscanf_s(__VA_ARGS__)
 #define sy_gcvt(...) _gcvt_s(__VA_ARGS__);
 
-#define value_to_string(buffer, ...)                                           \
-    sysprintf(buffer, sizeof((buffer)), __VA_ARGS__)
+#define value_to_string(buffer, ...) sysprintf(buffer, sizeof((buffer)), __VA_ARGS__)
 
-#define value_to_string_offset(buffer, offset, ...)                            \
+#define value_to_string_offset(buffer, offset, ...)                                                \
     sysprintf((buffer) + (offset), sizeof((buffer)) - (offset), __VA_ARGS__)
 
 #define string_to_value(buffer, ...) syscanf((buffer), __VA_ARGS__)
 
-#define f32_to_string(buffer, num_digits, val)                                 \
-    sy_gcvt(buffer, sizeof((buffer)), val, num_digits)
+#define f32_to_string(buffer, num_digits, val) sy_gcvt(buffer, sizeof((buffer)), val, num_digits)
 
-#define f32_to_string_offset(buffer, offset, num_digits, val)                  \
+#define f32_to_string_offset(buffer, offset, num_digits, val)                                      \
     sy_gcvt((buffer) + (offset), sizeof((buffer)) - (offset), val, num_digits)
 
-#define array_create(array, array_capacity)                                    \
-    do                                                                         \
-    {                                                                          \
-        (array)->size = 0;                                                     \
-        (array)->capacity = max((array_capacity), 2);                          \
-        (array)->data = calloc(array_capacity, sizeof((*(array)->data)));      \
+#define array_create(array, array_capacity)                                                        \
+    do                                                                                             \
+    {                                                                                              \
+        (array)->size = 0;                                                                         \
+        (array)->capacity = max((array_capacity), 2);                                              \
+        (array)->data = calloc(array_capacity, sizeof((*(array)->data)));                          \
     } while (0)
 
-#define array_push(array, value)                                               \
-    do                                                                         \
-    {                                                                          \
-        if ((array)->size >= (array)->capacity)                                \
-        {                                                                      \
-            (array)->capacity = (u32)(1.5f * (array)->capacity);               \
-            (array)->data = realloc(                                           \
-                (array)->data, (array)->capacity * sizeof((*(array)->data)));  \
-        }                                                                      \
-        (array)->data[(array)->size++] = (value);                              \
+#define array_push(array, value)                                                                   \
+    do                                                                                             \
+    {                                                                                              \
+        if ((array)->size >= (array)->capacity)                                                    \
+        {                                                                                          \
+            (array)->capacity = (u32)(1.5f * (array)->capacity);                                   \
+            (array)->data = realloc((array)->data, (array)->capacity * sizeof((*(array)->data)));  \
+        }                                                                                          \
+        (array)->data[(array)->size++] = (value);                                                  \
     } while (0)
 
 #define array_back(array) ((array)->data + ((array)->size - 1))
 
 #define array_free(array) free((array)->data)
 
-#define safe_array_push(arr, value)                                            \
-    do                                                                         \
-    {                                                                          \
-        platform_mutex_lock(&(arr)->mutex);                                    \
-        array_push(&(arr)->array, value);                                      \
-        platform_mutex_unlock(&(arr)->mutex);                                  \
+#define safe_array_push(arr, value)                                                                \
+    do                                                                                             \
+    {                                                                                              \
+        platform_mutex_lock(&(arr)->mutex);                                                        \
+        array_push(&(arr)->array, value);                                                          \
+        platform_mutex_unlock(&(arr)->mutex);                                                      \
     } while (0)
 
-#define safe_array_create(arr, array_capacity)                                 \
-    do                                                                         \
-    {                                                                          \
-        array_create(&(arr)->array, array_capacity);                           \
-        (arr)->mutex = platform_mutex_create();                                \
+#define safe_array_create(arr, array_capacity)                                                     \
+    do                                                                                             \
+    {                                                                                              \
+        array_create(&(arr)->array, array_capacity);                                               \
+        (arr)->mutex = platform_mutex_create();                                                    \
     } while (0)
 
-#define safe_array_free(arr)                                                   \
-    do                                                                         \
-    {                                                                          \
-        array_free(&(arr)->array);                                             \
-        platform_mutex_destroy(&(arr)->mutex);                                 \
+#define safe_array_free(arr)                                                                       \
+    do                                                                                             \
+    {                                                                                              \
+        array_free(&(arr)->array);                                                                 \
+        platform_mutex_destroy(&(arr)->mutex);                                                     \
     } while (0)
 
-#define array_move_to_front(type, array, index)                                \
-    do                                                                         \
-    {                                                                          \
-        type temp = (array)->data[(index)];                                    \
-        for (i32 i34251 = (index); i34251 >= 1; --i34251)                      \
-        {                                                                      \
-            (array)->data[i34251] = (array)->data[i34251 - 1];                 \
-        }                                                                      \
-        (array)->data[0] = temp;                                               \
+#define array_move_to_front(type, array, index)                                                    \
+    do                                                                                             \
+    {                                                                                              \
+        type temp = (array)->data[(index)];                                                        \
+        for (i32 i34251 = (index); i34251 >= 1; --i34251)                                          \
+        {                                                                                          \
+            (array)->data[i34251] = (array)->data[i34251 - 1];                                     \
+        }                                                                                          \
+        (array)->data[0] = temp;                                                                   \
     } while (0)
+
+#define ftic_max(first, second) ((first) + (((second) - (first)) * ((second) > (first))))
+#define ftic_min(first, second) ((first) + (((second) - (first)) * ((second) < (first))))
+#define ftic_clamp_low(value, low) ftic_max((value), (low))
+#define ftic_clamp_high(value, high) ftic_min((value), (high))
 
 #define static_array_size(array) (sizeof(array) / sizeof(array[0]))
 
@@ -94,7 +96,7 @@
 #define FTicMutex void*
 #define FTicSemaphore void*
 
-#define ftic_assert(ex)                                                        \
+#define ftic_assert(ex)                                                                            \
     if (!(ex)) *(u32*)0 = 0
 
 #define b_switch(val) (val) = (val) ? false : true
