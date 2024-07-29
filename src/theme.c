@@ -37,7 +37,7 @@ void theme_set_tron(ColorPicker* clear_color, ColorPicker* secondary_color, Colo
 {
     global_set_clear_color(v4ic(0.015f));
     global_set_secondary_color(v4f(1.0f, 0.36f, 0.0f, 1.0f));
-    global_set_text_color(v4f(0.0f, 0.7f, 1.0f, 1.0f));
+    global_set_text_color(v4f(0.0f, 0.76f, 1.0f, 1.0f));
     global_set_tab_color(v4f(0.119f, 0.128f, 0.155f, 1.0f));
 
     clear_color->at = v2f(16.0f, 197.0f);
@@ -45,7 +45,7 @@ void theme_set_tron(ColorPicker* clear_color, ColorPicker* secondary_color, Colo
     secondary_color->at = v2f(200.0f, 0.0f);
     secondary_color->spectrum_at = 12.0f;
     text_color->at = v2f(200.0f, 0.0f);
-    text_color->spectrum_at = 110.0f;
+    text_color->spectrum_at = 108.0f;
     tab_color->at = v2f(46.0f, 169.0f);
     tab_color->spectrum_at = 125.0f;
 }

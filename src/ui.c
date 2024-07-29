@@ -4611,11 +4611,21 @@ V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker, UiLayou
          color_display_size, picker_color, UI_DEFAULT_TEXTURE);
     window->rendering_index_count += 6;
 
-    ui_layout_set_width_and_height(layout,
-                                   color_picker_aabb.size.width + padding +
-                                       color_spectrum_aabb.size.width + padding +
-                                       color_display_size.width,
-                                   size.height);
+    const V2 rgb_text_position =
+        v2f(position.x, position.y + size.width + padding + ui_context.font.pixel_height);
+    char buffer[64] = { 0 };
+    value_to_string(buffer, "R: %.6f | G: %.6f | B: %.6f", picker_color.r, picker_color.g,
+                    picker_color.b);
+    f32 x_advance = 0.0f;
+    window->rendering_index_count +=
+        text_generation_color(ui_context.font.chars, buffer, UI_FONT_TEXTURE, rgb_text_position,
+                              1.0f, ui_context.font.line_height, global_get_text_color(), NULL,
+                              &x_advance, NULL, &ui_context.render.vertices);
+
+    const f32 width = color_picker_aabb.size.width + padding + color_spectrum_aabb.size.width +
+                      padding + color_display_size.width;
+    ui_layout_set_width_and_height(layout, ftic_max(width, x_advance),
+                                   size.height + padding + ui_context.font.pixel_height);
     return picker_color;
 }
 

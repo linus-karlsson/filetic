@@ -2327,6 +2327,14 @@ internal void drop_down_layout_add_color_picker_button(DropDownLayout* layout, c
     ui_layout_row(&layout->ui_layout);
 }
 
+internal void application_set_colors(ApplicationContext* app)
+{
+    app->secondary_color = global_get_secondary_color();
+    app->clear_color = global_get_clear_color();
+    app->text_color = global_get_text_color();
+    app->tab_color = global_get_tab_color();
+}
+
 internal void application_open_style_menu_window(ApplicationContext* app, DropDownLayout layout,
                                                  V4 button_color)
 {
@@ -2371,45 +2379,34 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
             {
                 theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker,
                                &app->text_color_picker, &app->tab_color_picker);
-                app->secondary_color = global_get_secondary_color();
-                app->clear_color = global_get_clear_color();
-                app->text_color = global_get_text_color();
-                app->tab_color = global_get_tab_color();
+                application_set_colors(app);
             }
             ui_layout_column(&layout.ui_layout);
             if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Light Theme",
                                      &layout.ui_layout))
             {
                 theme_set_light(&app->clear_color_picker, &app->secondary_color_picker,
-                               &app->text_color_picker, &app->tab_color_picker);
-                app->secondary_color = global_get_secondary_color();
-                app->clear_color = global_get_clear_color();
-                app->text_color = global_get_text_color();
-                app->tab_color = global_get_tab_color();
+                                &app->text_color_picker, &app->tab_color_picker);
+                application_set_colors(app);
             }
-            ui_layout_column(&layout.ui_layout);
+            ui_layout_reset_column(&layout.ui_layout);
+            ui_layout_row(&layout.ui_layout);
             if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Tron Theme",
                                      &layout.ui_layout))
             {
                 theme_set_tron(&app->clear_color_picker, &app->secondary_color_picker,
                                &app->text_color_picker, &app->tab_color_picker);
-                app->secondary_color = global_get_secondary_color();
-                app->clear_color = global_get_clear_color();
-                app->text_color = global_get_text_color();
-                app->tab_color = global_get_tab_color();
+                application_set_colors(app);
             }
-            ui_layout_reset_column(&layout.ui_layout);
-            ui_layout_row(&layout.ui_layout);
+            ui_layout_column(&layout.ui_layout);
             if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Slime Theme",
                                      &layout.ui_layout))
             {
                 theme_set_slime(&app->clear_color_picker, &app->secondary_color_picker,
-                               &app->text_color_picker, &app->tab_color_picker);
-                app->secondary_color = global_get_secondary_color();
-                app->clear_color = global_get_clear_color();
-                app->text_color = global_get_text_color();
-                app->tab_color = global_get_tab_color();
+                                &app->text_color_picker, &app->tab_color_picker);
+                application_set_colors(app);
             }
+            ui_layout_reset_column(&layout.ui_layout);
             ui_layout_row(&layout.ui_layout);
         }
 
@@ -2424,10 +2421,7 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
             {
                 theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker,
                                &app->text_color_picker, &app->tab_color_picker);
-                app->secondary_color = global_get_secondary_color();
-                app->clear_color = global_get_clear_color();
-                app->text_color = global_get_text_color();
-                app->tab_color = global_get_tab_color();
+                application_set_colors(app);
             }
         }
         ui_layout_row(&layout.ui_layout);
@@ -2688,7 +2682,7 @@ void application_run()
                     }
                     else
                     {
-                        app.preview_text.file = file_read(path);
+                        app.preview_text.file = file_read_full_path(path);
                         parse_file(&app.preview_text.file, &app.preview_text.file_colored);
                         app.preview_index = 2;
                     }
@@ -3030,17 +3024,17 @@ void application_run()
             bottom_bar->size = v2f(app.dimensions.width, bottom_bar_height);
             if (ui_window_begin(app.bottom_bar_window, NULL, UI_WINDOW_NONE))
             {
-                UiLayout ui_layout = ui_layout_create(v2f(10.0f, 2.0f));
+                UiLayout ui_layout = ui_layout_create(v2f(10.0f, 3.0f));
                 DirectoryPage* current = directory_current(&tab->directory_history);
                 char buffer[64] = { 0 };
                 sprintf_s(buffer, sizeof(buffer), "Folders: %u  |  Files: %u",
                           current->directory.sub_directories.size, current->directory.files.size);
                 ui_window_add_text(ui_layout.at, buffer, false, &ui_layout);
 
+                const f32 list_grid_icon_position =
+                    bottom_bar->size.width - (2.0f * bottom_bar_height + 5.0f);
                 if (current->grid_view)
                 {
-                    const f32 list_grid_icon_position =
-                        bottom_bar->size.width - (2.0f * bottom_bar_height + 5.0f);
                     ui_layout.at =
                         v2f(list_grid_icon_position - 120.0f, middle(bottom_bar_height, 5.0f));
 
@@ -3050,9 +3044,9 @@ void application_run()
                         ui_layout.at, v2f(110.0f, 5.0f), ui_icon_min_max.min, ui_icon_min_max.max,
                         ui_get_big_icon_size(), &pressed, &ui_layout));
                 }
-
+                ui_layout.at.x = list_grid_icon_position;
                 ui_layout.at.y = 0.0f;
-                ui_layout_column(&ui_layout);
+
                 if (ui_window_add_icon_button(ui_layout.at, v2i(bottom_bar_height),
                                               global_get_border_color(), full_icon_co,
                                               UI_LIST_ICON_TEXTURE, false, &ui_layout))
