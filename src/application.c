@@ -2537,8 +2537,6 @@ void application_open_preview(ApplicationContext* app)
         preview->size = image_dimensions;
         preview->position = v2f(middle(app->dimensions.width, preview->size.width),
                                 middle(app->dimensions.height, preview->size.height));
-        preview->top_color = global_get_clear_color();
-        preview->bottom_color = global_get_clear_color();
 
         if (ui_window_begin(app->preview_window, NULL, UI_WINDOW_OVERLAY))
         {
@@ -2569,9 +2567,6 @@ void application_open_preview(ApplicationContext* app)
         preview->size = v2f(app->dimensions.width * 0.9f, app->dimensions.height * 0.9f);
         preview->position = v2f(middle(app->dimensions.width, preview->size.width),
                                 middle(app->dimensions.height, preview->size.height));
-
-        preview->top_color = v4ic(0.0f);
-        preview->bottom_color = v4ic(0.0f);
 
         if (ui_window_begin(app->preview_window, NULL, UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
         {

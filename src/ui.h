@@ -90,11 +90,6 @@ typedef struct UiWindow
     V2 position;
     V2 first_item_position;
 
-    V2 resize_pointer_offset;
-    V2 resize_size_offset;
-    V4 top_color;
-    V4 bottom_color;
-
     u32 rendering_index_offset;
     u32 rendering_index_count;
 
@@ -120,14 +115,12 @@ typedef struct UiWindow
 
     f32 alpha;
     f32 back_ground_alpha;
-    u8 resize_dragging;
 
     b8 docked;
     b8 hide;
     b8 area_hit;
     b8 top_bar;
     b8 resizeable;
-    b8 any_holding;
     b8 size_animation_on;
     b8 position_animation_on;
     b8 closing;
