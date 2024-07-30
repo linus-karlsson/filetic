@@ -89,7 +89,6 @@ typedef struct UiWindow
     V2 size;
     V2 position;
     V2 first_item_position;
-    V2 top_bar_offset;
 
     V2 resize_pointer_offset;
     V2 resize_size_offset;
@@ -127,9 +126,6 @@ typedef struct UiWindow
     b8 hide;
     b8 area_hit;
     b8 top_bar;
-    b8 top_bar_pressed;
-    b8 release_from_dock_space;
-    b8 top_bar_hold;
     b8 resizeable;
     b8 any_holding;
     b8 size_animation_on;
