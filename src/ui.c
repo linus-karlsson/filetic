@@ -1870,7 +1870,6 @@ internal void check_if_window_should_be_docked()
     UiWindow* focused_window = ui_context.pressed_window;
     if (ui_context.dock_side_hit == 0)
     {
-
         dock_node_dock_window(ui_context.dock_hit_node, focused_window->dock_node, SPLIT_HORIZONTAL,
                               DOCK_SIDE_TOP);
         any_hit = true;
@@ -2161,20 +2160,6 @@ internal void sync_current_frame_windows2(WindowRenderDataArray* current_frame,
     current_frame->size = 0;
 }
 
-internal DockNodePtrArray get_active_dock_spaces(const WindowRenderDataArray* last_frame_windows)
-{
-    DockNodePtrArray dock_spaces = { 0 };
-    array_create(&dock_spaces, 10);
-
-    for (u32 i = 0; i < last_frame_windows->size; ++i)
-    {
-        u32 window_index = get_window_index2(last_frame_windows, i);
-        UiWindow* window = ui_context.windows.data + window_index;
-        array_push(&dock_spaces, window->dock_node);
-    }
-    return dock_spaces;
-}
-
 internal u32 display_text_and_truncate_if_necissary(const V2 position, const f32 total_width,
                                                     const f32 alpha, char* text)
 {
@@ -2207,7 +2192,7 @@ typedef struct TabChange
     b8 close_tab;
 } TabChange;
 
-internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
+internal TabChange update_tabs(const WindowRenderDataArray* windows,
                                UU32Array* dock_spaces_index_offsets_and_counts)
 {
     TabChange tab_change = { 0 };
@@ -2220,10 +2205,10 @@ internal TabChange update_tabs(DockNodePtrArray* dock_spaces,
 
     b8 any_tab_hit = false;
     b8 any_hit = false;
-    for (i32 i = ((i32)dock_spaces->size) - 1; i >= 0; --i)
+    for (i32 i = ((i32)windows->size) - 1; i >= 0; --i)
     {
-        DockNode* dock_space = dock_spaces->data[i];
-        UiWindow* window = ui_window_get(dock_space->windows.data[dock_space->window_in_focus]);
+        UiWindow* window = ui_window_get(windows->data[i].id);
+        DockNode* dock_space = window->dock_node;
         UU32 index_offset_and_count = {
             .first = ui_context.current_index_offset,
         };
@@ -2485,7 +2470,6 @@ void ui_context_end()
     ui_context.extra_index_offset = ui_context.current_index_offset;
     ui_context.extra_index_count = 0;
 
-#if 1
     if (ui_context.any_window_top_bar_hold)
     {
         i32 hit = root_display_docking(ui_context.dock_tree);
@@ -2504,37 +2488,29 @@ void ui_context_end()
             check_dock_space_resize();
         }
     }
-
-#endif
     check_and_display_mouse_drag_box();
 
     ui_context.current_index_offset = ui_context.extra_index_offset + ui_context.extra_index_count;
 
-    sync_current_frame_windows2(&ui_context.current_frame_docked_windows,
-                                &ui_context.last_frame_docked_windows);
-    sync_current_frame_windows2(&ui_context.current_frame_windows, &ui_context.last_frame_windows);
-    sync_current_frame_windows2(&ui_context.current_frame_overlay_windows,
-                                &ui_context.last_frame_overlay_windows);
+    WindowRenderDataArray* docked_windows = &ui_context.last_frame_docked_windows;
+    WindowRenderDataArray* floating_windows = &ui_context.last_frame_windows;
+    WindowRenderDataArray* overlay_windows = &ui_context.last_frame_overlay_windows;
+    sync_current_frame_windows2(&ui_context.current_frame_docked_windows, docked_windows);
+    sync_current_frame_windows2(&ui_context.current_frame_windows, floating_windows);
+    sync_current_frame_windows2(&ui_context.current_frame_overlay_windows, overlay_windows);
 
     if (ui_context.dimensions.y == 0.0f)
     {
-        ui_context.current_frame_windows.size = 0;
-        ui_context.current_frame_docked_windows.size = 0;
-        ui_context.current_frame_overlay_windows.size = 0;
         return;
     }
 
-    DockNodePtrArray dock_spaces_docked =
-        get_active_dock_spaces(&ui_context.last_frame_docked_windows);
-    UU32Array dock_spaces_index_offsets_and_counts_docked = { 0 };
-    array_create(&dock_spaces_index_offsets_and_counts_docked, dock_spaces_docked.size);
-    TabChange tab_change_docked =
-        update_tabs(&dock_spaces_docked, &dock_spaces_index_offsets_and_counts_docked);
+    UU32Array docked_index_offsets_and_counts = { 0 };
+    array_create(&docked_index_offsets_and_counts, docked_windows->size);
+    TabChange tab_change_docked = update_tabs(docked_windows, &docked_index_offsets_and_counts);
 
-    DockNodePtrArray dock_spaces = get_active_dock_spaces(&ui_context.last_frame_windows);
-    UU32Array dock_spaces_index_offsets_and_counts = { 0 };
-    array_create(&dock_spaces_index_offsets_and_counts, dock_spaces.size);
-    TabChange tab_change = update_tabs(&dock_spaces, &dock_spaces_index_offsets_and_counts);
+    UU32Array index_offsets_and_counts = { 0 };
+    array_create(&index_offsets_and_counts, floating_windows->size);
+    TabChange tab_change = update_tabs(floating_windows, &index_offsets_and_counts);
 
     ui_context.particles_index_offset = ui_context.current_index_offset;
     particle_buffer_update(&ui_context.particles, ui_context.delta_time);
@@ -2571,7 +2547,7 @@ void ui_context_end()
     ui_context.frosted_render.render.textures.size = 0;
     u32 fbo = 0;
     u32 fbo_texture = 0;
-    if (ui_frosted_glass && ui_context.last_frame_overlay_windows.size)
+    if (ui_frosted_glass && overlay_windows->size)
     {
         glGenFramebuffers(1, &fbo);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -2587,9 +2563,8 @@ void ui_context_end()
 
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
         {
-            render_ui(&ui_context.last_frame_docked_windows,
-                      &dock_spaces_index_offsets_and_counts_docked, &ui_context.last_frame_windows,
-                      &dock_spaces_index_offsets_and_counts);
+            render_ui(docked_windows, &docked_index_offsets_and_counts, floating_windows,
+                      &index_offsets_and_counts);
         }
         else
         {
@@ -2617,25 +2592,20 @@ void ui_context_end()
         glUniform1i(ui_context.frosted_samples_location, ui_context.frosted_samples);
         shader_unbind();
     }
-    render_ui(&ui_context.last_frame_docked_windows, &dock_spaces_index_offsets_and_counts_docked,
-              &ui_context.last_frame_windows, &dock_spaces_index_offsets_and_counts);
+    render_ui(docked_windows, &docked_index_offsets_and_counts, floating_windows,
+              &index_offsets_and_counts);
 
     AABB whole_screen_scissor = { .size = ui_context.dimensions };
 
-    if (ui_context.last_frame_overlay_windows.size)
+    if (overlay_windows->size)
     {
         render_overlay_ui(overlay_index_offset, overlay_index_count);
-    }
-
-    if (ui_context.last_frame_overlay_windows.size)
-    {
         if (fbo_texture)
         {
             texture_delete(fbo_texture);
         }
         glDeleteFramebuffers(1, &fbo);
     }
-
     if (tab_change_docked.dock_space)
     {
         handle_tab_change_or_close(tab_change_docked);
@@ -2645,14 +2615,8 @@ void ui_context_end()
         handle_tab_change_or_close(tab_change);
     }
 
-    array_free(&dock_spaces_docked);
-    array_free(&dock_spaces_index_offsets_and_counts_docked);
-    array_free(&dock_spaces);
-    array_free(&dock_spaces_index_offsets_and_counts);
-
-    ui_context.current_frame_windows.size = 0;
-    ui_context.current_frame_docked_windows.size = 0;
-    ui_context.current_frame_overlay_windows.size = 0;
+    array_free(&docked_index_offsets_and_counts);
+    array_free(&index_offsets_and_counts);
 }
 
 void ui_context_destroy()
