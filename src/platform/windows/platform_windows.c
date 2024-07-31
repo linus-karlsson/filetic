@@ -1421,7 +1421,6 @@ internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
             HBITMAP h_bitmap = mii.hbmpItem;
             if (h_bitmap != NULL)
             {
-                HDC hdc = GetDC(NULL);
 
                 BITMAP bitmap;
                 GetObject(h_bitmap, sizeof(BITMAP), &bitmap);
@@ -1430,20 +1429,29 @@ internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
                 ZeroMemory(&bi, sizeof(BITMAPINFOHEADER));
                 bi.biSize = sizeof(BITMAPINFOHEADER);
                 bi.biWidth = bitmap.bmWidth;
-                bi.biHeight = bitmap.bmHeight;
+                bi.biHeight = -bitmap.bmHeight;
                 bi.biPlanes = 1;
-                bi.biBitCount = 32;
+                bi.biBitCount = bitmap.bmBitsPixel;
                 bi.biCompression = BI_RGB;
-                bi.biSizeImage = ((bitmap.bmWidth * 32 + 31) / 32) * 4 * bitmap.bmHeight;
+                bi.biSizeImage = bitmap.bmWidth * bitmap.bmHeight * (bitmap.bmBitsPixel / 8);
 
                 BITMAPINFO bmi;
                 bmi.bmiHeader = bi;
 
-                u8* pixels = (u8*)calloc(bi.biSizeImage, sizeof(u8));
+                TextureProperties texture_properties = {
+                    .bytes = (u8*)calloc(bi.biSizeImage, sizeof(u8)),
+                    .channels = 4,
+                    .width = bitmap.bmWidth,
+                    .height = bitmap.bmHeight,
+                };
 
-                GetDIBits(hdc, h_bitmap, 0, bitmap.bmHeight, pixels, &bmi, DIB_RGB_COLORS);
+                HDC hdc = GetDC(NULL);
 
-                free(pixels);
+                GetDIBits(hdc, h_bitmap, 0, bitmap.bmHeight, texture_properties.bytes, &bmi,
+                          DIB_RGB_COLORS);
+
+                item.texture_id = texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
+                free(texture_properties.bytes);
 
                 ReleaseDC(NULL, hdc);
             }
@@ -1513,8 +1521,15 @@ internal void free_sub_menus(MenuItemArray* submenu)
 {
     for (u32 i = 0; i < submenu->size; ++i)
     {
-        free_sub_menus(&submenu->data[i].submenu_items);
-        free(submenu->data[i].text);
+        MenuItem* item = submenu->data + i;
+        free_sub_menus(&item->submenu_items);
+
+        free(item->text);
+        if(item->texture_id)
+        {
+            texture_delete(item->texture_id);
+            item->texture_id = 0;
+        }
     }
     if (submenu->data)
     {
@@ -1631,7 +1646,6 @@ void platform_open_context(void* window, const char* path)
 
     CoUninitialize();
 }
-
 
 void* directory_listen_to_directory_changes(const char* path)
 {

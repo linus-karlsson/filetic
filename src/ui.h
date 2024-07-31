@@ -93,6 +93,8 @@ typedef struct UiWindow
     u32 rendering_index_offset;
     u32 rendering_index_count;
 
+    u32 texture_offset;
+
     V2 position_before_animation;
     V2 position_after_animation;
     f32 position_animation_precent; 

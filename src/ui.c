@@ -2753,6 +2753,8 @@ b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
     window->frosted_background = check_bit(flags, UI_WINDOW_FROSTED_GLASS);
     window->overlay = check_bit(flags, UI_WINDOW_OVERLAY);
 
+    window->texture_offset = ui_context.render.render.textures.size;
+
     if (event_get_mouse_button_event()->action == FTIC_RELEASE)
     {
         window->scroll_bar.dragging = false;
@@ -3045,12 +3047,19 @@ b8 ui_window_end()
     if (window->closing && !window->size_animation_on && !window->position_animation_on)
     {
         window->closing = false;
+        ui_context.render.render.textures.size = window->texture_offset;
         return true;
     }
     if (window->overlay)
     {
-        return !window->area_hit && (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
-                                     event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
+        b8 closing =
+            !window->area_hit && (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
+                                  event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
+        if(closing)
+        {
+            ui_context.render.render.textures.size = window->texture_offset;
+            return true;
+        }
     }
     return false;
 }

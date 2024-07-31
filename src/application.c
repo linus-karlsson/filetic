@@ -2444,11 +2444,20 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
     {
         b8 clicked = ui_window_add_button(layout->at, &item_size, NULL, NULL, layout);
         V4 text_color = global_get_text_color();
-        V2 item_text_position = layout->at;
-        item_text_position.x += item_text_padding + 32.0f;
-        item_text_position.y += middle(item_size.height, ui_font_pixel_height) - 2.0f;
+
         MenuItem* item = menu_items->data + i;
+        if (item->texture_id)
+        {
+            V2 icon_position = layout->at;
+            icon_position.x += item_text_padding;
+            icon_position.y += middle(item_size.height, 16.0f);
+            ui_window_add_image(icon_position, v2i(16.0f), item->texture_id, layout);
+        }
+        V2 item_text_position = layout->at;
+        item_text_position.x += item_text_padding + 24.0f;
+        item_text_position.y += middle(item_size.height, ui_font_pixel_height) - 2.0f;
         ui_window_add_text_c(item_text_position, text_color, item->text, false, layout);
+
         if (item->submenu_items.size)
         {
             V2 symbol_size;

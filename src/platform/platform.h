@@ -96,9 +96,10 @@ typedef struct MenuItemArray
 struct MenuItem
 {
     i32 id;
-    b8 submenu_open;
+    u32 texture_id;
     char* text;
     MenuItemArray submenu_items;
+    b8 submenu_open;
 };
 
 typedef struct ContextMenu
