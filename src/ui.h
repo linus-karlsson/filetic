@@ -268,6 +268,7 @@ void ui_window_set_end_scroll_offset(const u32 window_id, const f32 offest);
 void ui_window_set_current_scroll_offset(const u32 window_id, const f32 offset);
 
 void ui_window_close(u32 window_id);
+void ui_window_close_current();
 
 void ui_window_row_begin(const f32 padding);
 f32 ui_window_row_end();
@@ -280,11 +281,7 @@ void ui_window_start_position_animation(UiWindow* window, V2 start_position, V2 
 b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color, const V4 texture_coordinates, const f32 texture_index, const b8 disable, UiLayout* layout);
 V2 ui_window_get_button_dimensions(V2 dimensions, const char* text, f32* x_advance_out);
 b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text , UiLayout* layout);
-b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index, UiLayout* layout);
-b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index, UiLayout* layout);
-II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, List* list);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input, UiLayout* layout);
-b8 ui_window_add_drop_down_menu(V2 position, DropDownMenu* drop_down_menu, void* option_data);
 void ui_window_add_text(V2 position, const char* text, b8 scrolling, UiLayout* layout);
 void ui_window_add_text_c(V2 position, V4 color, const char* text, b8 scrolling, UiLayout* layout);
 void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text, b8 scrolling, UiLayout* layout);
@@ -294,9 +291,13 @@ void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates
 V2 ui_window_get_switch_size();
 void ui_window_add_switch(V2 position, b8* selected, f32* x, UiLayout* layout);
 
-b8 ui_window_add_drop_down(V2 position, b8* open);
 f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 max_value, f32 value, b8* pressed, UiLayout* layout);
-b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list);
 V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker, UiLayout* layout);
 void ui_window_add_border(V2 position, const V2 size, const V4 color, const f32 thickness);
 void ui_window_add_rectangle(V2 position, const V2 size, const V4 color, UiLayout* layout);
+
+// (NOTE): this is very specific for this project and maybe should be implemented outside this ui.
+b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list);
+b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index, UiLayout* layout);
+b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index, UiLayout* layout);
+II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, List* list);

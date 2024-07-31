@@ -1401,9 +1401,23 @@ internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
         };
         if (GetMenuItemInfo(h_menu, i, TRUE, &mii))
         {
+            u32 buffer_length = (u32)strlen(buffer);
+            if (!buffer_length) continue;
+            for (u32 j = 0; j < buffer_length; ++j)
+            {
+                if (buffer[j] == '&')
+                {
+                    for (u32 k = j; k < buffer_length; k++)
+                    {
+                        buffer[k] = buffer[k + 1];
+                    }
+                    --buffer_length;
+                    --j;
+                }
+            }
             MenuItem item = { 0 };
             item.id = mii.wID;
-            item.text = string_copy(buffer, (u32)strlen(buffer), 2);
+            item.text = string_copy(buffer, buffer_length, 2);
             HBITMAP h_bitmap = mii.hbmpItem;
             if (h_bitmap != NULL)
             {
@@ -1428,6 +1442,8 @@ internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
                 u8* pixels = (u8*)calloc(bi.biSizeImage, sizeof(u8));
 
                 GetDIBits(hdc, h_bitmap, 0, bitmap.bmHeight, pixels, &bmi, DIB_RGB_COLORS);
+
+                free(pixels);
 
                 ReleaseDC(NULL, hdc);
             }
@@ -1503,6 +1519,7 @@ internal void free_sub_menus(MenuItemArray* submenu)
     if (submenu->data)
     {
         array_free(submenu);
+        submenu->data = NULL;
     }
 }
 
@@ -1513,6 +1530,30 @@ void platform_context_menu_destroy(ContextMenu* menu)
     ((IShellFolder*)menu->psf_parent)->lpVtbl->Release((IShellFolder*)menu->psf_parent);
     CoTaskMemFree(menu->pidl);
     CoUninitialize();
+    menu->items = (MenuItemArray){ 0 };
+    menu->pcm = NULL;
+    menu->psf_parent = NULL;
+    menu->pidl = NULL;
+}
+
+void platform_context_menu_invoke_command(ContextMenu* menu, void* window, i32 command)
+{
+    HWND hwnd = glfwGetWin32Window(window);
+    if (command)
+    {
+        CMINVOKECOMMANDINFOEX cmi = { 0 };
+        cmi.cbSize = sizeof(CMINVOKECOMMANDINFOEX);
+        cmi.fMask = 0;
+        cmi.hwnd = hwnd;
+        cmi.lpVerb = MAKEINTRESOURCEA(command - 1);
+        cmi.lpParameters = NULL;
+        cmi.lpDirectory = NULL;
+        cmi.nShow = SW_SHOWNORMAL;
+        cmi.dwHotKey = 0;
+        cmi.hIcon = NULL;
+
+        ((IContextMenu*)menu->pcm)->lpVtbl->InvokeCommand(menu->pcm, (LPCMINVOKECOMMANDINFO)&cmi);
+    }
 }
 
 void platform_open_context(void* window, const char* path)
@@ -1591,6 +1632,7 @@ void platform_open_context(void* window, const char* path)
     CoUninitialize();
 }
 
+
 void* directory_listen_to_directory_changes(const char* path)
 {
     HANDLE handle = FindFirstChangeNotification(path, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME);
@@ -1610,9 +1652,10 @@ b8 directory_look_for_directory_change(void* handle)
 
 PlatformTime platform_time_from_u64(u64 time)
 {
-    const FILETIME file_time = { .dwHighDateTime = (time >> 32),
-                                 .dwLowDateTime = (time & MAXDWORD) };
-
+    const FILETIME file_time = {
+        .dwHighDateTime = (time >> 32),
+        .dwLowDateTime = (time & MAXDWORD),
+    };
     PlatformTime result = { 0 };
     FileTimeToSystemTime(&file_time, (SYSTEMTIME*)&result);
     SYSTEMTIME sys_time;
@@ -1632,17 +1675,7 @@ void platform_open_terminal(const char* path)
     si.cb = sizeof(si);
     ZeroMemory(&pi, sizeof(pi));
 
-    if (CreateProcessA(NULL,   // No module name (use command line)
-                       buffer, // Command line
-                       NULL,   // Process handle not inheritable
-                       NULL,   // Thread handle not inheritable
-                       FALSE,  // Set handle inheritance to FALSE
-                       0,      // No creation flags
-                       NULL,   // Use parent's environment block
-                       NULL,   // Use parent's starting directory
-                       &si,    // Pointer to STARTUPINFO structure
-                       &pi)    // Pointer to PROCESS_INFORMATION structure
-    )
+    if (CreateProcessA(NULL, buffer, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
     {
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);

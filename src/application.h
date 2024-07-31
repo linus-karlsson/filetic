@@ -215,6 +215,9 @@ typedef struct ApplicationContext
     DropDownMenu2 suggestions;
     SuggestionSelectionData suggestion_data;
 
+    ContextMenu context_menu;
+    f32 context_menu_open_position_y;
+
     b8 show_hidden_files;
 } ApplicationContext;
 

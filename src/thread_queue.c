@@ -32,8 +32,7 @@ void semaphore_counter_wait_and_free(SemaphoreCounter* semaphore_counter)
     free(semaphore_counter->semaphore);
 }
 
-void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task,
-                       FTicSemaphore* semaphore)
+void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task, FTicSemaphore* semaphore)
 {
     platform_semaphore_wait_and_decrement(&task_queue->mutex);
 
@@ -54,28 +53,24 @@ void thread_task_push_(ThreadTaskQueue* task_queue, ThreadTask task,
     platform_semaphore_increment(&task_queue->start_semaphore, NULL);
 
     platform_semaphore_increment(&task_queue->mutex, NULL);
-
 }
 
-void thread_tasks_push(ThreadTaskQueue* task_queue, ThreadTask* tasks,
-                       u32 task_count, SemaphoreCounter* semaphore_counter)
+void thread_tasks_push(ThreadTaskQueue* task_queue, ThreadTask* tasks, u32 task_count,
+                       SemaphoreCounter* semaphore_counter)
 {
     if (semaphore_counter)
     {
         if (!semaphore_counter->semaphore && task_count)
         {
-            semaphore_counter->semaphore =
-                (FTicSemaphore*)calloc(1, sizeof(FTicSemaphore));
-            *semaphore_counter->semaphore =
-                platform_semaphore_create(0, task_count);
+            semaphore_counter->semaphore = (FTicSemaphore*)calloc(1, sizeof(FTicSemaphore));
+            *semaphore_counter->semaphore = platform_semaphore_create(0, task_count);
         }
         semaphore_counter->count = task_count;
     }
     for (u32 i = 0; i < task_count; i++)
     {
         thread_task_push_(task_queue, tasks[i],
-                          semaphore_counter ? semaphore_counter->semaphore
-                                            : NULL);
+                          semaphore_counter ? semaphore_counter->semaphore : NULL);
     }
 }
 
@@ -140,9 +135,7 @@ u64 thread_get_task_count(ThreadTaskQueue* task_queue, u64 id)
 void thread_tasks_clear(ThreadQueue* thread_queue)
 {
     platform_semaphore_wait_and_decrement(&thread_queue->task_queue.mutex);
-    for (i32 i = 0; i < ((i32)thread_queue->task_queue.size) -
-                            ((i32)thread_queue->pool_size);
-         ++i)
+    for (i32 i = 0; i < ((i32)thread_queue->task_queue.size) - ((i32)thread_queue->pool_size); ++i)
     {
         platform_semaphore_wait_and_decrement(thread_queue->task_queue.start_semaphore);
     }
@@ -155,8 +148,7 @@ void thread_tasks_clear(ThreadQueue* thread_queue)
 void thread_initialize(u32 capacity, u32 thread_count, ThreadQueue* queue)
 {
     ftic_assert(!queue->pool);
-    queue->pool =
-        (FTicThreadHandle*)calloc(thread_count, sizeof(FTicThreadHandle));
+    queue->pool = (FTicThreadHandle*)calloc(thread_count, sizeof(FTicThreadHandle));
     queue->pool_size = thread_count;
     queue->attribs = (ThreadAttrib*)calloc(thread_count, sizeof(ThreadAttrib));
     global_thread_count = thread_count;
@@ -166,8 +158,8 @@ void thread_initialize(u32 capacity, u32 thread_count, ThreadQueue* queue)
     queue->task_queue.start_semaphore = start_semaphore;
     queue->task_queue.mutex = mutex;
     queue->task_queue.capacity = capacity;
-    queue->task_queue.tasks = (ThreadTaskInternal*)calloc(
-        queue->task_queue.capacity, sizeof(ThreadTaskInternal));
+    queue->task_queue.tasks =
+        (ThreadTaskInternal*)calloc(queue->task_queue.capacity, sizeof(ThreadTaskInternal));
 
     for (u32 i = 0; i < thread_count; i++)
     {

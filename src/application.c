@@ -2434,9 +2434,63 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
     }
 }
 
+internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArray* menu_items,
+                                         void* window, V2 item_size, const f32 item_text_padding,
+                                         UiLayout* layout)
+{
+
+    const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
+    for (u32 i = 0; i < menu_items->size; ++i)
+    {
+        b8 clicked = ui_window_add_button(layout->at, &item_size, NULL, NULL, layout);
+        V4 text_color = global_get_text_color();
+        V2 item_text_position = layout->at;
+        item_text_position.x += item_text_padding + 32.0f;
+        item_text_position.y += middle(item_size.height, ui_font_pixel_height) - 2.0f;
+        MenuItem* item = menu_items->data + i;
+        ui_window_add_text_c(item_text_position, text_color, item->text, false, layout);
+        if (item->submenu_items.size)
+        {
+            V2 symbol_size;
+            V2 drop_down_symbol_position;
+            if (item->submenu_open)
+            {
+                symbol_size = v2f(2.0f, item_size.height * 0.6f);
+                drop_down_symbol_position.y =
+                    layout->at.y + middle(item_size.height, symbol_size.height);
+            }
+            else
+            {
+                symbol_size = v2f(item_size.height * 0.6f, 2.0f);
+                drop_down_symbol_position.y =
+                    layout->at.y + middle(item_size.height, symbol_size.height);
+            }
+            drop_down_symbol_position.x = layout->at.x + item_size.width;
+            drop_down_symbol_position.x -= 30.0f + (symbol_size.width * 0.5f);
+            ui_window_add_rectangle(drop_down_symbol_position, symbol_size, v4ic(1.0f), NULL);
+        }
+        else if (clicked)
+        {
+            platform_context_menu_invoke_command(context_menu, window, item->id);
+            ui_window_close_current();
+        }
+        ui_layout_row(layout);
+        if (clicked)
+        {
+            item->submenu_open ^= true;
+        }
+        if (item->submenu_open && item->submenu_items.size)
+        {
+            display_context_menu_items(context_menu, &item->submenu_items, window, item_size,
+                                       item_text_padding + 15.0f, layout);
+        }
+    }
+}
+
 internal void application_open_context_menu_window(ApplicationContext* app,
                                                    DirectoryTab* current_tab)
 {
+
     if (ui_window_begin(app->context_menu_window, NULL,
                         UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
     {
@@ -2467,46 +2521,54 @@ internal void application_open_context_menu_window(ApplicationContext* app,
                 app->drop_down_tab_index %= CONTEXT_ITEM_COUNT;
             }
         }
-        V2 item_size = v2f(250.0f, 24.0f + ui_font_pixel_height);
+        UiWindow* window = ui_window_get(app->context_menu_window);
+        window->position.y = app->context_menu_open_position_y;
+
+        f32 diff = (window->position.y + window->size.height + 20.0f) - app->dimensions.height;
+        window->position.y -= diff * (diff > 0.0f);
+
+        V2 item_size = v2f(300.0f, 8.0f + ui_font_pixel_height);
         UiLayout layout = ui_layout_create(v2d());
         const f32 item_text_padding = 5.0f;
-        for (u32 i = 0; i < CONTEXT_ITEM_COUNT; ++i)
+        if (app->context_menu.pcm == NULL)
         {
-            b8 clicked = ui_window_add_button(layout.at, &item_size, NULL, NULL, &layout);
-
-            MainDropDownSelectionData data = {
-                .window = app->window,
-                .quick_access = &app->quick_access.items,
-                .directory = directory_current(&current_tab->directory_history),
-                .selected_paths = &current_tab->directory_list.selected_item_values.paths,
-                .panel = app->panel_right_clicked,
-                .task_queue = &app->thread_queue.task_queue,
-            };
-            V4 text_color = global_get_text_color();
-            if (main_drop_down_selection(i, clicked, false, clicked, &text_color, &data))
+            for (u32 i = 0; i < CONTEXT_ITEM_COUNT - 1; ++i)
             {
-                tab_clear_selected(current_tab);
-                app->open_context_menu_window = false;
-            }
+                b8 clicked = ui_window_add_button(layout.at, &item_size, NULL, NULL, &layout);
 
-            if (i < 3)
-            {
-                V2 icon_position = layout.at;
-                icon_position.x += item_text_padding;
-                icon_position.y += middle(item_size.height, 24.0f);
-                ui_window_add_image(icon_position, v2i(24.0f),
-                                    app->main_render.render.textures.data[2 + i], &layout);
-            }
+                MainDropDownSelectionData data = {
+                    .window = app->window,
+                    .quick_access = &app->quick_access.items,
+                    .directory = directory_current(&current_tab->directory_history),
+                    .selected_paths = &current_tab->directory_list.selected_item_values.paths,
+                    .panel = app->panel_right_clicked,
+                    .task_queue = &app->thread_queue.task_queue,
+                };
+                V4 text_color = global_get_text_color();
+                if (main_drop_down_selection(i, clicked, false, clicked, &text_color, &data))
+                {
+                    tab_clear_selected(current_tab);
+                    app->open_context_menu_window = false;
+                }
 
-            V2 item_text_position = layout.at;
-            item_text_position.x += item_text_padding;
-            item_text_position.x += 32.0f;
-            item_text_position.y += middle(item_size.height, ui_font_pixel_height) - 2.0f;
-            ui_window_add_text_c(item_text_position, text_color, options[i], false, &layout);
-            ui_layout_row(&layout);
+                if (i < 3)
+                {
+                    V2 icon_position = layout.at;
+                    icon_position.x += item_text_padding;
+                    icon_position.y += middle(item_size.height, 24.0f);
+                    ui_window_add_image(icon_position, v2i(24.0f),
+                                        app->main_render.render.textures.data[2 + i], &layout);
+                }
+                V2 item_text_position = layout.at;
+                item_text_position.x += item_text_padding + 32.0f;
+                item_text_position.y += middle(item_size.height, ui_font_pixel_height) - 2.0f;
+                ui_window_add_text_c(item_text_position, text_color, options[i], false, &layout);
+                ui_layout_row(&layout);
+            }
         }
+        display_context_menu_items(&app->context_menu, &app->context_menu.items, app->window,
+                                   item_size, item_text_padding, &layout);
 
-        UiWindow* window = ui_window_get(app->context_menu_window);
         window->size.height = ease_out_cubic(app->context_menu_x) * layout.at.y;
         window->size.width = item_size.width;
 
@@ -2517,6 +2579,10 @@ internal void application_open_context_menu_window(ApplicationContext* app,
         {
             app->context_menu_x = 0.0f;
             app->open_context_menu_window = false;
+            if (app->context_menu.pcm != NULL)
+            {
+                platform_context_menu_destroy(&app->context_menu);
+            }
         }
     }
 }
@@ -2722,6 +2788,8 @@ void application_run()
 
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
+        b8 menu_open = false;
+
         if (app.preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
             event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT))
         {
@@ -2751,6 +2819,10 @@ void application_run()
                     min(app.dimensions.height - end_height - 10.0f, window->position.y);
                 window->position.x =
                     min(app.dimensions.width - item_size.width - 10.0f, window->position.x);
+
+                app.context_menu_open_position_y = window->position.y;
+
+                menu_open = true;
             }
         }
         look_for_dropped_files(directory_current(&tab->directory_history), directory_to_drop_in);
@@ -2821,7 +2893,7 @@ void application_run()
                     UiLayout ui_layout = ui_layout_create(v2i(10.0f));
                     *app.color_to_change = ui_window_add_color_picker(
                         v2i(10.0f), v2f(200.0f, 200.0f), app.color_picker_to_use, &ui_layout);
-#if 1
+#if 0
                     char buffer[64] = { 0 };
                     value_to_string(buffer, V2_FMT(app.color_picker_to_use->at));
                     log_message(buffer, strlen(buffer));
@@ -3151,6 +3223,15 @@ void application_run()
 
             if (app.open_context_menu_window)
             {
+                if (menu_open && tab->directory_list.selected_item_values.paths.size)
+                {
+                    if (app.context_menu.pcm != NULL)
+                    {
+                        platform_context_menu_destroy(&app.context_menu);
+                    }
+                    platform_context_menu_create(
+                        &app.context_menu, tab->directory_list.selected_item_values.paths.data[0]);
+                }
                 application_open_context_menu_window(&app, tab);
             }
         }

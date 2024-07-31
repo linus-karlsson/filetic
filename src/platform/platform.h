@@ -96,6 +96,7 @@ typedef struct MenuItemArray
 struct MenuItem
 {
     i32 id;
+    b8 submenu_open;
     char* text;
     MenuItemArray submenu_items;
 };
@@ -194,6 +195,7 @@ u32 platform_get_executable_directory_length();
 
 void platform_context_menu_create(ContextMenu* menu, const char* path);
 void platform_context_menu_destroy(ContextMenu* menu);
+void platform_context_menu_invoke_command(ContextMenu* menu, void* window, i32 command);
 
 void platform_open_context(void* window, const char* path);
 void platform_open_background_context(void* window, const char* path);
