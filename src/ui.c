@@ -90,6 +90,13 @@ typedef struct WindowRenderDataArray
     WindowRenderData* data;
 } WindowRenderDataArray;
 
+typedef struct F32Array
+{
+    u32 size;
+    u32 capacity;
+    f32* data;
+} F32Array;
+
 typedef struct UiContext
 {
     MVP mvp;
@@ -103,6 +110,8 @@ typedef struct UiContext
     u32 current_index_offset;
     U32Array id_to_index;
     U32Array free_indices;
+
+    F32Array animation_x;
 
     U32Array generated_textures;
 
@@ -268,11 +277,13 @@ void ui_layout_reset_column(UiLayout* layout)
 
 internal void ui_window_start_size_animation_(UiWindow* window, V2 end_size)
 {
+    ui_context.animation_x.data[window->id] = 0.0f;
     window->dock_node->aabb.size = end_size;
 }
 
 internal void ui_window_start_position_animation_(UiWindow* window, V2 end_position)
 {
+    ui_context.animation_x.data[window->id] = 0.0f;
     window->dock_node->aabb.min = end_position;
 }
 
@@ -321,26 +332,6 @@ internal void push_window_to_front(U32Array* window_array, const u32 index)
         window_array->data[i] = window_array->data[i - 1];
     }
     window_array->data[0] = temp;
-}
-
-internal void push_window_to_first_docked(U32Array* window_array, const u32 index)
-{
-    if ((!window_array->size) || (index == 0) || (index >= window_array->size))
-    {
-        return;
-    }
-    u32 index_to_insert = 0;
-    u32 temp = window_array->data[index];
-    for (u32 i = index; i >= 1; --i)
-    {
-        if (ui_window_get_(window_array->data[i - 1])->docked)
-        {
-            index_to_insert = i;
-            break;
-        }
-        window_array->data[i] = window_array->data[i - 1];
-    }
-    window_array->data[index_to_insert] = temp;
 }
 
 internal void push_window_to_back(U32Array* window_array, const u32 index)
@@ -649,6 +640,11 @@ internal void dock_node_set_split(DockNode* split_node, DockNode* parent, SplitA
             left_window->position = left->aabb.min;
             left_window->size = left->aabb.size;
         }
+        else
+        {
+            ui_window_start_position_animation_(left_window, left->aabb.min);
+            ui_window_start_size_animation_(left_window, left->aabb.size);
+        }
     }
     DockNode* right = split_node->children[1];
     for (u32 i = 0; i < right->windows.size; ++i)
@@ -658,6 +654,11 @@ internal void dock_node_set_split(DockNode* split_node, DockNode* parent, SplitA
         {
             right_window->position = right->aabb.min;
             right_window->size = right->aabb.size;
+        }
+        else
+        {
+            ui_window_start_position_animation_(right_window, right->aabb.min);
+            ui_window_start_size_animation_(right_window, right->aabb.size);
         }
     }
 }
@@ -842,9 +843,9 @@ internal u32 remove_window_from_shared_dock_space(const u32 window_index,
     }
     dock_space_to_change->windows.size--;
 
-    window_to_remove->closing = true;
-    window_to_remove->hide = false;
-    window_to_remove->docked = false;
+    set_bit(window_to_remove->flags, UI_WINDOW_CLOSING);
+    unset_bit(window_to_remove->flags, UI_WINDOW_HIDE);
+    unset_bit(window_to_remove->flags, UI_WINDOW_DOCKED);
     window_to_remove->dock_node = dock_node_create(NODE_LEAF, SPLIT_NONE, window_to_remove->id);
 
     if (focused_window)
@@ -854,7 +855,7 @@ internal u32 remove_window_from_shared_dock_space(const u32 window_index,
             dock_space_to_change->windows.data[dock_space_to_change->window_in_focus]);
         window_to_show->position = window_to_remove->position;
         window_to_show->size = window_to_remove->size;
-        window_to_show->hide = false;
+        unset_bit(window_to_remove->flags, UI_WINDOW_HIDE);
     }
     return dock_space_to_change->windows.data[dock_space_to_change->window_in_focus];
 }
@@ -1097,11 +1098,11 @@ internal void insert_window(DockNode* node, const u32 id, const b8 docked)
         .id = id,
         .size = v2f(200.0f, 200.0f),
         .dock_node = node,
-        .docked = docked,
         .alpha = 1.0f,
-        .back_ground_alpha = 1.0f,
     };
+    set_bit(window.flags, UI_WINDOW_DOCKED * docked);
     array_push(&ui_context.windows, window);
+    array_push(&ui_context.animation_x, 1.0f);
 
     AABBArray aabbs = { 0 };
     array_create(&aabbs, 10);
@@ -1177,7 +1178,7 @@ DockNode* read_node(FILE* file)
             insert_window(node, window_id, true);
             if (i != node->window_in_focus)
             {
-                array_back(&ui_context.windows)->hide = true;
+                set_bit(array_back(&ui_context.windows)->flags, UI_WINDOW_HIDE);
             }
         }
     }
@@ -1322,6 +1323,7 @@ void ui_context_create()
 {
     array_create(&ui_context.id_to_index, 100);
     array_create(&ui_context.free_indices, 100);
+    array_create(&ui_context.animation_x, 100);
 
     array_create(&ui_context.generated_textures, 10);
 
@@ -1629,20 +1631,21 @@ internal void handle_window_top_bar_events(UiWindow* window, V2 top_bar_offset)
                         if (window->id == dock_node->windows.data[i]) break;
                     }
                     remove_window_from_shared_dock_space(i, window, dock_node);
-                    window->closing = false; // Function above sets closing = true
+                    unset_bit(window->flags, UI_WINDOW_CLOSING);
                     ui_window_start_size_animation_(window, v2i(200.0f));
                 }
                 ui_context.window_pressed_release_from_dock_space = false;
             }
 
-            if (window->docked)
+            if (check_bit(window->flags, UI_WINDOW_DOCKED))
             {
                 DockNode* dock_node = window->dock_node;
                 for (u32 i = 0; i < dock_node->windows.size; ++i)
                 {
                     u32 id = dock_node->windows.data[i];
                     UiWindow* window_to_undock = ui_window_get_(id);
-                    window_to_undock->docked = false;
+
+                    unset_bit(window_to_undock->flags, UI_WINDOW_DOCKED);
                 }
                 dock_node_remove_node(ui_context.dock_tree, window->dock_node);
 
@@ -1721,7 +1724,7 @@ internal void reset_last_frame_windows(WindowRenderDataArray* last_frame)
         UiWindow* window = ui_context.windows.data + window_index;
         window->rendering_index_count = 0;
         window->rendering_index_offset = 0;
-        window->area_hit = false;
+        unset_bit(window->flags, UI_WINDOW_AREA_HIT);
     }
 }
 
@@ -1801,7 +1804,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
     reset_last_frame_windows(&ui_context.last_frame_overlay_windows);
     if (ui_context.pressed_window && ui_context.any_window_hold)
     {
-        ui_context.pressed_window->area_hit = true;
+        set_bit(ui_context.pressed_window->flags, UI_WINDOW_AREA_HIT);
     }
     if (check_collisions && !ui_context.dock_resize_hover && !ui_context.dock_resize &&
         !ui_context.any_window_top_bar_hold && !ui_context.any_window_hold)
@@ -1811,7 +1814,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
             const WindowRenderData* render_data = ui_context.last_frame_overlay_windows.data + i;
             if (check_window_collisions(render_data))
             {
-                ui_window_get_(render_data->id)->area_hit = true;
+                set_bit(ui_window_get_(render_data->id)->flags, UI_WINDOW_AREA_HIT);
                 goto collision_check_done;
             }
         }
@@ -1819,7 +1822,8 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
         {
             const WindowRenderData* render_data = ui_context.last_frame_windows.data + i;
             UiWindow* window = ui_window_get_(render_data->id);
-            if (window->resizeable && !ui_context.window_pressed_resize_dragging)
+            if (check_bit(window->flags, UI_WINDOW_RESIZEABLE) &&
+                !ui_context.window_pressed_resize_dragging)
             {
                 u8 any_collision = look_for_window_resize(window);
                 if (ui_context.window_pressed_resize_dragging)
@@ -1833,14 +1837,14 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
                 set_resize_cursor(any_collision);
                 if (any_collision)
                 {
-                    ui_window_get_(render_data->id)->area_hit = true;
+                    set_bit(window->flags, UI_WINDOW_AREA_HIT);
                     goto collision_check_done;
                 }
             }
             const u32 window_in_focus = ui_context.window_in_focus;
             if (check_window_collisions(render_data))
             {
-                window->area_hit = true;
+                set_bit(window->flags, UI_WINDOW_AREA_HIT);
                 if (ui_context.window_in_focus != window_in_focus)
                 {
                     push_window_to_back2(&ui_context.last_frame_windows, i);
@@ -1853,7 +1857,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
             const WindowRenderData* render_data = ui_context.last_frame_docked_windows.data + i;
             if (check_window_collisions(render_data))
             {
-                ui_window_get_(render_data->id)->area_hit = true;
+                set_bit(ui_window_get_(render_data->id)->flags, UI_WINDOW_AREA_HIT);
                 goto collision_check_done;
             }
         }
@@ -1903,7 +1907,7 @@ internal void check_if_window_should_be_docked()
             window->dock_node = ui_context.dock_hit_node;
             window->position = ui_context.dock_hit_node->aabb.min;
             window->size = ui_context.dock_hit_node->aabb.size;
-            window->docked = true;
+            set_bit(window->flags, UI_WINDOW_DOCKED);
         }
         for (u32 i = 0; i < ui_context.dock_hit_node->windows.size; ++i)
         {
@@ -1912,13 +1916,13 @@ internal void check_if_window_should_be_docked()
             UiWindow* window = ui_window_get_(window_id);
             if (window_id == focused_window->id)
             {
-                window->hide = false;
+                unset_bit(window->flags, UI_WINDOW_HIDE);
                 node->window_in_focus = i;
                 ui_context.window_in_focus = ui_context.id_to_index.data[window->id];
             }
             else
             {
-                window->hide = true;
+                set_bit(window->flags, UI_WINDOW_HIDE);
             }
         }
         free(dock_node->windows.data);
@@ -1932,7 +1936,7 @@ internal void check_if_window_should_be_docked()
         {
             u32 id = dock_node->windows.data[i];
             UiWindow* window_to_dock = ui_window_get_(id);
-            window_to_dock->docked = true;
+            set_bit(window_to_dock->flags, UI_WINDOW_DOCKED);
         }
     }
     ui_context.dock_side_hit = -1;
@@ -2220,7 +2224,7 @@ internal TabChange update_tabs(const WindowRenderDataArray* windows,
         {
             window_border_color = global_get_secondary_color();
         }
-        if (window->top_bar)
+        if (check_bit(window->flags, UI_WINDOW_TOP_BAR))
         {
             const V2 top_bar_dimensions = v2f(window->size.width, top_bar_height);
             const V4 top_bar_color = v4a(v4_s_multi(global_get_clear_color(), 1.2f), 1.0f);
@@ -2253,8 +2257,9 @@ internal TabChange update_tabs(const WindowRenderDataArray* windows,
                     tab_color = v4a(v4_s_multi(tab_color, 1.2f), 1.0f);
                 }
                 b8 tab_collided = false;
-                if (should_check_collision && window->area_hit && !tab_change.close_tab &&
-                    !any_tab_hit && collision_point_in_aabb(mouse_position, &tab_aabb))
+                if (should_check_collision && check_bit(window->flags, UI_WINDOW_AREA_HIT) &&
+                    !tab_change.close_tab && !any_tab_hit &&
+                    collision_point_in_aabb(mouse_position, &tab_aabb))
                 {
                     if (j != (i32)dock_space->window_in_focus)
                     {
@@ -2304,7 +2309,8 @@ internal TabChange update_tabs(const WindowRenderDataArray* windows,
 
                 b8 collided = collision_point_in_aabb(mouse_position, &button_aabb);
 
-                if (should_check_collision && collided && window->area_hit)
+                if (should_check_collision && collided &&
+                    check_bit(window->flags, UI_WINDOW_AREA_HIT))
                 {
                     if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
                     {
@@ -2332,8 +2338,9 @@ internal TabChange update_tabs(const WindowRenderDataArray* windows,
             add_border_(&index_offset_and_count.second, window->position, top_bar_dimensions,
                         global_get_border_color());
 
-            if (should_check_collision && window->area_hit && !tab_change.close_tab &&
-                !any_tab_hit && !any_hit && collision_point_in_aabb(mouse_position, &aabb) &&
+            if (should_check_collision && check_bit(window->flags, UI_WINDOW_AREA_HIT) &&
+                !tab_change.close_tab && !any_tab_hit && !any_hit &&
+                collision_point_in_aabb(mouse_position, &aabb) &&
                 event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
             {
                 ui_context.window_pressed_release_from_dock_space = false;
@@ -2455,10 +2462,10 @@ internal void handle_tab_change_or_close(TabChange tab_change)
     else
     {
         tab_change.dock_space->window_in_focus = tab_change.window_focus_index;
-        tab_change.window_to_hide->hide = true;
+        set_bit(tab_change.window_to_hide->flags, UI_WINDOW_HIDE);
         tab_change.window_to_show->position = tab_change.window_to_hide->position;
         tab_change.window_to_show->size = tab_change.window_to_hide->size;
-        tab_change.window_to_show->hide = false;
+        unset_bit(tab_change.window_to_show->flags, UI_WINDOW_HIDE);
         focused_window_id = tab_change.window_to_show->id;
     }
     ui_context.window_in_focus = ui_context.id_to_index.data[focused_window_id];
@@ -2679,9 +2686,33 @@ void ui_window_set_alpha(const u32 window_id, const f32 alpha)
 
 internal void window_animate(UiWindow* window)
 {
-    const f32 animation_speed = 4.0f;
+    const f64 animation_speed = 2.0;
     const f32 delta = (f32)(ui_context.delta_time * 10.0);
 
+#if 1
+    f32* x = ui_context.animation_x.data + window->id;
+    if (*x <= 1.0f)
+    {
+        f32 value = ease_out_cubic(*x);
+        value = ftic_clamp_high(value, 1.0f);
+        window->size = v2_lerp(window->size, window->dock_node->aabb.size, value);
+        window->position = v2_lerp(window->position, window->dock_node->aabb.min, value);
+        if (window == ui_context.pressed_window && ui_context.any_window_top_bar_hold)
+        {
+            const V2 mouse_position = event_get_mouse_position();
+            window->position.x = mouse_position.x - (window->size.width * 0.5f);
+            window->dock_node->aabb.min.x = window->position.x;
+            ui_context.window_pressed_offset = v2_sub(window->position, mouse_position);
+        }
+        *x += (f32)(ui_context.delta_time * animation_speed);
+    }
+    else
+    {
+        window->size = window->dock_node->aabb.size;
+        window->position = window->dock_node->aabb.min;
+    }
+
+#else
     const V2 size_diff = v2_sub(window->dock_node->aabb.size, window->size);
     window->size = v2_add(window->size, v2_s_multi(size_diff, delta));
 
@@ -2695,9 +2726,10 @@ internal void window_animate(UiWindow* window)
         window->dock_node->aabb.min.x = window->position.x;
         ui_context.window_pressed_offset = v2_sub(window->position, mouse_position);
     }
+#endif
 }
 
-b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
+b8 ui_window_begin(u32 window_id, const char* title, u8 flags)
 {
     ui_context.current_window_id = window_id;
 
@@ -2706,17 +2738,13 @@ b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
     AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
     aabbs->size = 0;
 
-    window->resizeable = check_bit(flags, UI_WINDOW_RESIZEABLE);
-    window->top_bar = check_bit(flags, UI_WINDOW_TOP_BAR);
-    window->frosted_background = check_bit(flags, UI_WINDOW_FROSTED_GLASS);
-    window->overlay = check_bit(flags, UI_WINDOW_OVERLAY);
-
+    window->flags = flags | (window->flags & (UI_WINDOW_DOCKED | UI_WINDOW_HIDE |
+                                              UI_WINDOW_AREA_HIT | UI_WINDOW_CLOSING));
     window->texture_offset = ui_context.render.render.textures.size;
 
     if (event_get_mouse_button_event()->action == FTIC_RELEASE)
     {
-        window->scroll_bar.dragging = false;
-        window->scroll_bar_width.dragging = false;
+        window->scroll_bar_dragging = SCROLL_BAR_NONE;
     }
     if (title)
     {
@@ -2745,19 +2773,19 @@ b8 ui_window_begin(u32 window_id, const char* title, u32 flags)
 
     const f32 top_bar_height = ui_context.font.pixel_height + 6.0f;
     window->first_item_position = window->position;
-    window->first_item_position.y += top_bar_height * window->top_bar;
+    window->first_item_position.y += top_bar_height * check_bit(window->flags, UI_WINDOW_TOP_BAR);
 
     window->total_height = 0.0f;
     window->total_width = 0.0f;
 
-    if (window->hide) return false;
+    if (check_bit(window->flags, UI_WINDOW_HIDE)) return false;
 
     // window->position = round_v2(window->position);
     // window->size = round_v2(window->size);
 
     V4 top_color = add_window_alpha(window, global_get_clear_color());
     V4 bottom_color = add_window_alpha(window, global_get_clear_color());
-    if (window->frosted_background)
+    if (check_bit(window->flags, UI_WINDOW_FROSTED_GLASS))
     {
         const f32 alpha = 0.8f + (0.2f * !ui_frosted_glass);
         top_color.a = alpha;
@@ -2804,7 +2832,7 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
         };
         array_push(aabbs, scroll_bar_aabb);
 
-        if (collided || window->scroll_bar.dragging)
+        if (collided || check_bit(window->scroll_bar_dragging, SCROLL_BAR_HEIGHT))
         {
             quad(&ui_context.render.vertices, position, scroll_bar_dimensions,
                  global_get_bright_color(), 0.0f);
@@ -2819,30 +2847,31 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
 
         if (hover_clicked_index.pressed && collided)
         {
-            window->scroll_bar.dragging = true;
-            window->scroll_bar.mouse_pointer_offset = scroll_bar_aabb.min.y - mouse_position.y;
+            ui_context.any_window_hold = true;
+            window->scroll_bar_dragging = SCROLL_BAR_HEIGHT;
+            window->scroll_bar_mouse_pointer_offset = scroll_bar_aabb.min.y - mouse_position.y;
         }
 
         if (hover_clicked_index.clicked)
         {
-            window->scroll_bar.dragging = false;
+            window->scroll_bar_dragging = SCROLL_BAR_NONE;
         }
 
-        if (window->scroll_bar.dragging)
+        if (check_bit(window->scroll_bar_dragging, SCROLL_BAR_HEIGHT))
         {
             const f32 end_position_y = lower_end - scroll_bar_dimensions.height;
 
-            f32 new_y = mouse_position.y + window->scroll_bar.mouse_pointer_offset;
+            f32 new_y = mouse_position.y + window->scroll_bar_mouse_pointer_offset;
 
             // Clipping
             if (new_y < initial_y)
             {
-                window->scroll_bar.mouse_pointer_offset = scroll_bar_aabb.min.y - mouse_position.y;
+                window->scroll_bar_mouse_pointer_offset = scroll_bar_aabb.min.y - mouse_position.y;
                 new_y = initial_y;
             }
             if (new_y > end_position_y)
             {
-                window->scroll_bar.mouse_pointer_offset = scroll_bar_aabb.min.y - mouse_position.y;
+                window->scroll_bar_mouse_pointer_offset = scroll_bar_aabb.min.y - mouse_position.y;
                 new_y = end_position_y;
             }
 
@@ -2892,7 +2921,7 @@ internal void add_scroll_bar_width(UiWindow* window, AABBArray* aabbs,
         };
         array_push(aabbs, scroll_bar_aabb);
 
-        if (collided || window->scroll_bar_width.dragging)
+        if (collided || check_bit(window->scroll_bar_dragging, SCROLL_BAR_WIDTH))
         {
             quad(&ui_context.render.vertices, position, scroll_bar_dimensions,
                  global_get_bright_color(), 0.0f);
@@ -2908,28 +2937,25 @@ internal void add_scroll_bar_width(UiWindow* window, AABBArray* aabbs,
         if (hover_clicked_index.pressed && collided)
         {
             ui_context.any_window_hold = true;
-            window->scroll_bar_width.dragging = true;
-            window->scroll_bar_width.mouse_pointer_offset =
-                scroll_bar_aabb.min.x - mouse_position.x;
+            window->scroll_bar_dragging = SCROLL_BAR_WIDTH;
+            window->scroll_bar_mouse_pointer_offset = scroll_bar_aabb.min.x - mouse_position.x;
         }
 
-        if (window->scroll_bar_width.dragging)
+        if (window->scroll_bar_dragging)
         {
             const f32 end_position_x = lower_end - scroll_bar_dimensions.width;
 
-            f32 new_x = mouse_position.x + window->scroll_bar_width.mouse_pointer_offset;
+            f32 new_x = mouse_position.x + window->scroll_bar_mouse_pointer_offset;
 
             // Clipping
             if (new_x < initial_x)
             {
-                window->scroll_bar_width.mouse_pointer_offset =
-                    scroll_bar_aabb.min.x - mouse_position.x;
+                window->scroll_bar_mouse_pointer_offset = scroll_bar_aabb.min.x - mouse_position.x;
                 new_x = initial_x;
             }
             if (new_x > end_position_x)
             {
-                window->scroll_bar_width.mouse_pointer_offset =
-                    scroll_bar_aabb.min.x - mouse_position.x;
+                window->scroll_bar_mouse_pointer_offset = scroll_bar_aabb.min.x - mouse_position.x;
                 new_x = end_position_x;
             }
 
@@ -2959,9 +2985,10 @@ b8 ui_window_end()
     add_scroll_bar_height(window, aabbs, hover_clicked_index);
     add_scroll_bar_width(window, aabbs, hover_clicked_index);
 
-    if (!window->scroll_bar.dragging)
+    if (!window->scroll_bar_dragging)
     {
-        if (event_get_mouse_wheel_event()->activated && window->area_hit)
+        if (event_get_mouse_wheel_event()->activated &&
+            check_bit(window->flags, UI_WINDOW_AREA_HIT))
         {
             window->end_scroll_offset =
                 set_scroll_offset(window->total_height, window->size.y, window->end_scroll_offset);
@@ -2981,7 +3008,9 @@ b8 ui_window_end()
     const b8 position_animation_on = !closed_interval(-1.0f, position_diff.x, 1.0f) &&
                                      !closed_interval(-1.0f, position_diff.y, 1.0f);
 
-    if (!window->hide && (!window->closing || size_animation_on || position_animation_on))
+    if (!check_bit(window->flags, UI_WINDOW_HIDE) &&
+        (!check_bit(window->flags, UI_WINDOW_CLOSING) || size_animation_on ||
+         position_animation_on))
     {
         AABB window_aabb = { .min = window->position, .size = window->size };
         WindowRenderData render_data = {
@@ -2990,11 +3019,11 @@ b8 ui_window_end()
             .index_offset = window->rendering_index_offset,
             .index_count = window->rendering_index_count,
         };
-        if (window->overlay)
+        if (check_bit(window->flags, UI_WINDOW_OVERLAY))
         {
             array_push(&ui_context.current_frame_overlay_windows, render_data);
         }
-        else if (window->docked)
+        else if (check_bit(window->flags, UI_WINDOW_DOCKED))
         {
             array_push(&ui_context.current_frame_docked_windows, render_data);
         }
@@ -3008,17 +3037,17 @@ b8 ui_window_end()
     ui_context.current_index_offset =
         window->rendering_index_offset + window->rendering_index_count;
 
-    if (window->closing && !size_animation_on && !position_animation_on)
+    if (check_bit(window->flags, UI_WINDOW_CLOSING) && !size_animation_on && !position_animation_on)
     {
-        window->closing = false;
+        unset_bit(window->flags, UI_WINDOW_CLOSING);
         ui_context.render.render.textures.size = window->texture_offset;
         return true;
     }
-    if (window->overlay)
+    if (check_bit(window->flags, UI_WINDOW_OVERLAY))
     {
-        b8 closing =
-            !window->area_hit && (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
-                                  event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
+        b8 closing = !check_bit(window->flags, UI_WINDOW_AREA_HIT) &&
+                     (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
+                      event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
         if (closing)
         {
             ui_context.render.render.textures.size = window->texture_offset;
@@ -3568,13 +3597,13 @@ void ui_window_close(u32 window_id)
 
     if (dock_space->windows.size == 1)
     {
-        if (window->docked)
+        if (check_bit(window->flags, UI_WINDOW_DOCKED))
         {
             dock_node_remove_node(ui_context.dock_tree, dock_space);
         }
-        window->closing = true;
-        window->hide = false;
-        window->docked = false;
+        set_bit(window->flags, UI_WINDOW_CLOSING);
+        unset_bit(window->flags, UI_WINDOW_HIDE);
+        unset_bit(window->flags, UI_WINDOW_DOCKED);
         V2 end_position = v2_add(window->position, v2_s_multi(window->size, 0.5f));
         ui_window_start_position_animation_(window, end_position);
         ui_window_start_size_animation_(window, v2d());
@@ -3597,7 +3626,7 @@ void ui_window_close(u32 window_id)
 
 void ui_window_close_current()
 {
-    ui_window_get_(ui_context.current_window_id)->closing = true;
+    set_bit(ui_window_get_(ui_context.current_window_id)->flags, UI_WINDOW_CLOSING);
 }
 
 void ui_window_set_size(u32 window_id, const V2 size)
@@ -4618,7 +4647,7 @@ b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableLis
         list->selected = false;
     }
 
-    const b8 reset = !window->area_hit || mouse_released;
+    const b8 reset = !check_bit(window->flags, UI_WINDOW_AREA_HIT) || mouse_released;
     if (reset)
     {
         list->hold = false;
