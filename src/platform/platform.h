@@ -104,6 +104,7 @@ struct MenuItem
 
 typedef struct ContextMenu
 {
+    f32 x;
     void* psf_parent;
     void* pcm;
     void* pidl;

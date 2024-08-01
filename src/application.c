@@ -2566,11 +2566,6 @@ internal void application_open_context_menu_window(ApplicationContext* app,
                 app->drop_down_tab_index %= CONTEXT_ITEM_COUNT;
             }
         }
-        UiWindow* window = ui_window_get(app->context_menu_window);
-        window->position.y = app->context_menu_open_position_y;
-
-        f32 diff = (window->position.y + window->size.height + 20.0f) - app->dimensions.height;
-        window->position.y -= diff * (diff > 0.0f);
 
         V2 item_size = v2f(300.0f, 8.0f + ui_font_pixel_height);
         UiLayout layout = ui_layout_create(v2d());
@@ -2616,8 +2611,23 @@ internal void application_open_context_menu_window(ApplicationContext* app,
                                    &current_tab->directory_list.selected_item_values.paths,
                                    &app->quick_access.items, &layout);
 
+        UiWindow* window = ui_window_get(app->context_menu_window);
         window->size.height = ease_out_cubic(app->context_menu_x) * layout.at.y;
         window->size.width = item_size.width;
+
+        f32 diff = (window->position.y + window->size.height + 20.0f) - app->dimensions.height;
+        window->position.y -= diff * (diff > 0.0f) * (f32)app->delta_time * 10.0f;
+        if (window->position.y < app->context_menu_open_position_y)
+        {
+            const f32 height_form_position = (window->position.y + window->size.height + 20.0f);
+            if (height_form_position < app->dimensions.height)
+            {
+                const f32 to_bottom = app->dimensions.height - height_form_position;
+                const f32 offset = app->context_menu_open_position_y - window->position.y;
+                diff = ftic_min(to_bottom, offset);
+                window->position.y += diff * (f32)app->delta_time * 10.0f;
+            }
+        }
 
         app->context_menu_x += (f32)(app->delta_time * 8.0);
         app->context_menu_x = ftic_clamp_high(app->context_menu_x, 1.0f);
