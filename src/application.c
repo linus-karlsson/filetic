@@ -2436,7 +2436,8 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
 
 internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArray* menu_items,
                                          void* window, V2 item_size, const f32 item_text_padding,
-                                         UiLayout* layout)
+                                         const CharPtrArray* selected_paths,
+                                         DirectoryItemArray* quick_access, UiLayout* layout)
 {
 
     const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
@@ -2480,7 +2481,41 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
         }
         else if (clicked)
         {
-            platform_context_menu_invoke_command(context_menu, window, item->id);
+            if (item->id == 160)
+            {
+                for (u32 j = 0; j < selected_paths->size; ++j)
+                {
+                    char* path_temp = selected_paths->data[j];
+                    if (!platform_directory_exists(path_temp))
+                    {
+                        continue;
+                    }
+                    b8 exist = false;
+                    for (u32 k = 0; k < quick_access->size; ++k)
+                    {
+                        if (!strcmp(path_temp, quick_access->data[k].path))
+                        {
+                            exist = true;
+                            break;
+                        }
+                    }
+                    if (!exist)
+                    {
+                        const u32 length = (u32)strlen(path_temp);
+                        char* path = (char*)calloc(length + 1, sizeof(char));
+                        memcpy(path, path_temp, length);
+                        DirectoryItem directory_item = {
+                            .path = path,
+                            .name = path + get_path_length(path, length),
+                        };
+                        array_push(quick_access, directory_item);
+                    }
+                }
+            }
+            else
+            {
+                platform_context_menu_invoke_command(context_menu, window, item->id);
+            }
             ui_window_close_current();
         }
         ui_layout_row(layout);
@@ -2491,7 +2526,8 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
         if (item->submenu_open && item->submenu_items.size)
         {
             display_context_menu_items(context_menu, &item->submenu_items, window, item_size,
-                                       item_text_padding + 24.0f, layout);
+                                       item_text_padding + 24.0f, selected_paths, quick_access,
+                                       layout);
         }
     }
 }
@@ -2576,7 +2612,9 @@ internal void application_open_context_menu_window(ApplicationContext* app,
             }
         }
         display_context_menu_items(&app->context_menu, &app->context_menu.items, app->window,
-                                   item_size, item_text_padding, &layout);
+                                   item_size, item_text_padding,
+                                   &current_tab->directory_list.selected_item_values.paths,
+                                   &app->quick_access.items, &layout);
 
         window->size.height = ease_out_cubic(app->context_menu_x) * layout.at.y;
         window->size.width = item_size.width;
@@ -2655,7 +2693,7 @@ void application_open_preview(ApplicationContext* app)
 void pre_open_context_menu(void* data)
 {
     ContextMenu* menu = (ContextMenu*)data;
-    platform_context_menu_create(menu,"C:");
+    platform_context_menu_create(menu, "C:");
     platform_context_menu_destroy(menu);
 }
 

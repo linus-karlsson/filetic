@@ -1560,7 +1560,7 @@ void platform_context_menu_invoke_command(ContextMenu* menu, void* window, i32 c
         cmi.cbSize = sizeof(CMINVOKECOMMANDINFOEX);
         cmi.fMask = 0;
         cmi.hwnd = hwnd;
-        cmi.lpVerb = MAKEINTRESOURCEA(command - 1);
+        cmi.lpVerb = MAKEINTRESOURCE(command - 1);
         cmi.lpParameters = NULL;
         cmi.lpDirectory = NULL;
         cmi.nShow = SW_SHOWNORMAL;
@@ -1570,6 +1570,7 @@ void platform_context_menu_invoke_command(ContextMenu* menu, void* window, i32 c
         ((IContextMenu*)menu->pcm)->lpVtbl->InvokeCommand(menu->pcm, (LPCMINVOKECOMMANDINFO)&cmi);
     }
 }
+
 
 void platform_open_context(void* window, const char* path)
 {
