@@ -97,19 +97,13 @@ typedef struct UiWindow
     DockNode* dock_node;
 
     u32 id;
-    u32 texture_offset;
+
     V2 size;
     V2 position;
-    V2 first_item_position;
 
-    u32 rendering_index_offset;
-    u32 rendering_index_count;
-
-    f32 total_height;
     f32 end_scroll_offset;
     f32 current_scroll_offset;
 
-    f32 total_width;
     f32 end_scroll_offset_width;
     f32 current_scroll_offset_width;
 
