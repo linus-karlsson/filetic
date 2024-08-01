@@ -95,14 +95,6 @@ typedef struct UiWindow
 
     u32 texture_offset;
 
-    V2 position_before_animation;
-    V2 position_after_animation;
-    f32 position_animation_precent; 
-
-    V2 size_before_animation;
-    V2 size_after_animation;
-    f32 size_animation_precent; 
-
     f32 total_height;
     f32 end_scroll_offset;
     f32 current_scroll_offset;
@@ -123,8 +115,6 @@ typedef struct UiWindow
     b8 area_hit;
     b8 top_bar;
     b8 resizeable;
-    b8 size_animation_on;
-    b8 position_animation_on;
     b8 closing;
     b8 overlay;
     b8 frosted_background;
@@ -215,7 +205,7 @@ typedef struct UiLayout
     f32 row_height;
     f32 column_width;
     f32 padding;
-}UiLayout;
+} UiLayout;
 
 #define UI_WINDOW_NONE 0
 #define UI_WINDOW_TOP_BAR BIT_1
@@ -261,7 +251,7 @@ void ui_context_set_animation(b8 on);
 void ui_context_set_highlight_focused_window(b8 on);
 
 u32 ui_window_create();
-UiWindow* ui_window_get(const u32 window_id);
+const UiWindow* ui_window_get(const u32 window_id);
 u32 ui_window_in_focus();
 b8 ui_window_begin(u32 window_id, const char* title, u32 flags);
 b8 ui_window_end();
@@ -272,13 +262,18 @@ void ui_window_set_current_scroll_offset(const u32 window_id, const f32 offset);
 void ui_window_close(u32 window_id);
 void ui_window_close_current();
 
+void ui_window_set_size(u32 window_id, const V2 size);
+void ui_window_set_position(u32 window_id, const V2 position);
+
 void ui_window_row_begin(const f32 padding);
 f32 ui_window_row_end();
 void ui_window_column_begin(const f32 padding);
 f32 ui_window_column_end();
 
-void ui_window_start_size_animation(UiWindow* window, V2 start_size, V2 end_size);
-void ui_window_start_position_animation(UiWindow* window, V2 start_position, V2 end_position);
+void ui_window_start_size_animation(const u32 window_id, V2 end_size);
+void ui_window_start_position_animation(const u32 window_id, V2 end_position);
+
+void ui_window_set_alpha(const u32 window_id, const f32 alpha);
 
 b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color, const V4 texture_coordinates, const f32 texture_index, const b8 disable, UiLayout* layout);
 V2 ui_window_get_button_dimensions(V2 dimensions, const char* text, f32* x_advance_out);

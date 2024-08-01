@@ -24,8 +24,7 @@ void load_thumpnails(void* data)
     if (value.texture_properties.width > arguments->size ||
         value.texture_properties.height > arguments->size)
     {
-        texture_resize(&value.texture_properties, arguments->size,
-                       arguments->size);
+        texture_resize(&value.texture_properties, arguments->size, arguments->size);
     }
 
     platform_mutex_lock(&arguments->array->mutex);
@@ -52,19 +51,12 @@ internal void look_for_same_items(const DirectoryItemArray* existing_items,
             DirectoryItem* existing_item = existing_items->data + j;
             if (guid_compare(reloaded_item->id, existing_item->id) == 0)
             {
-                reloaded_item->before_animation =
-                    existing_item->before_animation;
-                reloaded_item->after_animation = existing_item->after_animation;
-                reloaded_item->animation_precent =
-                    existing_item->animation_precent;
-
+                reloaded_item->animation_offset = existing_item->animation_offset;
                 reloaded_item->texture_id = existing_item->texture_id;
                 reloaded_item->texture_width = existing_item->texture_width;
                 reloaded_item->texture_height = existing_item->texture_height;
 
-                reloaded_item->reload_thumbnail =
-                    existing_item->reload_thumbnail;
-                reloaded_item->animation_on = existing_item->animation_on;
+                reloaded_item->reload_thumbnail = existing_item->reload_thumbnail;
                 reloaded_item->rename = existing_item->rename;
                 break;
             }
@@ -84,8 +76,7 @@ void directory_reload(DirectoryPage* directory_page)
 
     look_for_same_items(&directory_page->directory.sub_directories,
                         &reloaded_directory.sub_directories);
-    look_for_same_items(&directory_page->directory.files,
-                        &reloaded_directory.files);
+    look_for_same_items(&directory_page->directory.files, &reloaded_directory.files);
 
     platform_reset_directory(&directory_page->directory, false);
     directory_page->directory = reloaded_directory;
@@ -99,8 +90,7 @@ void directory_paste_in_directory(DirectoryPage* current_directory)
     platform_paste_from_clipboard(&pasted_paths);
     if (pasted_paths.size)
     {
-        platform_paste_to_directory(&pasted_paths,
-                                    current_directory->directory.parent);
+        platform_paste_to_directory(&pasted_paths, current_directory->directory.parent);
         for (u32 i = 0; i < pasted_paths.size; ++i)
         {
             free(pasted_paths.data[i]);
@@ -110,14 +100,12 @@ void directory_paste_in_directory(DirectoryPage* current_directory)
     free(pasted_paths.data);
 }
 
-internal i32 name_compare_function(const DirectoryItem* first,
-                                   const DirectoryItem* second)
+internal i32 name_compare_function(const DirectoryItem* first, const DirectoryItem* second)
 {
     return string_compare_case_insensitive(first->name, second->name);
 }
 
-internal i32 date_compare_function(const DirectoryItem* first,
-                                   const DirectoryItem* second)
+internal i32 date_compare_function(const DirectoryItem* first, const DirectoryItem* second)
 {
     PlatformTime first_time = platform_time_from_u64(first->last_write_time);
     PlatformTime second_time = platform_time_from_u64(second->last_write_time);
@@ -125,17 +113,14 @@ internal i32 date_compare_function(const DirectoryItem* first,
 }
 
 internal void merge(DirectoryItem* array,
-                    i32 (*compare_function)(const DirectoryItem*,
-                                            const DirectoryItem*),
-                    u32 left, u32 mid, u32 right)
+                    i32 (*compare_function)(const DirectoryItem*, const DirectoryItem*), u32 left,
+                    u32 mid, u32 right)
 {
     u32 n1 = mid - left + 1;
     u32 n2 = right - mid;
 
-    DirectoryItem* left_array =
-        (DirectoryItem*)malloc(n1 * sizeof(DirectoryItem));
-    DirectoryItem* right_array =
-        (DirectoryItem*)malloc(n2 * sizeof(DirectoryItem));
+    DirectoryItem* left_array = (DirectoryItem*)malloc(n1 * sizeof(DirectoryItem));
+    DirectoryItem* right_array = (DirectoryItem*)malloc(n2 * sizeof(DirectoryItem));
 
     for (u32 i = 0; i < n1; ++i)
     {
@@ -177,8 +162,7 @@ internal void merge(DirectoryItem* array,
 }
 
 internal void merge_sort(DirectoryItem* array,
-                         i32 (*compare_function)(const DirectoryItem*,
-                                                 const DirectoryItem*),
+                         i32 (*compare_function)(const DirectoryItem*, const DirectoryItem*),
                          u32 left, u32 right)
 {
     if (left < right)
@@ -215,8 +199,7 @@ void directory_sort_by_size(DirectoryItemArray* array)
 {
     if (array->size <= 1) return;
 
-    DirectoryItem* output =
-        (DirectoryItem*)calloc(array->size, sizeof(DirectoryItem));
+    DirectoryItem* output = (DirectoryItem*)calloc(array->size, sizeof(DirectoryItem));
     u32 count[256] = { 0 };
 
     for (u32 shift = 0, s = 0; shift < 8; ++shift, s += 8)
@@ -249,8 +232,7 @@ void directory_sort_by_date(DirectoryItemArray* array)
 {
     if (array->size <= 1) return;
 
-    DirectoryItem* output =
-        (DirectoryItem*)calloc(array->size, sizeof(DirectoryItem));
+    DirectoryItem* output = (DirectoryItem*)calloc(array->size, sizeof(DirectoryItem));
     u32 count[256] = { 0 };
 
     for (u32 shift = 0, s = 0; shift < 8; ++shift, s += 8)
@@ -289,8 +271,7 @@ void directory_sort(DirectoryPage* directory_page)
             directory_sort_by_name(&directory_page->directory.files);
             if (directory_page->sort_count == 2)
             {
-                directory_flip_array(
-                    &directory_page->directory.sub_directories);
+                directory_flip_array(&directory_page->directory.sub_directories);
                 directory_flip_array(&directory_page->directory.files);
             }
             break;
@@ -322,8 +303,7 @@ void directory_sort(DirectoryPage* directory_page)
     }
 }
 
-void directory_history_update_directory_change_handle(
-    DirectoryHistory* directory_history)
+void directory_history_update_directory_change_handle(DirectoryHistory* directory_history)
 {
     directory_unlisten_to_directory_changes(directory_history->change_handle);
     directory_history->change_handle = directory_listen_to_directory_changes(
@@ -338,11 +318,9 @@ internal u32 look_for_and_get_thumbnails(const DirectoryItemArray* files,
     for (u32 i = 0; i < files->size; ++i)
     {
         const DirectoryItem* item = files->data + i;
-        const char* extension =
-            file_get_extension(item->path, (u32)strlen(item->path));
+        const char* extension = file_get_extension(item->path, (u32)strlen(item->path));
 
-        if (extension &&
-            (!strcmp(extension, "jpg") || !strcmp(extension, "png")))
+        if (extension && (!strcmp(extension, "jpg") || !strcmp(extension, "png")))
         {
             LoadThumpnailData* thump_nail_data =
                 (LoadThumpnailData*)calloc(1, sizeof(LoadThumpnailData));
@@ -366,8 +344,7 @@ internal u32 count_image_obj_files(const DirectoryItemArray* files)
     for (u32 i = 0; i < files->size; ++i)
     {
         DirectoryItem* item = files->data + i;
-        count += (item->type == FILE_PNG || item->type == FILE_JPG ||
-                  item->type == FILE_OBJ);
+        count += (item->type == FILE_PNG || item->type == FILE_JPG || item->type == FILE_OBJ);
     }
     return count;
 }
@@ -378,8 +355,8 @@ internal b8 should_be_grid_view(const DirectoryPage* page)
 
     if (count)
     {
-        if (((f32)count / (f32)(page->directory.files.size +
-                                page->directory.sub_directories.size)) >= 0.8f)
+        if (((f32)count /
+             (f32)(page->directory.files.size + page->directory.sub_directories.size)) >= 0.8f)
         {
             return true;
         }
@@ -393,8 +370,8 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
     char saved_chars[3];
     saved_chars[0] = path[length];
     path[length] = '\0';
-    if (string_compare_case_insensitive(
-            path, directory_current(directory_history)->directory.parent) &&
+    if (string_compare_case_insensitive(path,
+                                        directory_current(directory_history)->directory.parent) &&
         platform_directory_exists(path))
     {
         path[length++] = '\\';
@@ -407,8 +384,7 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
         for (i32 i = directory_history->history.size - 1;
              i >= (i32)directory_history->current_index + 1; --i)
         {
-            platform_reset_directory(
-                &directory_history->history.data[i].directory, true);
+            platform_reset_directory(&directory_history->history.data[i].directory, true);
         }
         directory_history->history.size = ++directory_history->current_index;
         array_push(&directory_history->history, new_page); // size + 1
@@ -430,15 +406,13 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
     return result;
 }
 
-void directory_open_folder(char* folder_path,
-                           DirectoryHistory* directory_history)
+void directory_open_folder(char* folder_path, DirectoryHistory* directory_history)
 {
     u32 length = (u32)strlen(folder_path);
     directory_go_to(folder_path, length, directory_history);
 }
 
-void directory_move_in_history(const i32 index_add,
-                               SelectedItemValues* selected_item_values,
+void directory_move_in_history(const i32 index_add, SelectedItemValues* selected_item_values,
                                DirectoryHistory* directory_history)
 {
     directory_history->current_index += index_add;
@@ -483,8 +457,7 @@ void directory_go_up(DirectoryHistory* directory_history)
     free(new_parent);
 }
 
-void directory_tab_add(const char* dir, ThreadTaskQueue* task_queue,
-                       DirectoryTab* tab)
+void directory_tab_add(const char* dir, ThreadTaskQueue* task_queue, DirectoryTab* tab)
 {
     array_create(&tab->directory_history.history, 10);
 
@@ -516,8 +489,7 @@ void directory_tab_clear(DirectoryTab* tab)
 {
     for (u32 i = 0; i < tab->directory_history.history.size; i++)
     {
-        platform_reset_directory(
-            &tab->directory_history.history.data[i].directory, true);
+        platform_reset_directory(&tab->directory_history.history.data[i].directory, true);
     }
     array_free(&tab->directory_history.history);
 
@@ -527,9 +499,8 @@ void directory_tab_clear(DirectoryTab* tab)
     platform_mutex_unlock(&tab->textures.mutex);
     platform_mutex_destroy(&tab->textures.mutex);
 
-    directory_unlisten_to_directory_changes(
-        tab->directory_history.change_handle);
-    for(u32 i = 0; i < tab->directory_list.inputs.size; ++i)
+    directory_unlisten_to_directory_changes(tab->directory_history.change_handle);
+    for (u32 i = 0; i < tab->directory_list.inputs.size; ++i)
     {
         ui_input_buffer_delete(tab->directory_list.inputs.data + i);
     }
@@ -546,11 +517,9 @@ void directory_clear_selected_items(SelectedItemValues* selected_item_values)
     selected_item_values->paths.size = 0;
 }
 
-void directory_remove_selected_item(SelectedItemValues* selected_item_values,
-                                    const FticGUID guid)
+void directory_remove_selected_item(SelectedItemValues* selected_item_values, const FticGUID guid)
 {
-    CellGuid* cell =
-        hash_table_remove_guid(&selected_item_values->selected_items, guid);
+    CellGuid* cell = hash_table_remove_guid(&selected_item_values->selected_items, guid);
     if (cell)
     {
         CharPtrArray* paths = &selected_item_values->paths;

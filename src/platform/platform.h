@@ -57,16 +57,13 @@ typedef struct DirectoryItem
     char* path;
     DirectoryItemType type;
 
-    V2 before_animation;
-    V2 after_animation;
-    f32 animation_precent; 
+    V2 animation_offset;
 
     u32 texture_id;
-    i32 texture_width;
-    i32 texture_height;
+    u16 texture_width;
+    u16 texture_height;
 
     b8 reload_thumbnail;
-    b8 animation_on;
     b8 rename;
 } DirectoryItem;
 
