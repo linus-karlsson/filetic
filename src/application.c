@@ -2475,7 +2475,7 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
                     layout->at.y + middle(item_size.height, symbol_size.height);
             }
             drop_down_symbol_position.x = layout->at.x + item_size.width;
-            drop_down_symbol_position.x -= 30.0f + (symbol_size.width * 0.5f);
+            drop_down_symbol_position.x -= 20.0f + (symbol_size.width * 0.5f);
             ui_window_add_rectangle(drop_down_symbol_position, symbol_size, v4ic(1.0f), NULL);
         }
         else if (clicked)
@@ -2491,7 +2491,7 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
         if (item->submenu_open && item->submenu_items.size)
         {
             display_context_menu_items(context_menu, &item->submenu_items, window, item_size,
-                                       item_text_padding + 15.0f, layout);
+                                       item_text_padding + 24.0f, layout);
         }
     }
 }
@@ -2564,12 +2564,12 @@ internal void application_open_context_menu_window(ApplicationContext* app,
                 {
                     V2 icon_position = layout.at;
                     icon_position.x += item_text_padding;
-                    icon_position.y += middle(item_size.height, 24.0f);
-                    ui_window_add_image(icon_position, v2i(24.0f),
+                    icon_position.y += middle(item_size.height, 16.0f);
+                    ui_window_add_image(icon_position, v2i(16.0f),
                                         app->main_render.render.textures.data[2 + i], &layout);
                 }
                 V2 item_text_position = layout.at;
-                item_text_position.x += item_text_padding + 32.0f;
+                item_text_position.x += item_text_padding + 24.0f;
                 item_text_position.y += middle(item_size.height, ui_font_pixel_height) - 2.0f;
                 ui_window_add_text_c(item_text_position, text_color, options[i], false, &layout);
                 ui_layout_row(&layout);
@@ -2652,6 +2652,13 @@ void application_open_preview(ApplicationContext* app)
     }
 }
 
+void pre_open_context_menu(void* data)
+{
+    ContextMenu* menu = (ContextMenu*)data;
+    platform_context_menu_create(menu,"C:");
+    platform_context_menu_destroy(menu);
+}
+
 void application_run()
 {
     ApplicationContext app = { 0 };
@@ -2673,6 +2680,13 @@ void application_run()
     array_push(&menu_values, menu_options[0]);
     array_push(&menu_values, menu_options[1]);
     array_push(&menu_values, menu_options[2]);
+
+    // Only doing this because somehow this makes the context menu open faster
+    ThreadTask task = {
+        .data = &app.context_menu,
+        .task_callback = pre_open_context_menu,
+    };
+    thread_tasks_push(&app.thread_queue.task_queue, &task, 1, NULL);
 
     enable_gldebugging();
     glEnable(GL_BLEND);
