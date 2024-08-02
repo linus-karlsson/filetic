@@ -28,6 +28,14 @@
 #define f32_to_string_offset(buffer, offset, num_digits, val)                                      \
     sy_gcvt((buffer) + (offset), sizeof((buffer)) - (offset), val, num_digits)
 
+#define ArraySigniture(name, type)                                                                 \
+    typedef struct name##Array                                                                     \
+    {                                                                                              \
+        u32 size;                                                                                  \
+        u32 capacity;                                                                              \
+        type* data;                                                                                \
+    } name##Array;
+
 #define array_create(array, array_capacity)                                                        \
     do                                                                                             \
     {                                                                                              \

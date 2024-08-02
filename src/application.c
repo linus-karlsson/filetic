@@ -7,6 +7,7 @@
 #include "random.h"
 #include "globals.h"
 #include "theme.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <glad/glad.h>
@@ -103,6 +104,35 @@ internal void drop_down_layout_add_switch_with_text(DropDownLayout* layout, cons
     ui_layout_row(&layout->ui_layout);
 }
 
+internal void drop_down_layout_add_radio_button_with_text(DropDownLayout* layout, const char* text,
+                                                          b8* selected)
+{
+    ui_window_add_text(drop_down_layout_text_position(layout), text, false, &layout->ui_layout);
+    ui_window_add_radio_button(drop_down_layout_right_align_position(layout, 16.0f), v2i(16.0f),
+                               selected, &layout->ui_layout);
+    ui_layout_row(&layout->ui_layout);
+}
+
+internal void drop_down_layout_add_line(DropDownLayout* layout)
+{
+    ui_window_add_rectangle(layout->ui_layout.at,
+                            v2f(layout->width - (2.0f * layout->ui_layout.start_x), 1.0f),
+                            global_get_border_color(), &layout->ui_layout);
+    ui_layout_row(&layout->ui_layout);
+}
+
+internal b8 drop_down_layout_add_reset_button(DropDownLayout* layout, const V4 button_color)
+{
+    drop_down_layout_add_line(layout);
+    const char* text = "Reset to default";
+    const V2 button_dim = ui_window_get_button_dimensions(v2d(), text, NULL);
+    const f32 x_position = middle(layout->width, button_dim.width);
+    b8 result = ui_window_add_button(v2f(x_position, layout->ui_layout.at.y), NULL, &button_color,
+                                     text, &layout->ui_layout);
+    ui_layout_row(&layout->ui_layout);
+    return result;
+}
+
 internal u32 drop_down_layout_add_increment_width_text(DropDownLayout* layout, const char* text,
                                                        const V4 button_color, const u32 value)
 {
@@ -140,14 +170,6 @@ internal u32 drop_down_layout_add_increment_width_text(DropDownLayout* layout, c
     ui_layout_row(&layout->ui_layout);
     ui_layout_reset_column(&layout->ui_layout);
     return result;
-}
-
-internal void drop_down_layout_add_line(DropDownLayout* layout)
-{
-    ui_window_add_rectangle(layout->ui_layout.at,
-                            v2f(layout->width - (2.0f * layout->ui_layout.start_x), 1.0f),
-                            global_get_border_color(), &layout->ui_layout);
-    ui_layout_row(&layout->ui_layout);
 }
 
 typedef enum DebugLogLevel
@@ -434,7 +456,7 @@ internal void recent_panel_add_item(RecentPanel* recent, const char* path_temp)
         memcpy(path, path_temp, length);
         DirectoryItem item = {
             .path = path,
-            .name = path + get_path_length(path, length),
+            .name_offset = (u16)get_path_length(path, length),
         };
         if (items->size == recent->total)
         {
@@ -933,7 +955,7 @@ internal void get_suggestions(const V2 position, DirectoryPage* current,
     {
         DirectoryItem* dir_item = directory.sub_directories.data + i;
         dir_item->size =
-            string_span_case_insensitive(dir_item->name, path + current_directory_len + 1);
+            string_span_case_insensitive(item_name(dir_item), path + current_directory_len + 1);
     }
     directory_sort_by_size(&directory.sub_directories);
     directory_flip_array(&directory.sub_directories);
@@ -943,7 +965,7 @@ internal void get_suggestions(const V2 position, DirectoryPage* current,
     const u32 item_count = min(directory.sub_directories.size, 6);
     for (u32 i = 0; i < item_count; ++i)
     {
-        array_push(&suggestions->options, directory.sub_directories.data[i].name);
+        array_push(&suggestions->options, item_name(directory.sub_directories.data + i));
         array_push(&suggestion_data->items, directory.sub_directories.data[i]);
     }
 
@@ -1309,7 +1331,7 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item
                             memcpy(path, path_temp, length);
                             DirectoryItem item = {
                                 .path = path,
-                                .name = path + get_path_length(path, length),
+                                .name_offset = (u16)get_path_length(path, length),
                             };
                             array_push(arguments->quick_access, item);
                         }
@@ -1540,7 +1562,7 @@ internal void access_panel_load(AccessPanel* panel, const char* file_path)
             memcpy(path, line.data, line.size);
             DirectoryItem item = {
                 .path = path,
-                .name = path + get_path_length(path, line.size),
+                .name_offset = (u16)get_path_length(path, line.size),
             };
             array_push(&panel->items, item);
         }
@@ -1652,6 +1674,7 @@ u8* application_initialize(ApplicationContext* app)
     platform_init_drag_drop();
     thread_initialize(100000, platform_get_core_count() - 1, &app->thread_queue);
     platform_set_executable_directory();
+    platform_initialize_filter();
 
     app->font = (FontTTF){ 0 };
     const i32 width_atlas = 512;
@@ -1767,11 +1790,23 @@ u8* application_initialize(ApplicationContext* app)
                             "saved/recent.txt");
     app->recent.total = 10;
 
+    app->filter.buffer = ui_input_buffer_create();
+    array_create(&app->filter.options, 20);
+    const char* filter_texts[7] = { "png", "jpg", "pdf", "cpp", "c", "java", "obj" };
+    for (u32 i = 0; i < static_array_size(filter_texts); ++i)
+    {
+        FilterOption option = {
+            .value = string_copy_d(filter_texts[i]),
+            .selected = true,
+        };
+        array_push(&app->filter.options, option);
+        platform_insert_filter_value(option.value, option.selected);
+    }
+
     app->context_menu_window = app->windows.data[window_index++];
-
     app->style_menu_window = app->windows.data[window_index++];
-
     app->color_picker_window = app->windows.data[window_index++];
+    app->filter_menu_window = app->windows.data[window_index++];
 
     theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker, &app->text_color_picker,
                    &app->tab_color_picker);
@@ -1814,6 +1849,12 @@ void application_uninitialize(ApplicationContext* app)
     {
         free(app->preview_image.current_viewed_path);
     }
+
+    for (u32 i = 0; i < app->filter.options.size; ++i)
+    {
+        free(app->filter.options.data[i].value);
+    }
+    array_free(&app->filter.options);
 
     window_destroy(app->window);
 
@@ -1933,7 +1974,7 @@ internal void parse_all_subdirectories(const char* start_directory, const u32 le
 
     for (u32 i = 0; i < directory.files.size; ++i)
     {
-        const char* name = directory.files.data[i].name;
+        const char* name = item_name(directory.files.data + i);
         log_message(name, strlen(name));
         free(directory.files.data[i].path);
     }
@@ -1952,7 +1993,7 @@ internal void safe_add_directory_item(const DirectoryItem* item,
                                       FindingCallbackAttribute* arguments,
                                       SafeFileArray* safe_array)
 {
-    const char* name = item->name;
+    const char* name = item_namec(item);
     char* path = item->path;
     if (string_contains_case_insensitive(name, arguments->string_to_match))
     {
@@ -1961,8 +2002,8 @@ internal void safe_add_directory_item(const DirectoryItem* item,
         DirectoryItem copy = {
             .size = item->size,
             .path = string_copy(path, path_length, 2),
+            .name_offset = (u16)(path_length - name_length),
         };
-        copy.name = copy.path + path_length - name_length;
         safe_array_push(safe_array, copy);
     }
 }
@@ -2072,7 +2113,6 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
     presist b8 ui_frosted_glass_selected = true;
 
     presist f32 dark_mode_x = 0.0f;
-    presist f32 hidden_files_x = 0.0f;
     presist f32 focused_window_x = 0.0f;
     presist f32 animation_x = 0.0f;
     presist f32 ui_frosted_x = 0.0f;
@@ -2100,8 +2140,8 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
             DirectoryItemArray* files = &app->font_change_directory.files;
             for (i32 i = 0; i < (i32)files->size; ++i)
             {
-                const char* extension =
-                    file_get_extension(files->data[i].name, (u32)strlen(files->data[i].name));
+                const char* extension = file_get_extension(item_name(files->data + i),
+                                                           (u32)strlen(item_name(files->data + i)));
                 if (!extension || strcmp(extension, "ttf"))
                 {
                     char* path_to_remove = files->data[i].path;
@@ -2173,19 +2213,6 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
         ui_context_set_highlight_focused_window(highlight_fucused_window_selected);
     }
     {
-        b8 before = app->show_hidden_files;
-        drop_down_layout_add_switch_with_text(
-            &layout, "Show hidden files:", &app->show_hidden_files, &hidden_files_x);
-        platform_show_hidden_files(app->show_hidden_files);
-        if (before != app->show_hidden_files)
-        {
-            for (u32 i = 0; i < app->tabs.size; ++i)
-            {
-                directory_reload(directory_current(&app->tabs.data[i].directory_history));
-            }
-        }
-    }
-    {
         drop_down_layout_add_switch_with_text(&layout, "Frosted glass:", &ui_frosted_glass_selected,
                                               &ui_frosted_x);
         ui_set_frosted_glass(ui_frosted_glass_selected);
@@ -2205,42 +2232,31 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
         ui_layout_row(&layout.ui_layout);
     }
 
-    drop_down_layout_add_line(&layout);
+    if (drop_down_layout_add_reset_button(&layout, button_color))
     {
-        const char* text = "Reset to default";
-        const V2 button_dim = ui_window_get_button_dimensions(v2d(), text, NULL);
-        const f32 x_position = middle(layout.width, button_dim.width);
-        if (ui_window_add_button(v2f(x_position, layout.ui_layout.at.y), NULL, &button_color, text,
-                                 &layout.ui_layout))
-        {
-            ui_context_set_font_path("C:/Windows/Fonts/arial.ttf");
-            ui_context_change_font_pixel_height(16);
+        ui_context_set_font_path("C:/Windows/Fonts/arial.ttf");
+        ui_context_change_font_pixel_height(16);
 
-            animation_x = 1.0f * animation_on_selected;
-            dark_mode_x = 1.0f * dark_mode_selected;
-            focused_window_x = 1.0f * highlight_fucused_window_selected;
-            hidden_files_x = 1.0f * app->show_hidden_files;
+        animation_x = 1.0f * animation_on_selected;
+        dark_mode_x = 1.0f * dark_mode_selected;
+        focused_window_x = 1.0f * highlight_fucused_window_selected;
 
-            animation_on_selected = true;
-            dark_mode_selected = true;
-            highlight_fucused_window_selected = true;
-            app->show_hidden_files = true;
+        animation_on_selected = true;
+        dark_mode_selected = true;
+        highlight_fucused_window_selected = true;
 
-            app->recent.total = 10;
+        app->recent.total = 10;
 
-            ui_set_big_icon_min_size(64.0f);
-            ui_set_big_icon_max_size(256.0f);
-            ui_set_frosted_blur_amount(0.00132f);
-            ui_set_list_padding(0.0f);
-        }
-        ui_layout_row(&layout.ui_layout);
+        ui_set_big_icon_min_size(64.0f);
+        ui_set_big_icon_max_size(256.0f);
+        ui_set_frosted_blur_amount(0.00132f);
+        ui_set_list_padding(0.0f);
     }
 
-    ui_window_set_size(app->menu_window, v2f(layout.width, layout.ui_layout.at.y));
+    ui_window_dock_space_size(app->menu_window, v2f(layout.width, layout.ui_layout.at.y));
     if (ui_window_end() && !app->open_font_change_window && app->open_menu_window)
     {
         dark_mode_x = 0.0f;
-        hidden_files_x = 0.0f;
         focused_window_x = 0.0f;
         animation_x = 0.0f;
         ui_frosted_x = 0.0f;
@@ -2284,7 +2300,7 @@ internal void application_open_windows_window(ApplicationContext* app, DropDownL
         window_open_menu_item_add(&app->search_result_window_item, &layout,
                                   "Search result:", app->dimensions);
 
-        ui_window_set_size(app->windows_window, v2f(layout.width, layout.ui_layout.at.y));
+        ui_window_dock_space_size(app->windows_window, v2f(layout.width, layout.ui_layout.at.y));
         if (ui_window_end() && app->open_windows_window)
         {
             app->quick_access.menu_item.switch_x = 0.0f;
@@ -2400,25 +2416,137 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
             ui_layout_row(&layout.ui_layout);
         }
 
-        drop_down_layout_add_line(&layout);
-
+        if (drop_down_layout_add_reset_button(&layout, button_color))
         {
-            const char* text = "Reset to default";
-            const V2 button_dim = ui_window_get_button_dimensions(v2d(), text, NULL);
-            const f32 x_position = middle(layout.width, button_dim.width);
-            if (ui_window_add_button(v2f(x_position, layout.ui_layout.at.y), NULL, &button_color,
-                                     text, &layout.ui_layout))
-            {
-                theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker,
-                               &app->text_color_picker, &app->tab_color_picker);
-                application_set_colors(app);
-            }
+            theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker,
+                           &app->text_color_picker, &app->tab_color_picker);
+            application_set_colors(app);
         }
-        ui_layout_row(&layout.ui_layout);
-        ui_window_set_size(app->style_menu_window, v2f(layout.width, layout.ui_layout.at.y));
+
+        ui_window_dock_space_size(app->style_menu_window, v2f(layout.width, layout.ui_layout.at.y));
         if (ui_window_end() && !app->open_color_picker_window && app->open_style_menu_window)
         {
             app->open_style_menu_window = false;
+        }
+    }
+}
+
+internal void application_open_filter_menu_window(ApplicationContext* app, DropDownLayout layout,
+                                                  V4 button_color)
+{
+    if (ui_window_begin(app->filter_menu_window, NULL, UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+    {
+        {
+            V2 button_dim = ui_window_get_button_dimensions(v2d(), "Add", NULL);
+            V2 input_dim = v2f(layout.width - (layout.ui_layout.padding * 3.0f) - button_dim.width,
+                               button_dim.height);
+
+            ui_window_add_input_field(layout.ui_layout.at, input_dim, &app->filter.buffer,
+                                      &layout.ui_layout);
+            ui_layout_column(&layout.ui_layout);
+            if (ui_window_add_button(layout.ui_layout.at, &button_dim, &button_color, "Add",
+                                     &layout.ui_layout))
+            {
+                for (u32 i = 0; i < app->filter.buffer.buffer.size; ++i)
+                {
+                    app->filter.buffer.buffer.data[i] =
+                        (char)tolower(app->filter.buffer.buffer.data[i]);
+                }
+                b8 exist = false;
+                for (u32 i = 0; i < app->filter.options.size; ++i)
+                {
+                    if (strcmp(app->filter.buffer.buffer.data, app->filter.options.data[i].value) ==
+                        0)
+                    {
+                        exist = true;
+                        break;
+                    }
+                }
+                if (!exist)
+                {
+                    FilterOption option = {
+                        .value = string_copy(app->filter.buffer.buffer.data,
+                                             app->filter.buffer.buffer.size, 2),
+                        .selected = true,
+                    };
+                    array_push(&app->filter.options, option);
+                    platform_insert_filter_value(option.value, option.selected);
+                }
+            }
+            ui_layout_reset_column(&layout.ui_layout);
+            ui_layout_row(&layout.ui_layout);
+        }
+        b8 changed = false;
+
+        {
+            presist b8 selected = true;
+            b8 before = selected;
+            drop_down_layout_add_radio_button_with_text(&layout, "Folders", &selected);
+            platform_set_folder_filter(selected);
+            changed |= before != selected;
+        }
+
+        for (u32 i = 0; i < app->filter.options.size; ++i)
+        {
+            FilterOption* option = app->filter.options.data + i;
+            b8 before = option->selected;
+            drop_down_layout_add_radio_button_with_text(&layout, option->value, &option->selected);
+            if (before != option->selected)
+            {
+                platform_set_filter_on(option->value, option->selected);
+                changed = true;
+            }
+        }
+
+        drop_down_layout_add_line(&layout);
+
+        presist f32 hidden_files_x = 0.0f;
+        presist f32 filter_on_x = 0.0f;
+        {
+            b8 before = app->filter.on;
+            drop_down_layout_add_switch_with_text(&layout, "Filter on:", &app->filter.on,
+                                                  &filter_on_x);
+            platform_set_filter(app->filter.on);
+            changed |= before != app->filter.on;
+        }
+        {
+            b8 before = app->show_hidden_files;
+            drop_down_layout_add_switch_with_text(
+                &layout, "Show hidden files:", &app->show_hidden_files, &hidden_files_x);
+            platform_show_hidden_files(app->show_hidden_files);
+            changed |= before != app->show_hidden_files;
+        }
+
+        if (drop_down_layout_add_reset_button(&layout, button_color))
+        {
+            for (u32 i = 0; i < app->filter.options.size; ++i)
+            {
+                FilterOption* option = app->filter.options.data + i;
+                option->selected = true;
+                platform_set_filter_on(option->value, option->selected);
+            }
+            changed = true;
+
+            app->filter.on = false;
+            platform_set_filter(app->filter.on);
+
+            app->show_hidden_files = true;
+        }
+        if (changed)
+        {
+            for (u32 i = 0; i < app->tabs.size; ++i)
+            {
+                directory_reload(directory_current(&app->tabs.data[i].directory_history));
+            }
+        }
+
+        ui_window_dock_space_size(app->filter_menu_window,
+                                  v2f(layout.width, layout.ui_layout.at.y));
+        if (ui_window_end() && app->open_filter_menu_window)
+        {
+            app->open_filter_menu_window = false;
+            hidden_files_x = 0.0f;
+            filter_on_x = 0.0f;
         }
     }
 }
@@ -2495,7 +2623,7 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
                         memcpy(path, path_temp, length);
                         DirectoryItem directory_item = {
                             .path = path,
-                            .name = path + get_path_length(path, length),
+                            .name_offset = (u16)get_path_length(path, length),
                         };
                         array_push(quick_access, directory_item);
                     }
@@ -2699,12 +2827,18 @@ void pre_open_context_menu(void* data)
     platform_context_menu_destroy(menu);
 }
 
+void open_menu_window(const u32 window, const V2 position, const f32 starting_width)
+{
+    ui_window_set_position(window, position);
+    ui_window_set_size(window, v2f(starting_width * 0.8f, 0.0f));
+    ui_window_start_size_animation(window, v2f(starting_width * 0.8f, 0.0f));
+    ui_window_set_animation_x(window, 0.2f);
+}
+
 void application_run()
 {
     ApplicationContext app = { 0 };
     u8* font_bitmap = application_initialize(&app);
-
-    log_u64(" ", (u64)sizeof(UiWindow));
 
     ContextMenu menu = { 0 };
 
@@ -2716,12 +2850,13 @@ void application_run()
     V2 last_mouse_position = v2d();
     f32 distance = 0.0f;
 
-    char* menu_options[] = { "Menu", "Windows", "Style" };
+    char* menu_options[] = { "Menu", "Windows", "Style", "Filter" };
     CharPtrArray menu_values = { 0 };
     array_create(&menu_values, 10);
     array_push(&menu_values, menu_options[0]);
     array_push(&menu_values, menu_options[1]);
     array_push(&menu_values, menu_options[2]);
+    array_push(&menu_values, menu_options[3]);
 
     // Only doing this because somehow this makes the context menu open faster
     ThreadTask task = {
@@ -2917,6 +3052,10 @@ void application_run()
             {
                 application_open_style_menu_window(&app, layout, button_color);
             }
+            if (app.open_filter_menu_window)
+            {
+                application_open_filter_menu_window(&app, layout, button_color);
+            }
 
             if (app.open_font_change_window)
             {
@@ -2981,24 +3120,35 @@ void application_run()
                 i32 index_clicked = ui_window_add_menu_bar(&menu_values, &drop_down_position);
                 if (index_clicked == 0)
                 {
-                    ui_window_set_position(app.menu_window, drop_down_position);
+                    open_menu_window(app.menu_window, drop_down_position, layout.width);
                     app.open_windows_window = false;
                     app.open_style_menu_window = false;
+                    app.open_filter_menu_window = false;
                     app.open_menu_window = true;
                 }
                 else if (index_clicked == 1)
                 {
-                    ui_window_set_position(app.windows_window, drop_down_position);
+                    open_menu_window(app.windows_window, drop_down_position, layout.width);
                     app.open_menu_window = false;
                     app.open_style_menu_window = false;
+                    app.open_filter_menu_window = false;
                     app.open_windows_window = true;
                 }
                 else if (index_clicked == 2)
                 {
-                    ui_window_set_position(app.style_menu_window, drop_down_position);
+                    open_menu_window(app.style_menu_window, drop_down_position, layout.width);
                     app.open_menu_window = false;
                     app.open_windows_window = false;
+                    app.open_filter_menu_window = false;
                     app.open_style_menu_window = true;
+                }
+                else if (index_clicked == 3)
+                {
+                    open_menu_window(app.filter_menu_window, drop_down_position, layout.width);
+                    app.open_menu_window = false;
+                    app.open_windows_window = false;
+                    app.open_style_menu_window = false;
+                    app.open_filter_menu_window = true;
                 }
 
                 const f32 button_size = 32.0f;
@@ -3232,6 +3382,7 @@ void application_run()
                 if (ui_window_in_focus() == window_id)
                 {
                     app.tab_index = i;
+                    tab = app.tabs.data + app.tab_index;
                 }
 
                 ui_window_set_alpha(window_id, i == app.tab_index ? 1.0f : 0.7f);

@@ -102,7 +102,7 @@ void directory_paste_in_directory(DirectoryPage* current_directory)
 
 internal i32 name_compare_function(const DirectoryItem* first, const DirectoryItem* second)
 {
-    return string_compare_case_insensitive(first->name, second->name);
+    return string_compare_case_insensitive(item_namec(first), item_namec(second));
 }
 
 internal i32 date_compare_function(const DirectoryItem* first, const DirectoryItem* second)

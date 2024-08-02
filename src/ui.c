@@ -282,13 +282,13 @@ void ui_layout_reset_column(UiLayout* layout)
     layout->at.x = layout->start_x;
 }
 
-internal void ui_window_start_size_animation_(UiWindow* window, V2 end_size)
+internal void ui_window_start_size_animation_(UiWindow* window, const V2 end_size)
 {
     ui_context.animation_x.data[window->id] = 0.0f;
     window->dock_node->aabb.size = end_size;
 }
 
-internal void ui_window_start_position_animation_(UiWindow* window, V2 end_position)
+internal void ui_window_start_position_animation_(UiWindow* window, const V2 end_position)
 {
     ui_context.animation_x.data[window->id] = 0.0f;
     window->dock_node->aabb.min = end_position;
@@ -388,16 +388,6 @@ internal u32 generate_id(const u32 index, U32Array* free_ids, U32Array* id_to_in
     return id;
 }
 
-internal u32 get_window_index(const U32Array* array, const u32 id_index)
-{
-    return ui_context.id_to_index.data[array->data[id_index]];
-}
-
-internal u32 get_window_index2(const WindowRenderDataArray* array, const u32 id_index)
-{
-    return ui_context.id_to_index.data[array->data[id_index].id];
-}
-
 internal AABB add_quad_(u32* index_count, const V2 position, const V2 size, const V4 color,
                         const f32 texture_index)
 {
@@ -422,7 +412,7 @@ internal AABB add_default_quad_aabb_(u32* index_count, const AABB* aabb, const V
     return add_quad_(index_count, aabb->min, aabb->size, color, UI_DEFAULT_TEXTURE);
 }
 
-internal AABB add_quad_co(UiWindow* window, const V2 position, const V2 size, const V4 color,
+internal AABB add_quad_co(const V2 position, const V2 size, const V4 color,
                           const V4 texture_coordinates, const f32 texture_index)
 {
     AABB result = quad_co(&ui_context.render.vertices, position, size, color, texture_coordinates,
@@ -431,34 +421,32 @@ internal AABB add_quad_co(UiWindow* window, const V2 position, const V2 size, co
     return result;
 }
 
-internal AABB add_quad(UiWindow* window, const V2 position, const V2 size, const V4 color,
-                       const f32 texture_index)
+internal AABB add_quad(const V2 position, const V2 size, const V4 color, const f32 texture_index)
 {
     return add_quad_(&ui_context.current_window_index_count, position, size, color, texture_index);
 }
 
-internal AABB add_quad_aabb(UiWindow* window, const AABB* aabb, const V4 color,
-                            const f32 texture_index)
+internal AABB add_quad_aabb(const AABB* aabb, const V4 color, const f32 texture_index)
 {
-    return add_quad(window, aabb->min, aabb->size, color, texture_index);
+    return add_quad(aabb->min, aabb->size, color, texture_index);
 }
 
-internal AABB add_default_quad(UiWindow* window, const V2 position, const V2 size, const V4 color)
+internal AABB add_default_quad(const V2 position, const V2 size, const V4 color)
 {
     return add_default_quad_(&ui_context.current_window_index_count, position, size, color);
 }
 
-internal AABB add_default_quad_aabb(UiWindow* window, const AABB* aabb, const V4 color)
+internal AABB add_default_quad_aabb(const AABB* aabb, const V4 color)
 {
     return add_default_quad_aabb_(&ui_context.current_window_index_count, aabb, color);
 }
 
-internal AABB add_circle(UiWindow* window, const V2 position, const V2 size, const V4 color)
+internal AABB add_circle(const V2 position, const V2 size, const V4 color)
 {
-    return add_quad(window, position, size, color, UI_CIRCLE_TEXTURE);
+    return add_quad(position, size, color, UI_CIRCLE_TEXTURE);
 }
 
-internal AABB add_border_rounded(UiWindow* window, const V2 position, const V2 size, const V4 color)
+internal AABB add_border_rounded(const V2 position, const V2 size, const V4 color)
 {
     return quad_border_rounded(&ui_context.render.vertices, &ui_context.current_window_index_count,
                                position, size, color, 1.0f, 0.4f, 3, 0.0f);
@@ -1031,14 +1019,29 @@ internal b8 dock_node_resize_collision_traverse(DockNode* root)
     return false;
 }
 
-void ui_window_start_size_animation(const u32 window_id, V2 end_size)
+void ui_window_start_size_animation(const u32 window_id, const V2 end_size)
 {
     ui_window_start_size_animation_(ui_window_get_(window_id), end_size);
 }
 
-void ui_window_start_position_animation(const u32 window_id, V2 end_position)
+void ui_window_start_position_animation(const u32 window_id, const V2 end_position)
 {
     ui_window_start_position_animation_(ui_window_get_(window_id), end_position);
+}
+
+void ui_window_dock_space_size(const u32 window_id, const V2 end_size)
+{
+    ui_window_get_(window_id)->dock_node->aabb.size = end_size;
+}
+
+void ui_window_dock_space_min(const u32 window_id, const V2 end_position)
+{
+    ui_window_get_(window_id)->dock_node->aabb.min = end_position;
+}
+
+void ui_window_set_animation_x(const u32 window_id, const f32 x)
+{
+    ui_context.animation_x.data[window_id] = x;
 }
 
 InputBuffer ui_input_buffer_create()
@@ -1498,9 +1501,6 @@ void ui_context_create()
                           frosted_vertex_buffer_id, frosted_index_buffer_id);
     }
 
-    ui_context.docking_color = v4f(global_get_secondary_color().r, global_get_secondary_color().g,
-                                   global_get_secondary_color().b, 0.4f);
-
     particle_buffer_create(&ui_context.particles, 1000);
 }
 
@@ -1749,6 +1749,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
         ui_context.window_pressed_resize_dragging = RESIZE_NONE;
         ui_context.any_window_hold = false;
     }
+    ui_context.docking_color = v4a(global_get_secondary_color(), 0.4f);
 
     if (!ui_context.any_window_hold && ui_context.dock_resize)
     {
@@ -2692,7 +2693,7 @@ void ui_window_set_alpha(const u32 window_id, const f32 alpha)
 
 internal void window_animate(UiWindow* window)
 {
-    const f64 animation_speed = 2.0;
+    const f64 animation_speed = 1.0;
     const f32 delta = (f32)(ui_context.delta_time * 10.0);
 
 #if 1
@@ -2746,6 +2747,7 @@ b8 ui_window_begin(u32 window_id, const char* title, u8 flags)
 
     window->flags = flags | (window->flags & (UI_WINDOW_DOCKED | UI_WINDOW_HIDE |
                                               UI_WINDOW_AREA_HIT | UI_WINDOW_CLOSING));
+
     ui_context.current_window_texture_offset = ui_context.render.render.textures.size;
 
     if (event_get_mouse_button_event()->action == FTIC_RELEASE)
@@ -3100,14 +3102,14 @@ b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color,
 
     if (hover && event_get_mouse_button_event()->action == FTIC_RELEASE)
     {
-        add_default_quad_aabb(window, &button_aabb, hover_color);
+        add_default_quad_aabb(&button_aabb, hover_color);
     }
 
     V2 icon_size = v2_s_multi(button_aabb.size, 0.7f);
     V2 icon_position = v2_add(
         position, v2f(middle(size.width, icon_size.width), middle(size.height, icon_size.height)));
 
-    add_quad_co(window, icon_position, icon_size, button_color, texture_coordinates, texture_index);
+    add_quad_co(icon_position, icon_size, button_color, texture_coordinates, texture_index);
 
     ui_layout_set_width_and_height(layout, button_aabb.size.width, button_aabb.size.height);
     return clicked;
@@ -3147,14 +3149,13 @@ internal void render_input(UiWindow* window, const f64 delta_time, const V2 text
             input->input_index = ftic_min(input->input_index + 1, (i32)input->buffer.size);
             input->time = 0.4f;
         }
-        input->time += delta_time;
+        input->time += (f32)delta_time;
         if (input->time >= 0.4f)
         {
             const f32 x_advance =
                 text_x_advance(ui_context.font.chars, input->buffer.data, input->input_index, 1.0f);
 
-            add_default_quad(window,
-                             v2f(text_position.x + x_advance + 1.0f, text_position.y + 2.0f),
+            add_default_quad(v2f(text_position.x + x_advance + 1.0f, text_position.y + 2.0f),
                              v2f(1.0f, ui_context.font.pixel_height), v4i(1.0f));
 
             input->time = input->time >= 0.8f ? 0 : input->time;
@@ -3214,7 +3215,7 @@ internal void render_input(UiWindow* window, const f64 delta_time, const V2 text
         const f32 position_x = input->chars_selected.data[0].aabb.min.x;
         const AABB* last_char = &array_back(&input->chars_selected)->aabb;
         const f32 size_width = (last_char->min.x + last_char->size.width) - position_x;
-        add_default_quad(window, v2f(position_x, text_position.y),
+        add_default_quad(v2f(position_x, text_position.y),
                          v2f(size_width, ui_context.font.pixel_height + 5.0f),
                          ui_context.docking_color);
     }
@@ -3298,7 +3299,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input, UiL
     {
         input->active = hover_clicked_index.index == (i32)aabbs->size;
     }
-    array_push(aabbs, add_default_quad(window, position, size, global_get_clear_color()));
+    array_push(aabbs, add_default_quad(position, size, global_get_clear_color()));
 
     b8 typed = false;
     if (input->active)
@@ -3348,7 +3349,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input, UiL
         v2f(position.x + 5.0f, position.y + (middle(size.y, ui_context.font.pixel_height) * 0.8f));
     render_input(window, ui_context.delta_time, text_position, input);
 
-    add_border_rounded(window, position, size, global_get_border_color());
+    add_border_rounded(position, size, global_get_border_color());
 
     ui_layout_set_width_and_height(layout, size.width, size.height);
     return typed;
@@ -3423,7 +3424,7 @@ void ui_window_add_image(V2 position, V2 image_dimensions, u32 image, UiLayout* 
     f32 texture_index = (f32)ui_context.render.render.textures.size;
     array_push(&ui_context.render.render.textures, image);
 
-    add_quad(window, position, image_dimensions, v4ic(1.0f), texture_index);
+    add_quad(position, image_dimensions, v4ic(1.0f), texture_index);
 
     ui_context.current_window_total_height = ftic_max(
         ui_context.current_window_total_height, relative_position.y + image_dimensions.height);
@@ -3518,7 +3519,7 @@ i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item)
     i32 index = -1;
 
     f32 pixel_height = 10.0f + ui_context.font.pixel_height;
-    add_default_quad(window, window->position, v2f(ui_context.dimensions.width, pixel_height),
+    add_default_quad(window->position, v2f(ui_context.dimensions.width, pixel_height),
                      global_get_clear_color());
 
     UiLayout layout = ui_layout_create(window->position);
@@ -3547,7 +3548,7 @@ void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates
     UiWindow* window = ui_context.windows.data + window_index;
 
     position = add_first_item_offset(window, position);
-    add_quad_co(window, position, size, v4ic(1.0f), texture_coordinates, texture_index);
+    add_quad_co(position, size, v4ic(1.0f), texture_coordinates, texture_index);
 
     ui_layout_set_width_and_height(layout, size.width, size.height);
 }
@@ -3576,7 +3577,7 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x, UiLayout* layout)
 
     V2 size = ui_window_get_switch_size();
     AABB aabb = { .min = position, .size = size };
-    array_push(aabbs, add_default_quad_aabb(window, &aabb, global_get_highlight_color()));
+    array_push(aabbs, add_default_quad_aabb(&aabb, global_get_highlight_color()));
 
     V4 color = *selected ? global_get_secondary_color() : global_get_border_color();
     V2 t_position = aabb.min;
@@ -3592,7 +3593,7 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x, UiLayout* layout)
                              ease_out_cubic(*x));
         *x = ftic_clamp_high(*x + (f32)ui_context.delta_time * 5.0f, 1.0f);
     }
-    add_default_quad(window, t_position, v2f(aabb.size.width * 0.5f, aabb.size.height), color);
+    add_default_quad(t_position, v2f(aabb.size.width * 0.5f, aabb.size.height), color);
 
     ui_layout_set_width_and_height(layout, size.width, size.height);
 }
@@ -3672,7 +3673,7 @@ f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 ma
         color = v4a(v4_s_multi(color, 1.4f), 1.0f);
         slider_color = v4a(v4_s_multi(slider_color, 1.2f), 1.0f);
     }
-    array_push(aabbs, add_default_quad(window, position, size, color));
+    array_push(aabbs, add_default_quad(position, size, color));
 
     V2 slider_size = v2f(0.0f, size.height * 5.0f);
     slider_size.width = slider_size.height * 0.5f;
@@ -3709,7 +3710,7 @@ f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 ma
     const f32 p = (value - min_value) / (max_value - min_value);
     slider_position.x = lerp_f32(start_x, end_x, p);
 
-    array_push(aabbs, add_default_quad(window, slider_position, slider_size, slider_color));
+    array_push(aabbs, add_default_quad(slider_position, slider_size, slider_color));
     ui_layout_set_width_and_height(layout, size.width, slider_size.height);
 
     return value;
@@ -3875,13 +3876,13 @@ V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker, UiLayou
             quad_get_gradiant_texture_coordinates(), texture_index);
     ui_context.current_window_index_count += 6;
 
-    add_circle(window, cirle_position, cirle_size, picker_color);
+    add_circle(cirle_position, cirle_size, picker_color);
     quad_border_rounded(&ui_context.render.vertices, &ui_context.current_window_index_count,
                         v2_sub(cirle_position, v2i(2.0f)), v2_add(cirle_size, v2i(4.0f)),
                         v4ic(0.0f), 2.0f, 1.0f, 4, UI_DEFAULT_TEXTURE);
 
-    add_quad_aabb(window, &color_spectrum_aabb, v4ic(1.0f), UI_COLOR_PICKER_TEXTURE);
-    add_default_quad(window, v2f(color_spectrum_aabb.min.x, position.y + picker->spectrum_at),
+    add_quad_aabb(&color_spectrum_aabb, v4ic(1.0f), UI_COLOR_PICKER_TEXTURE);
+    add_default_quad(v2f(color_spectrum_aabb.min.x, position.y + picker->spectrum_at),
                      v2f(color_spectrum_aabb.size.width, 3.0f), v4ic(0.0f));
 
     const AABB color_display = {
@@ -3889,7 +3890,7 @@ V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker, UiLayou
             v2f(color_spectrum_aabb.min.x + color_spectrum_aabb.size.width + padding, position.y),
         .size = v2i(40.0f),
     };
-    add_default_quad_aabb(window, &color_display, picker_color);
+    add_default_quad_aabb(&color_display, picker_color);
 
     const V2 rgb_text_position =
         v2f(position.x, position.y + size.width + padding + ui_context.font.pixel_height);
@@ -3921,6 +3922,39 @@ void ui_window_add_rectangle(V2 position, const V2 size, const V4 color, UiLayou
     position = add_first_item_offset(window, position);
     quad(&ui_context.render.vertices, position, size, color, UI_DEFAULT_TEXTURE);
     ui_context.current_window_index_count += 6;
+    ui_layout_set_width_and_height(layout, size.width, size.height);
+}
+
+void ui_window_add_radio_button(V2 position, const V2 size, b8* selected, UiLayout* layout)
+{
+    const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
+    UiWindow* window = ui_context.windows.data + window_index;
+    AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
+    HoverClickedIndex hover_clicked_index =
+        ui_context.window_hover_clicked_indices.data[window_index];
+
+    position = add_first_item_offset(window, position);
+
+    b8 hover = hover_clicked_index.index == (i32)aabbs->size;
+    V4 color = global_get_secondary_color();
+    if (hover)
+    {
+        color = v4a(v4_s_multi(color, 1.4f), 1.0f);
+    }
+    array_push(aabbs, add_circle(position, size, color));
+
+    if (hover && hover_clicked_index.pressed)
+    {
+        *selected ^= true;
+    }
+
+    if (*selected)
+    {
+        V2 selected_size = v2_s_multi(size, 0.6f);
+        V2 selected_position = v2f(position.x + middle(size.width, selected_size.width),
+                                   position.y + middle(size.height, selected_size.height));
+        add_circle(selected_position, selected_size, v4ic(0.0f));
+    }
     ui_layout_set_width_and_height(layout, size.width, size.height);
 }
 
@@ -3978,7 +4012,7 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
         if (hit)
         {
             const u32 path_length = (u32)strlen(item->path);
-            const u32 name_length = (u32)strlen(item->name);
+            const u32 name_length = path_length - item->name_offset;
 
             b8 removed_item = false;
             b8 ctrl_pressed = event_get_key_event()->ctrl_pressed;
@@ -4011,7 +4045,7 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
 
             if (list->selected_item_values.last_selected)
             {
-                if (strcmp(list->selected_item_values.last_selected, item->name) == 0)
+                if (strcmp(list->selected_item_values.last_selected, item_name(item)) == 0)
                 {
                     if (removed_item)
                     {
@@ -4034,13 +4068,14 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
                 {
                     free(list->selected_item_values.last_selected);
                     list->selected_item_values.last_selected =
-                        string_copy(item->name, name_length, 0);
+                        string_copy(item_name(item), name_length, 0);
                     item->rename = false;
                 }
             }
             else
             {
-                list->selected_item_values.last_selected = string_copy(item->name, name_length, 0);
+                list->selected_item_values.last_selected =
+                    string_copy(item_name(item), name_length, 0);
                 item->rename = false;
             }
 
@@ -4062,13 +4097,13 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
             {
                 input->active = true;
                 input->buffer.size = 0;
-                const u32 name_length = (u32)strlen(item->name);
+                const u32 name_length = (u32)strlen(item_name(item));
                 input->buffer.size = 0;
                 input->input_index = -1;
                 input->time = 0.4f;
                 for (u32 i = 0; i < name_length; ++i)
                 {
-                    array_push(&input->buffer, item->name[i]);
+                    array_push(&input->buffer, item_name(item)[i]);
                 }
                 array_push(&input->buffer, '\0');
                 input->buffer.size--;
@@ -4183,7 +4218,7 @@ internal AABB directory_item_render_icon(const V2 position, const V2 size, f32 i
 
     const V2 icon_size = v2i(24.0f);
     AABB icon_aabb =
-        add_quad(window, v2f(position.x + 5.0f, position.y + middle(size.height, icon_size.height)),
+        add_quad(v2f(position.x + 5.0f, position.y + middle(size.height, icon_size.height)),
                  icon_size, add_window_alpha(window, v4i(1.0f)), icon_index);
 
     return icon_aabb;
@@ -4223,7 +4258,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions, f32 icon_in
     }
     ui_context.current_window_index_count += display_text_and_truncate_if_necissary(
         text_position, (item_dimensions.width - icon_aabb.size.x - 20.0f - x_advance),
-        window->alpha, item->name);
+        window->alpha, item_name(item));
 
     return hit && hover_clicked_index.double_clicked;
 }
@@ -4256,7 +4291,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
     if (hit || selected)
     {
         const V4 color = selected ? v4ic(0.45f) : v4ic(0.3f);
-        add_default_quad_aabb(window, &back_drop_aabb, add_window_alpha(window, color));
+        add_default_quad_aabb(&back_drop_aabb, add_window_alpha(window, color));
     }
 
     V2 icon_size = v2i(ui_big_icon_size);
@@ -4333,7 +4368,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
     const f32 total_available_width_for_text = item_dimensions.width;
 
     f32 x_advance =
-        text_x_advance(ui_context.font.chars, item->name, (u32)strlen(item->name), 1.0f);
+        text_x_advance(ui_context.font.chars, item_name(item), (u32)strlen(item_name(item)), 1.0f);
 
     x_advance = ftic_min(x_advance, total_available_width_for_text);
 
@@ -4342,7 +4377,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
     text_position.y = icon_aabb.min.y + icon_aabb.size.height;
     text_position.y += ui_context.font.pixel_height;
     ui_context.current_window_index_count += display_text_and_truncate_if_necissary(
-        text_position, total_available_width_for_text, window->alpha, item->name);
+        text_position, total_available_width_for_text, window->alpha, item_name(item));
 
     return hit && hover_clicked_index.double_clicked;
 }
@@ -4537,7 +4572,7 @@ internal void render_movable_item(UiWindow* window, DirectoryItem* item, V2 posi
 
     ui_context.current_window_index_count += display_text_and_truncate_if_necissary(
         text_position, (item_dimensions.width - icon_aabb.size.x - 20.0f), window->alpha,
-        item->name);
+        item_name(item));
 }
 
 b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list)
@@ -4666,3 +4701,4 @@ b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableLis
                                                       relative_position.y + item_dimensions.height);
     return any_hit && hover_clicked_index.double_clicked;
 }
+

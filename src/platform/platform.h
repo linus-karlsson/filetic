@@ -53,19 +53,22 @@ typedef struct DirectoryItem
     FticGUID id;                                   
     u64 size;
     u64 last_write_time;
-    char* name;
     char* path;
-    DirectoryItemType type;
 
     V2 animation_offset;
 
+    DirectoryItemType type;
     u32 texture_id;
     u16 texture_width;
     u16 texture_height;
 
+    u16 name_offset;
     b8 reload_thumbnail;
     b8 rename;
 } DirectoryItem;
+
+char* item_name(DirectoryItem* item);
+const char* item_namec(const DirectoryItem* item);
 
 typedef struct DirectoryItemArray
 {
@@ -206,3 +209,9 @@ void platform_show_hidden_files(b8 show);
 
 PlatformTime platform_time_from_u64(u64 time);
 void platform_open_terminal(const char* path);
+
+void platform_initialize_filter();
+void platform_insert_filter_value(char* value, b8 selected);
+void platform_set_filter_on(const char* value, b8 selected);
+void platform_set_filter(b8 on);
+void platform_set_folder_filter(b8 on);

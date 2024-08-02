@@ -97,7 +97,6 @@ typedef struct UiWindow
     DockNode* dock_node;
 
     u32 id;
-
     V2 size;
     V2 position;
 
@@ -129,8 +128,8 @@ typedef struct InputBuffer
     i32 start_selection_index;
     i32 end_selection_index;
 
+    f32 time;
     f32 selected_pivot_point;
-    f64 time;
     i32 input_index;
     b8 selected;
     b8 active;
@@ -148,8 +147,7 @@ typedef struct DropDownMenu
     f32 x;
     i32 tab_index;
     CharPtrArray options;
-    b8 (*menu_options_selection)(u32 index, b8 hit, b8 should_close, b8 item_clicked,
-                                 V4* text_color, void* data);
+    b8 (*menu_options_selection)(u32 index, b8 hit, b8 should_close, b8 item_clicked, V4* text_color, void* data);
 } DropDownMenu;
 
 typedef struct II32
@@ -201,7 +199,6 @@ typedef struct UiLayout
     f32 padding;
 } UiLayout;
 
-
 UiLayout ui_layout_create(V2 at);
 void ui_layout_row(UiLayout* layout);
 void ui_layout_column(UiLayout* layout);
@@ -215,8 +212,7 @@ void ui_input_buffer_copy_selection_to_clipboard(InputBuffer* input);
 void ui_input_buffer_erase_from_selection(InputBuffer* input);
 
 void ui_context_create();
-void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 delta_time,
-                      const b8 check_collisions);
+void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 delta_time, const b8 check_collisions);
 void ui_context_end();
 void ui_context_destroy();
 
@@ -260,42 +256,35 @@ f32 ui_window_row_end();
 void ui_window_column_begin(const f32 padding);
 f32 ui_window_column_end();
 
-void ui_window_start_size_animation(const u32 window_id, V2 end_size);
-void ui_window_start_position_animation(const u32 window_id, V2 end_position);
+void ui_window_start_size_animation(const u32 window_id, const V2 end_size);
+void ui_window_start_position_animation(const u32 window_id, const V2 end_position);
+void ui_window_dock_space_size(const u32 window_id, const V2 end_size);
+void ui_window_dock_space_min(const u32 window_id, const V2 end_position);
+void ui_window_set_animation_x(const u32 window_id, const f32 x);
 
 void ui_window_set_alpha(const u32 window_id, const f32 alpha);
 
-b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color,
-                             const V4 texture_coordinates, const f32 texture_index,
-                             const b8 disable, UiLayout* layout);
+b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color, const V4 texture_coordinates, const f32 texture_index, const b8 disable, UiLayout* layout);
 V2 ui_window_get_button_dimensions(V2 dimensions, const char* text, f32* x_advance_out);
-b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text,
-                        UiLayout* layout);
+b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char* text, UiLayout* layout);
 b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input, UiLayout* layout);
 void ui_window_add_text(V2 position, const char* text, b8 scrolling, UiLayout* layout);
 void ui_window_add_text_c(V2 position, V4 color, const char* text, b8 scrolling, UiLayout* layout);
-void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text, b8 scrolling,
-                                UiLayout* layout);
+void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text, b8 scrolling, UiLayout* layout);
 void ui_window_add_image(V2 position, V2 image_dimensions, u32 image, UiLayout* layout);
 i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item);
-void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates,
-                        const f32 texture_index, UiLayout* layout);
+void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates, const f32 texture_index, UiLayout* layout);
 V2 ui_window_get_switch_size();
 void ui_window_add_switch(V2 position, b8* selected, f32* x, UiLayout* layout);
 
-f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 max_value, f32 value,
-                         b8* pressed, UiLayout* layout);
+f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 max_value, f32 value, b8* pressed, UiLayout* layout);
 V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker, UiLayout* layout);
 void ui_window_add_border(V2 position, const V2 size, const V4 color, const f32 thickness);
 void ui_window_add_rectangle(V2 position, const V2 size, const V4 color, UiLayout* layout);
+void ui_window_add_radio_button(V2 position, const V2 size, b8* selected, UiLayout* layout);
 
 // (NOTE): this is very specific for this project and maybe should be implemented outside this ui.
 b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list);
-b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items,
-                             List* list, i32* double_clicked_index, UiLayout* layout);
-b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items,
-                           List* list, i32* double_clicked_index, UiLayout* layout);
-II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders,
-                                       const DirectoryItemArray* files, ThreadTaskQueue* task_queue,
-                                       SafeIdTexturePropertiesArray* textures,
-                                       SafeObjectThumbnailArray* objects, List* list);
+b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index, UiLayout* layout);
+b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index, UiLayout* layout);
+II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, List* list);

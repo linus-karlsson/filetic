@@ -2,6 +2,7 @@
 #include "platform/platform.h"
 #include "logging.h"
 #include "texture.h"
+#include "hash.h"
 
 #include <stdio.h>
 #include <Windows.h>
@@ -28,9 +29,12 @@
 
 #define TOTAL_CURSORS 7
 
-global b8 show_hidden_files = true;
-global char executable_dir[MAX_PATH] = { 0 };
-global u32 executable_dir_length = 0;
+global b8 g_show_hidden_files = true;
+global b8 g_filter = false;
+global b8 g_folder_filter = true;
+global HashTableCharU32 g_filter_options = { 0 };
+global char g_executable_dir[MAX_PATH] = { 0 };
+global u32 g_executable_dir_length = 0;
 
 typedef struct Callbacks
 {
@@ -66,6 +70,16 @@ typedef struct WindowsPlatformInternal
 
     b8 running;
 } WindowsPlatformInternal;
+
+char* item_name(DirectoryItem* item)
+{
+    return item->path + item->name_offset;
+}
+
+const char* item_namec(const DirectoryItem* item)
+{
+    return item->path + item->name_offset;
+}
 
 internal wchar_t* char_to_wchar(const char* text, const size_t original_size)
 {
@@ -214,14 +228,14 @@ internal LRESULT msg_handler(HWND window, UINT msg, WPARAM w_param, LPARAM l_par
 
 void platform_set_executable_directory()
 {
-    u32 size = GetModuleFileName(NULL, executable_dir, (DWORD)sizeof(executable_dir));
+    u32 size = GetModuleFileName(NULL, g_executable_dir, (DWORD)sizeof(g_executable_dir));
     for (i32 i = size; i >= 0; --i)
     {
-        const char current_char = executable_dir[i];
+        const char current_char = g_executable_dir[i];
         if (current_char == '\\' || current_char == '/')
         {
-            executable_dir[i + 1] = '\0';
-            executable_dir_length = i + 1;
+            g_executable_dir[i + 1] = '\0';
+            g_executable_dir_length = i + 1;
             break;
         }
     }
@@ -229,12 +243,12 @@ void platform_set_executable_directory()
 
 const char* platform_get_executable_directory()
 {
-    return executable_dir;
+    return g_executable_dir;
 }
 
 u32 platform_get_executable_directory_length()
 {
-    return executable_dir_length;
+    return g_executable_dir_length;
 }
 
 i32 platform_time_compare(const PlatformTime* first, const PlatformTime* second)
@@ -553,7 +567,7 @@ internal void insert_directory_item(const u32 directory_len, const u64 size,
                 .size = size,
                 .last_write_time = last_write_time,
                 .path = path,
-                .name = path + directory_len - 1,
+                .name_offset = (u16)(directory_len - 1),
                 .type = type,
             };
 
@@ -566,44 +580,80 @@ internal void insert_directory_item(const u32 directory_len, const u64 size,
 
 void platform_show_hidden_files(b8 show)
 {
-    show_hidden_files = show;
+    g_show_hidden_files = show;
 }
 
-internal DirectoryItemType get_file_type_based_on_extension(const char* name, const u32 name_length)
+void platform_set_filter(b8 on)
 {
+    g_filter = on;
+}
+
+void platform_initialize_filter()
+{
+    g_filter_options = hash_table_create_char_u32(100, hash_murmur);
+}
+
+void platform_insert_filter_value(char* value, b8 selected)
+{
+    hash_table_insert_char_u32(&g_filter_options, value, selected);
+}
+
+void platform_set_filter_on(const char* value, b8 selected)
+{
+    u32* val = hash_table_get_char_u32(&g_filter_options, value);
+    if (val)
+    {
+        *val = selected;
+    }
+}
+
+void platform_set_folder_filter(b8 on)
+{
+    g_folder_filter = on;
+}
+
+internal DirectoryItemType get_file_type_based_on_extension(const char* name, const u32 name_length,
+                                                            u32* include)
+{
+    DirectoryItemType result = FILE_DEFAULT;
     const char* extension = file_get_extension(name, (u32)strlen(name));
     if (extension)
     {
         if (strcmp(extension, "png") == 0)
         {
-            return FILE_PNG;
+            result = FILE_PNG;
         }
         else if (strcmp(extension, "jpg") == 0)
         {
-            return FILE_JPG;
+            result = FILE_JPG;
         }
         else if (strcmp(extension, "pdf") == 0)
         {
-            return FILE_PDF;
+            result = FILE_PDF;
         }
         else if (strcmp(extension, "cpp") == 0)
         {
-            return FILE_CPP;
+            result = FILE_CPP;
         }
         else if (strcmp(extension, "c") == 0 || strcmp(extension, "h") == 0)
         {
-            return FILE_C;
+            result = FILE_C;
         }
         else if (strcmp(extension, "java") == 0)
         {
-            return FILE_JAVA;
+            result = FILE_JAVA;
         }
         else if (strcmp(extension, "obj") == 0)
         {
-            return FILE_OBJ;
+            result = FILE_OBJ;
+        }
+        if (g_filter)
+        {
+            u32* exist = hash_table_get_char_u32(&g_filter_options, extension);
+            *include = exist != NULL ? *exist : true;
         }
     }
-    return FILE_DEFAULT;
+    return result;
 }
 
 Directory platform_get_directory(const char* directory_path, const u32 directory_len)
@@ -619,7 +669,7 @@ Directory platform_get_directory(const char* directory_path, const u32 directory
         do
         {
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM ||
-                (!show_hidden_files &&
+                (!g_show_hidden_files &&
                  ((ffd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) || ffd.cFileName[0] == '.')))
             {
                 continue;
@@ -641,16 +691,24 @@ Directory platform_get_directory(const char* directory_path, const u32 directory
 
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
             {
-                insert_directory_item(directory_len, 0, last_write_time, FOLDER_DEFAULT, path,
-                                      &directory.sub_directories);
+                if (g_folder_filter || !g_filter)
+                {
+                    insert_directory_item(directory_len, 0, last_write_time, FOLDER_DEFAULT, path,
+                                          &directory.sub_directories);
+                }
             }
             else
             {
+                u32 include = true;
                 DirectoryItemType type =
-                    get_file_type_based_on_extension(ffd.cFileName, name_length);
-                insert_directory_item(directory_len,
-                                      (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
-                                      last_write_time, type, path, &directory.files);
+                    get_file_type_based_on_extension(ffd.cFileName, name_length, &include);
+
+                if (include)
+                {
+                    insert_directory_item(directory_len,
+                                          (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
+                                          last_write_time, type, path, &directory.files);
+                }
             }
 
         } while (FindNextFile(file_handle, &ffd));
@@ -1433,7 +1491,8 @@ internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
                 bi.biPlanes = 1;
                 bi.biBitCount = bitmap.bmBitsPixel;
                 bi.biCompression = BI_RGB;
-                bi.biSizeImage = bitmap.bmWidth * bitmap.bmHeight * (bitmap.bmBitsPixel / 8);
+                const u32 bytes_per_pixels = (bitmap.bmBitsPixel / 8);
+                bi.biSizeImage = bitmap.bmWidth * bitmap.bmHeight * bytes_per_pixels;
 
                 BITMAPINFO bmi;
                 bmi.bmiHeader = bi;
@@ -1449,6 +1508,14 @@ internal void get_menu_items(HMENU h_menu, MenuItemArray* menu_items)
 
                 GetDIBits(hdc, h_bitmap, 0, bitmap.bmHeight, texture_properties.bytes, &bmi,
                           DIB_RGB_COLORS);
+
+                // From BGRA to RGBA
+                for (u32 h = 0; h < bi.biSizeImage; h += bytes_per_pixels)
+                {
+                    u8 temp = texture_properties.bytes[h];
+                    texture_properties.bytes[h] = texture_properties.bytes[h + 2];
+                    texture_properties.bytes[h + 2] = temp;
+                }
 
                 item.texture_id = texture_create(&texture_properties, GL_RGBA8, GL_RGBA, GL_LINEAR);
                 free(texture_properties.bytes);
@@ -1525,7 +1592,7 @@ internal void free_sub_menus(MenuItemArray* submenu)
         free_sub_menus(&item->submenu_items);
 
         free(item->text);
-        if(item->texture_id)
+        if (item->texture_id)
         {
             texture_delete(item->texture_id);
             item->texture_id = 0;
@@ -1570,7 +1637,6 @@ void platform_context_menu_invoke_command(ContextMenu* menu, void* window, i32 c
         ((IContextMenu*)menu->pcm)->lpVtbl->InvokeCommand(menu->pcm, (LPCMINVOKECOMMANDINFO)&cmi);
     }
 }
-
 
 void platform_open_context(void* window, const char* path)
 {
