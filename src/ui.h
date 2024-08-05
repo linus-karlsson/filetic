@@ -11,30 +11,32 @@
 #define UI_FONT_TEXTURE 1.0f
 
 #define UI_ARROW_ICON_TEXTURE 2.0f
-#define UI_LIST_ICON_TEXTURE 3.0f
-#define UI_GRID_ICON_TEXTURE 4.0f
+#define UI_ARROW_DOWN_ICON_TEXTURE 3.0f
+#define UI_ARROW_UP_ICON_TEXTURE 4.0f
+#define UI_LIST_ICON_TEXTURE 5.0f
+#define UI_GRID_ICON_TEXTURE 6.0f
 
-#define UI_CIRCLE_TEXTURE 5.0f
-#define UI_COLOR_PICKER_TEXTURE 6.0f
+#define UI_CIRCLE_TEXTURE 7.0f
+#define UI_COLOR_PICKER_TEXTURE 8.0f
 
-#define UI_FOLDER_ICON_TEXTURE 7.0f
-#define UI_FILE_ICON_TEXTURE 8.0f
-#define UI_FILE_PNG_ICON_TEXTURE 9.0f
-#define UI_FILE_JPG_ICON_TEXTURE 10.0f
-#define UI_FILE_PDF_ICON_TEXTURE 11.0f
-#define UI_FILE_JAVA_ICON_TEXTURE 12.0f
-#define UI_FILE_CPP_ICON_TEXTURE 13.0f
-#define UI_FILE_C_ICON_TEXTURE 14.0f
+#define UI_FOLDER_ICON_TEXTURE 9.0f
+#define UI_FILE_ICON_TEXTURE 10.0f
+#define UI_FILE_PNG_ICON_TEXTURE 11.0f
+#define UI_FILE_JPG_ICON_TEXTURE 12.0f
+#define UI_FILE_PDF_ICON_TEXTURE 13.0f
+#define UI_FILE_JAVA_ICON_TEXTURE 14.0f
+#define UI_FILE_CPP_ICON_TEXTURE 15.0f
+#define UI_FILE_C_ICON_TEXTURE 16.0f
 
-#define UI_FOLDER_ICON_BIG_TEXTURE 15.0f
-#define UI_FILE_ICON_BIG_TEXTURE 16.0f
-#define UI_FILE_PNG_ICON_BIG_TEXTURE 17.0f
-#define UI_FILE_JPG_ICON_BIG_TEXTURE 18.0f
-#define UI_FILE_PDF_ICON_BIG_TEXTURE 19.0f
-#define UI_FILE_JAVA_ICON_BIG_TEXTURE 20.0f
-#define UI_FILE_CPP_ICON_BIG_TEXTURE 21.0f
-#define UI_FILE_C_ICON_BIG_TEXTURE 22.0f
-#define UI_FILE_OBJ_ICON_TEXTURE 23.0f
+#define UI_FOLDER_ICON_BIG_TEXTURE 17.0f
+#define UI_FILE_ICON_BIG_TEXTURE 18.0f
+#define UI_FILE_PNG_ICON_BIG_TEXTURE 19.0f
+#define UI_FILE_JPG_ICON_BIG_TEXTURE 20.0f
+#define UI_FILE_PDF_ICON_BIG_TEXTURE 21.0f
+#define UI_FILE_JAVA_ICON_BIG_TEXTURE 22.0f
+#define UI_FILE_CPP_ICON_BIG_TEXTURE 23.0f
+#define UI_FILE_C_ICON_BIG_TEXTURE 24.0f
+#define UI_FILE_OBJ_ICON_TEXTURE 25.0f
 
 typedef struct HoverClickedIndex
 {
@@ -285,6 +287,5 @@ void ui_window_add_radio_button(V2 position, const V2 size, b8* selected, UiLayo
 
 // (NOTE): this is very specific for this project and maybe should be implemented outside this ui.
 b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list);
-b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index, UiLayout* layout);
-b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* double_clicked_index, UiLayout* layout);
-II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders, const DirectoryItemArray* files, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, List* list);
+i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, UiLayout* layout);
+i32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* items, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, List* list);

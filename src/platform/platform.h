@@ -80,8 +80,7 @@ typedef struct DirectoryItemArray
 typedef struct Directory
 {
     char* parent;
-    DirectoryItemArray files;
-    DirectoryItemArray sub_directories;
+    DirectoryItemArray items;
 } Directory;
 
 typedef struct MenuItem MenuItem;
@@ -155,7 +154,7 @@ void platform_event_set_on_key_stroke(Platform* platform, OnKeyStrokeCallback_ c
 void platform_change_cursor(Platform* platform, u32 cursor_id);
 
 b8 platform_directory_exists(const char* directory_path);
-Directory platform_get_directory(const char* directory_path, const u32 directory_len);
+Directory platform_get_directory(const char* directory_path, const u32 directory_len, b8 files);
 void platform_reset_directory(Directory* directory, b8 delete_textures);
 
 FTicMutex platform_mutex_create(void);

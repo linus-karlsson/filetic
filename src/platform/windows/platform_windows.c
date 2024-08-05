@@ -656,11 +656,12 @@ internal DirectoryItemType get_file_type_based_on_extension(const char* name, co
     return result;
 }
 
-Directory platform_get_directory(const char* directory_path, const u32 directory_len)
+Directory platform_get_directory(const char* directory_path, const u32 directory_len, b8 get_files)
 {
-    Directory directory = { 0 };
-    array_create(&directory.files, 10);
-    array_create(&directory.sub_directories, 10);
+    DirectoryItemArray folders = {0};
+    DirectoryItemArray files = {0};
+    array_create(&folders, 10);
+    array_create(&files, 10);
 
     WIN32_FIND_DATA ffd = { 0 };
     HANDLE file_handle = FindFirstFile(directory_path, &ffd);
@@ -694,10 +695,10 @@ Directory platform_get_directory(const char* directory_path, const u32 directory
                 if (g_folder_filter || !g_filter)
                 {
                     insert_directory_item(directory_len, 0, last_write_time, FOLDER_DEFAULT, path,
-                                          &directory.sub_directories);
+                                          &folders);
                 }
             }
-            else
+            else if (get_files)
             {
                 u32 include = true;
                 DirectoryItemType type =
@@ -707,38 +708,45 @@ Directory platform_get_directory(const char* directory_path, const u32 directory
                 {
                     insert_directory_item(directory_len,
                                           (ffd.nFileSizeHigh * (MAXDWORD + 1)) + ffd.nFileSizeLow,
-                                          last_write_time, type, path, &directory.files);
+                                          last_write_time, type, path, &files);
                 }
             }
 
         } while (FindNextFile(file_handle, &ffd));
         FindClose(file_handle);
     }
+    Directory directory = { 0 };
     directory.parent = (char*)calloc(directory_len + 1, sizeof(char));
     memcpy(directory.parent, directory_path, directory_len - 2);
+
+    array_create(&directory.items, folders.size + files.size);
+    for(u32 i = 0; i < folders.size; ++i)
+    {
+        array_push(&directory.items, folders.data[i]);
+    }
+    for(u32 i = 0; i < files.size; ++i)
+    {
+        array_push(&directory.items, files.data[i]);
+    }
+    array_free(&folders);
+    array_free(&files);
     return directory;
 }
 
 void platform_reset_directory(Directory* directory, b8 delete_textures)
 {
-    for (u32 i = 0; i < directory->files.size; ++i)
+    for (u32 i = 0; i < directory->items.size; ++i)
     {
-        DirectoryItem* file = directory->files.data + i;
-        free(file->path);
-        if (delete_textures && file->texture_id)
+        DirectoryItem* item = directory->items.data + i;
+        free(item->path);
+        if (delete_textures && item->texture_id)
         {
-            texture_delete(file->texture_id);
+            texture_delete(item->texture_id);
         }
     }
-    for (u32 i = 0; i < directory->sub_directories.size; ++i)
-    {
-        free(directory->sub_directories.data[i].path);
-    }
-    free(directory->files.data);
-    free(directory->sub_directories.data);
+    array_free(&directory->items);
     free(directory->parent);
-    directory->files = (DirectoryItemArray){ 0 };
-    directory->sub_directories = (DirectoryItemArray){ 0 };
+    directory->items = (DirectoryItemArray){ 0 };
 }
 
 FTicMutex platform_mutex_create(void)

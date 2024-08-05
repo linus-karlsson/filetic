@@ -142,6 +142,8 @@ typedef struct UiContext
     V2 current_window_first_item_position;
     f32 current_window_total_height;
     f32 current_window_total_width;
+    V4 current_window_top_color;
+    V4 current_window_bottom_color;
 
     u32 extra_index_offset;
     u32 extra_index_count;
@@ -161,7 +163,6 @@ typedef struct UiContext
     AABB mouse_drag_box;
 
     FontTTF font;
-
 
     V4 docking_color;
 
@@ -1381,6 +1382,8 @@ void ui_context_create()
     // TODO: make all of these icons into a sprite sheet.
     u32 default_texture = create_default_texture();
     u32 arrow_icon_texture = load_icon_as_white_resize("res/icons/arrow_sprite_sheet.png", 72, 24);
+    u32 arrow_down_icon_texture = load_icon_as_white("res/icons/arrow-down.png");
+    u32 arrow_up_icon_texture = load_icon_as_white("res/icons/arrow-up.png");
     u32 list_icon_texture = load_icon_as_white("res/icons/list.png");
     u32 grid_icon_texture = load_icon_as_white("res/icons/grid.png");
 
@@ -1426,6 +1429,8 @@ void ui_context_create()
     array_push(&textures, default_texture);
     array_push(&textures, font_texture);
     array_push(&textures, arrow_icon_texture);
+    array_push(&textures, arrow_down_icon_texture);
+    array_push(&textures, arrow_up_icon_texture);
     array_push(&textures, list_icon_texture);
     array_push(&textures, grid_icon_texture);
 
@@ -1763,6 +1768,10 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
         ui_context.window_pressed_resize_dragging = RESIZE_NONE;
         ui_context.any_window_hold = false;
     }
+
+    ui_context.current_window_top_color = global_get_clear_color();
+    ui_context.current_window_bottom_color = global_get_clear_color();
+
     ui_context.docking_color = v4a(global_get_secondary_color(), 0.4f);
 
     if (!ui_context.any_window_hold && ui_context.dock_resize)
@@ -2120,7 +2129,7 @@ internal void check_and_display_mouse_drag_box()
 }
 
 internal void sync_current_frame_windows(WindowRenderDataArray* current_frame,
-                                          WindowRenderDataArray* last_frame)
+                                         WindowRenderDataArray* last_frame)
 {
     // TODO: can be very expensive. Consider a more efficient way.
     for (u32 i = 0; i < last_frame->size; ++i)
@@ -2775,8 +2784,8 @@ b8 ui_window_begin(u32 window_id, const char* title, u8 flags)
     // window->position = round_v2(window->position);
     // window->size = round_v2(window->size);
 
-    V4 top_color = add_window_alpha(window, global_get_clear_color());
-    V4 bottom_color = add_window_alpha(window, global_get_clear_color());
+    V4 top_color = add_window_alpha(window, ui_context.current_window_top_color);
+    V4 bottom_color = add_window_alpha(window, ui_context.current_window_bottom_color);
     if (check_bit(window->flags, UI_WINDOW_FROSTED_GLASS))
     {
         const f32 alpha = 0.8f + (0.2f * !ui_frosted_glass);
@@ -4094,45 +4103,48 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
     return hit;
 }
 
-internal f32 get_file_icon_based_on_extension(const f32 icon_index, DirectoryItemType type)
+internal f32 get_file_icon_based_on_extension(const b8 small, DirectoryItemType type)
 {
-    b8 small = icon_index == UI_FILE_ICON_TEXTURE;
-    if (small || icon_index == UI_FILE_ICON_BIG_TEXTURE)
+    f32 icon_index = UI_FILE_ICON_TEXTURE;
+    switch (type)
     {
-        switch (type)
+        case FOLDER_DEFAULT:
         {
-            case FILE_PNG:
-            {
-                return small ? UI_FILE_PNG_ICON_TEXTURE : UI_FILE_PNG_ICON_BIG_TEXTURE;
-            }
-            case FILE_JPG:
-            {
-                return small ? UI_FILE_JPG_ICON_TEXTURE : UI_FILE_JPG_ICON_BIG_TEXTURE;
-            }
-            case FILE_PDF:
-            {
-                return small ? UI_FILE_PDF_ICON_TEXTURE : UI_FILE_PDF_ICON_BIG_TEXTURE;
-            }
-            case FILE_CPP:
-            {
-                return small ? UI_FILE_CPP_ICON_TEXTURE : UI_FILE_CPP_ICON_BIG_TEXTURE;
-            }
-            case FILE_C:
-            {
-                return small ? UI_FILE_C_ICON_TEXTURE : UI_FILE_C_ICON_BIG_TEXTURE;
-            }
-            case FILE_JAVA:
-            {
-                return small ? UI_FILE_JAVA_ICON_TEXTURE : UI_FILE_JAVA_ICON_BIG_TEXTURE;
-            }
-            case FILE_OBJ:
-            {
-                return UI_FILE_OBJ_ICON_TEXTURE;
-            }
-            default: break;
+            return small ? UI_FOLDER_ICON_TEXTURE : UI_FOLDER_ICON_BIG_TEXTURE;
+        }
+        case FILE_PNG:
+        {
+            return small ? UI_FILE_PNG_ICON_TEXTURE : UI_FILE_PNG_ICON_BIG_TEXTURE;
+        }
+        case FILE_JPG:
+        {
+            return small ? UI_FILE_JPG_ICON_TEXTURE : UI_FILE_JPG_ICON_BIG_TEXTURE;
+        }
+        case FILE_PDF:
+        {
+            return small ? UI_FILE_PDF_ICON_TEXTURE : UI_FILE_PDF_ICON_BIG_TEXTURE;
+        }
+        case FILE_CPP:
+        {
+            return small ? UI_FILE_CPP_ICON_TEXTURE : UI_FILE_CPP_ICON_BIG_TEXTURE;
+        }
+        case FILE_C:
+        {
+            return small ? UI_FILE_C_ICON_TEXTURE : UI_FILE_C_ICON_BIG_TEXTURE;
+        }
+        case FILE_JAVA:
+        {
+            return small ? UI_FILE_JAVA_ICON_TEXTURE : UI_FILE_JAVA_ICON_BIG_TEXTURE;
+        }
+        case FILE_OBJ:
+        {
+            return UI_FILE_OBJ_ICON_TEXTURE;
+        }
+        default:
+        {
+            return small ? UI_FILE_ICON_TEXTURE : UI_FILE_ICON_BIG_TEXTURE;
         }
     }
-    return icon_index;
 }
 
 internal V2 animate_based_on_selection(const b8 selected, const b8 hit, V2 now, const V2 after,
@@ -4184,13 +4196,13 @@ internal void directory_item_update_position_and_background(DirectoryItem* item,
     item_dimensions->width -= item->animation_offset.x;
 }
 
-internal AABB directory_item_render_icon(const V2 position, const V2 size, f32 icon_index,
+internal AABB directory_item_render_icon(const V2 position, const V2 size, const b8 small,
                                          const DirectoryItemType item_type)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
 
-    icon_index = get_file_icon_based_on_extension(icon_index, item_type);
+    const f32 icon_index = get_file_icon_based_on_extension(small, item_type);
 
     const V2 icon_size = v2i(24.0f);
     AABB icon_aabb =
@@ -4200,7 +4212,7 @@ internal AABB directory_item_render_icon(const V2 position, const V2 size, f32 i
     return icon_aabb;
 }
 
-internal b8 directory_item(V2 starting_position, V2 item_dimensions, f32 icon_index,
+internal b8 directory_item(V2 starting_position, V2 item_dimensions, b8* selected,
                            DirectoryItem* item, List* list)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
@@ -4208,15 +4220,14 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions, f32 icon_in
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    b8 selected = false;
     b8 hit =
-        check_directory_item_collision(starting_position, item_dimensions, item, &selected, list);
+        check_directory_item_collision(starting_position, item_dimensions, item, selected, list);
 
-    directory_item_update_position_and_background(item, hit, selected, &starting_position,
+    directory_item_update_position_and_background(item, hit, *selected, &starting_position,
                                                   &item_dimensions);
 
     AABB icon_aabb =
-        directory_item_render_icon(starting_position, item_dimensions, icon_index, item->type);
+        directory_item_render_icon(starting_position, item_dimensions, true, item->type);
 
     V2 text_position = v2_s_add(starting_position, ui_context.font.pixel_height + 5.0f);
 
@@ -4239,7 +4250,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions, f32 icon_in
     return hit && hover_clicked_index.double_clicked;
 }
 
-internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 icon_index,
+internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, b8* selected,
                                 ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures,
                                 SafeObjectThumbnailArray* objects, DirectoryItem* item, List* list)
 {
@@ -4249,11 +4260,10 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    b8 selected = false;
     b8 hit =
-        check_directory_item_collision(starting_position, item_dimensions, item, &selected, list);
+        check_directory_item_collision(starting_position, item_dimensions, item, selected, list);
 
-    item->animation_offset = animate_based_on_selection(selected, hit, item->animation_offset,
+    item->animation_offset = animate_based_on_selection(*selected, hit, item->animation_offset,
                                                         v2i(10.0f), ui_context.delta_time);
     v2_sub_equal(&starting_position, item->animation_offset);
     v2_add_equal(&item_dimensions, item->animation_offset);
@@ -4264,12 +4274,13 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
     };
     array_push(aabbs, back_drop_aabb);
 
-    if (hit || selected)
+    if (hit || *selected)
     {
-        const V4 color = selected ? v4ic(0.45f) : v4ic(0.3f);
+        const V4 color = *selected ? v4ic(0.45f) : v4ic(0.3f);
         add_default_quad_aabb(&back_drop_aabb, add_window_alpha(window, color));
     }
 
+    f32 icon_index = UI_FILE_ICON_TEXTURE;
     V2 icon_size = v2i(ui_big_icon_size);
     if (item->texture_id)
     {
@@ -4291,7 +4302,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
     }
     else
     {
-        icon_index = get_file_icon_based_on_extension(icon_index, item->type);
+        icon_index = get_file_icon_based_on_extension(false, item->type);
         if (!item->reload_thumbnail)
         {
             if ((icon_index == UI_FILE_PNG_ICON_BIG_TEXTURE ||
@@ -4358,8 +4369,8 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, f32 ic
     return hit && hover_clicked_index.double_clicked;
 }
 
-i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index, const f32 item_height,
-                                      DirectoryItemArray* items, List* list, UiLayout* layout)
+i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, DirectoryItemArray* items,
+                                      List* list, UiLayout* layout)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
@@ -4380,10 +4391,14 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index, const f
         if (item_in_view(position.y, item_dimensions.height, window->position.y,
                          window->size.height))
         {
+            b8 selected = false;
             DirectoryItem* item = items->data + i;
-            if (directory_item(position, item_dimensions, icon_index, item, list))
+            if (directory_item(position, item_dimensions, &selected, item, list))
             {
                 double_clicked_index = i;
+            }
+            if (selected)
+            {
             }
             if (item->rename && list && list->inputs.data[list->input_index].active)
             {
@@ -4419,39 +4434,24 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 icon_index, const f
     return double_clicked_index;
 }
 
-internal void display_grid_item(const V2 position, const i32 index,
-                                const DirectoryItemArray* folders, const DirectoryItemArray* files,
+internal void display_grid_item(const V2 position, const i32 index, const DirectoryItemArray* items,
                                 const V2 item_dimensions, ThreadTaskQueue* task_queue,
                                 SafeIdTexturePropertiesArray* textures,
-                                SafeObjectThumbnailArray* objects, II32* hit_index, List* list)
+                                SafeObjectThumbnailArray* objects, i32* hit_index, List* list)
 {
-    if (index < (i32)folders->size)
+    DirectoryItem* item = items->data + index;
+    b8 selected = false;
+    if (directory_item_grid(position, item_dimensions, &selected, task_queue, textures, objects,
+                            item, list))
     {
-        DirectoryItem* item = folders->data + index;
-        if (directory_item_grid(position, item_dimensions, UI_FOLDER_ICON_BIG_TEXTURE, task_queue,
-                                textures, objects, item, list))
-        {
-            hit_index->first = 0;
-            hit_index->second = index;
-        }
-    }
-    else
-    {
-        const i32 new_index = index - folders->size;
-        DirectoryItem* item = files->data + new_index;
-        if (directory_item_grid(position, item_dimensions, UI_FILE_ICON_BIG_TEXTURE, task_queue,
-                                textures, objects, item, list))
-        {
-            hit_index->first = 1;
-            hit_index->second = new_index;
-        }
+        *hit_index = index;
     }
 }
 
-II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* folders,
-                                       const DirectoryItemArray* files, ThreadTaskQueue* task_queue,
-                                       SafeIdTexturePropertiesArray* textures,
-                                       SafeObjectThumbnailArray* objects, List* list)
+i32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* items,
+                                      ThreadTaskQueue* task_queue,
+                                      SafeIdTexturePropertiesArray* textures,
+                                      SafeObjectThumbnailArray* objects, List* list)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
@@ -4461,7 +4461,7 @@ II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* fo
     V2 item_dimensions = v2i(ui_big_icon_size);
     item_dimensions.height += (ui_context.font.pixel_height + 5.0f);
 
-    const u32 item_count = folders->size + files->size;
+    const u32 item_count = items->size;
     const f32 grid_padding = 10.0f + ui_list_padding;
     const f32 total_area_space = window->size.width - relative_position.x;
     const i32 columns =
@@ -4476,7 +4476,7 @@ II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* fo
     position.x += grid_padding_width;
     const f32 start_x = position.x;
 
-    II32 hit_index = { .first = -1, .second = -1 };
+    i32 hit_index = -1;
     for (i32 row = 0; row < rows; ++row)
     {
         if (item_in_view(position.y, item_dimensions.height, window->position.y,
@@ -4485,8 +4485,8 @@ II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* fo
             for (i32 column = 0; column < columns; ++column)
             {
                 const i32 index = (row * columns) + column;
-                display_grid_item(position, index, folders, files, item_dimensions, task_queue,
-                                  textures, objects, &hit_index, list);
+                display_grid_item(position, index, items, item_dimensions, task_queue, textures,
+                                  objects, &hit_index, list);
                 position.x += item_dimensions.width + grid_padding_width;
             }
             position.x = start_x;
@@ -4499,7 +4499,7 @@ II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* fo
         for (i32 column = 0; column < last_row; ++column)
         {
             const i32 index = (rows * columns) + column;
-            display_grid_item(position, index, folders, files, item_dimensions, task_queue,
+            display_grid_item(position, index, items, item_dimensions, task_queue,
                               textures, objects, &hit_index, list);
             position.x += item_dimensions.width + grid_padding_width;
         }
@@ -4513,24 +4513,6 @@ II32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* fo
     return hit_index;
 }
 
-b8 ui_window_add_folder_list(V2 position, const f32 item_height, DirectoryItemArray* items,
-                             List* list, i32* double_clicked_index, UiLayout* layout)
-{
-    i32 result = ui_window_add_directory_item_list(position, UI_FOLDER_ICON_TEXTURE, item_height,
-                                                   items, list, layout);
-    if (double_clicked_index) *double_clicked_index = result;
-    return result != -1;
-}
-
-b8 ui_window_add_file_list(V2 position, const f32 item_height, DirectoryItemArray* items,
-                           List* list, i32* double_clicked_index, UiLayout* layout)
-{
-    i32 result = ui_window_add_directory_item_list(position, UI_FILE_ICON_TEXTURE, item_height,
-                                                   items, list, layout);
-    if (double_clicked_index) *double_clicked_index = result;
-    return result != -1;
-}
-
 internal void render_movable_item(UiWindow* window, DirectoryItem* item, V2 position, V2 size,
                                   const b8 hit, const b8 selected)
 {
@@ -4538,9 +4520,7 @@ internal void render_movable_item(UiWindow* window, DirectoryItem* item, V2 posi
 
     const V2 item_dimensions = size;
 
-    const f32 icon_index =
-        item->type == FOLDER_DEFAULT ? UI_FOLDER_ICON_TEXTURE : UI_FILE_ICON_TEXTURE;
-    AABB icon_aabb = directory_item_render_icon(position, size, icon_index, item->type);
+    AABB icon_aabb = directory_item_render_icon(position, size, true, item->type);
 
     V2 text_position = v2_s_add(position, ui_context.font.pixel_height + 5.0f);
 

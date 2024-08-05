@@ -70,13 +70,11 @@ void directory_reload(DirectoryPage* directory_page)
     u32 length = (u32)strlen(path);
     path[length++] = '\\';
     path[length++] = '*';
-    Directory reloaded_directory = platform_get_directory(path, length);
+    Directory reloaded_directory = platform_get_directory(path, length, true);
     path[length - 2] = '\0';
     path[length - 1] = '\0';
 
-    look_for_same_items(&directory_page->directory.sub_directories,
-                        &reloaded_directory.sub_directories);
-    look_for_same_items(&directory_page->directory.files, &reloaded_directory.files);
+    look_for_same_items(&directory_page->directory.items, &reloaded_directory.items);
 
     platform_reset_directory(&directory_page->directory, false);
     directory_page->directory = reloaded_directory;
@@ -263,41 +261,64 @@ void directory_sort_by_date(DirectoryItemArray* array)
 
 void directory_sort(DirectoryPage* directory_page)
 {
+    DirectoryItemArray* items = &directory_page->directory.items;
     switch (directory_page->sort_by)
     {
         case SORT_NAME:
         {
-            directory_sort_by_name(&directory_page->directory.sub_directories);
-            directory_sort_by_name(&directory_page->directory.files);
+            directory_sort_by_name(items);
             if (directory_page->sort_count == 2)
             {
-                directory_flip_array(&directory_page->directory.sub_directories);
-                directory_flip_array(&directory_page->directory.files);
+                directory_flip_array(items);
             }
             break;
         }
         case SORT_SIZE:
         {
-            directory_sort_by_size(&directory_page->directory.files);
+            directory_sort_by_size(items);
             if (directory_page->sort_count == 2)
             {
-                directory_flip_array(&directory_page->directory.files);
+                directory_flip_array(items);
             }
             break;
         }
         case SORT_DATE:
         {
-            directory_sort_by_date(&directory_page->directory.files);
+            directory_sort_by_date(items);
             if (directory_page->sort_count == 2)
             {
-                directory_flip_array(&directory_page->directory.files);
+                directory_flip_array(items);
             }
             break;
         }
         default:
         {
-            // directory_sort_by_name(&directory_page->directory.sub_directories);
-            // directory_sort_by_name(&directory_page->directory.files);
+            directory_sort_by_name(items);
+
+            // NOTE: very inefficient but does not happen very often.
+            DirectoryItemArray temp = { 0 };
+            array_create(&temp, items->size);
+
+            i32 iterations = (i32)items->size;
+            for (i32 i = 0; i < iterations; ++i)
+            {
+                DirectoryItem* item = items->data + i;
+                if (item->type == FOLDER_DEFAULT)
+                {
+                    array_push(&temp, *item);
+                    for (i32 j = i; j < iterations - 1; ++j)
+                    {
+                        items->data[j] = items->data[j + 1];
+                    }
+                    --i;
+                    --iterations;
+                }
+            }
+            u32 files_to_move = items->size - temp.size;
+            memmove(items->data + temp.size, items->data, files_to_move * sizeof(DirectoryItem));
+            memcpy(items->data, temp.data, temp.size * sizeof(DirectoryItem));
+
+            array_free(&temp);
             break;
         }
     }
@@ -338,12 +359,12 @@ internal u32 look_for_and_get_thumbnails(const DirectoryItemArray* files,
     return count;
 }
 
-internal u32 count_image_obj_files(const DirectoryItemArray* files)
+internal u32 count_image_obj_files(const DirectoryItemArray* items)
 {
     u32 count = 0;
-    for (u32 i = 0; i < files->size; ++i)
+    for (u32 i = 0; i < items->size; ++i)
     {
-        DirectoryItem* item = files->data + i;
+        DirectoryItem* item = items->data + i;
         count += (item->type == FILE_PNG || item->type == FILE_JPG || item->type == FILE_OBJ);
     }
     return count;
@@ -351,12 +372,11 @@ internal u32 count_image_obj_files(const DirectoryItemArray* files)
 
 internal b8 should_be_grid_view(const DirectoryPage* page)
 {
-    u32 count = count_image_obj_files(&page->directory.files);
+    u32 count = count_image_obj_files(&page->directory.items);
 
     if (count)
     {
-        if (((f32)count /
-             (f32)(page->directory.files.size + page->directory.sub_directories.size)) >= 0.8f)
+        if (((f32)count / (f32)(page->directory.items.size)) >= 0.8f)
         {
             return true;
         }
@@ -380,7 +400,7 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
         saved_chars[2] = path[length];
         path[length] = '\0';
         DirectoryPage new_page = { 0 };
-        new_page.directory = platform_get_directory(path, length);
+        new_page.directory = platform_get_directory(path, length, true);
         for (i32 i = directory_history->history.size - 1;
              i >= (i32)directory_history->current_index + 1; --i)
         {
@@ -419,9 +439,9 @@ void directory_move_in_history(const i32 index_add, SelectedItemValues* selected
     DirectoryPage* current = directory_current(directory_history);
     directory_clear_selected_items(selected_item_values);
     directory_reload(current);
-    for (u32 i = 0; i < current->directory.files.size; ++i)
+    for (u32 i = 0; i < current->directory.items.size; ++i)
     {
-        DirectoryItem* item = current->directory.files.data + i;
+        DirectoryItem* item = current->directory.items.data + i;
         if (item->texture_id)
         {
             texture_delete(item->texture_id);
@@ -462,7 +482,7 @@ void directory_tab_add(const char* dir, ThreadTaskQueue* task_queue, DirectoryTa
     array_create(&tab->directory_history.history, 10);
 
     DirectoryPage page = { 0 };
-    page.directory = platform_get_directory(dir, (u32)strlen(dir));
+    page.directory = platform_get_directory(dir, (u32)strlen(dir), true);
     array_push(&tab->directory_history.history, page);
 
     tab->directory_history.change_handle =

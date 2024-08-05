@@ -295,22 +295,26 @@ internal b8 check_and_load_image(const i32 index, V2* image_dimensions, char** c
 
 internal V2 load_and_scale_preview_image(const ApplicationContext* application,
                                          V2* image_dimensions, char** current_path,
-                                         const DirectoryItemArray* files, U32Array* textures)
+                                         const DirectoryItemArray* items, U32Array* textures)
 {
     b8 right_key = event_is_key_pressed_repeat(FTIC_KEY_RIGHT);
     b8 left_key = event_is_key_pressed_repeat(FTIC_KEY_LEFT);
     if (right_key || left_key)
     {
-        for (i32 i = 0; i < (i32)files->size; ++i)
+        for (i32 i = 0; i < (i32)items->size; ++i)
         {
-            if (!string_compare_case_insensitive(*current_path, files->data[i].path))
+            if (items->data[i].type == FOLDER_DEFAULT)
+            {
+                continue;
+            }
+            else if (!string_compare_case_insensitive(*current_path, items->data[i].path))
             {
                 if (right_key)
                 {
-                    for (i32 count = 1; count <= (i32)files->size; ++count)
+                    for (i32 count = 1; count <= (i32)items->size; ++count)
                     {
-                        const i32 index = (i + count) % files->size;
-                        if (check_and_load_image(index, image_dimensions, current_path, files,
+                        const i32 index = (i + count) % items->size;
+                        if (check_and_load_image(index, image_dimensions, current_path, items,
                                                  textures))
                         {
                             break;
@@ -319,11 +323,11 @@ internal V2 load_and_scale_preview_image(const ApplicationContext* application,
                 }
                 else
                 {
-                    for (i32 count = 1, index = i - count; count <= (i32)files->size;
+                    for (i32 count = 1, index = i - count; count <= (i32)items->size;
                          ++count, --index)
                     {
-                        if (index < 0) index = files->size - 1;
-                        if (check_and_load_image(index, image_dimensions, current_path, files,
+                        if (index < 0) index = items->size - 1;
+                        if (check_and_load_image(index, image_dimensions, current_path, items,
                                                  textures))
                         {
                             break;
@@ -362,7 +366,7 @@ internal void drag_drop_callback(void* data)
     platform_start_drag_drop(selected_paths);
 }
 
-internal void set_sorting_buttons(const SortBy sort_by, DirectoryTab* tab)
+internal void sort_directory(const SortBy sort_by, DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
     if (current->sort_by != sort_by)
@@ -410,17 +414,17 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
 
         UiLayout layout = { .at = v2f(10.0f, 10.0f) };
         i32 selected_item = -1;
-        if (ui_window_add_folder_list(layout.at, list_item_height,
-                                      &page->search_result_folder_array.array, NULL, &selected_item,
-                                      &layout))
+        selected_item = ui_window_add_directory_item_list(
+            layout.at, list_item_height, &page->search_result_folder_array.array, NULL, &layout);
+        if (selected_item != -1)
         {
             directory_open_folder(page->search_result_folder_array.array.data[selected_item].path,
                                   directory_history);
         }
         ui_layout_row(&layout);
-        if (ui_window_add_file_list(layout.at, list_item_height,
-                                    &page->search_result_file_array.array, NULL, &selected_item,
-                                    &layout))
+        selected_item = ui_window_add_directory_item_list(
+            layout.at, list_item_height, &page->search_result_file_array.array, NULL, &layout);
+        if (selected_item != -1)
         {
             platform_open_file(page->search_result_file_array.array.data[selected_item].path);
         }
@@ -515,9 +519,9 @@ internal void look_for_and_load_image_thumbnails(DirectoryTab* tab)
     {
         IdTextureProperties* texture = tab->textures.array.data + i;
         DirectoryItem* item = NULL;
-        for (u32 j = 0; j < current->directory.files.size; ++j)
+        for (u32 j = 0; j < current->directory.items.size; ++j)
         {
-            DirectoryItem* current_item = current->directory.files.data + j;
+            DirectoryItem* current_item = current->directory.items.data + j;
             if (!guid_compare(texture->id, current_item->id))
             {
                 item = current_item;
@@ -667,9 +671,9 @@ internal void look_for_and_load_object_thumbnails(const V2 dimensions, const u32
     {
         ObjectThumbnail* object = tab->objects.array.data + i;
         DirectoryItem* item = NULL;
-        for (u32 j = 0; j < current->directory.files.size; ++j)
+        for (u32 j = 0; j < current->directory.items.size; ++j)
         {
-            DirectoryItem* current_item = current->directory.files.data + j;
+            DirectoryItem* current_item = current->directory.items.data + j;
             if (!guid_compare(object->id, current_item->id))
             {
                 item = current_item;
@@ -697,6 +701,22 @@ internal void look_for_and_load_object_thumbnails(const V2 dimensions, const u32
     platform_mutex_unlock(&tab->objects.mutex);
 }
 
+internal void add_arrow_icon(const V2 at, const V2 button_size, const u32 sort_count)
+{
+    f32 sort_icon = 0.0f;
+    if (sort_count == 1)
+    {
+        sort_icon = UI_ARROW_DOWN_ICON_TEXTURE;
+    }
+    else if (sort_count == 2)
+    {
+        sort_icon = UI_ARROW_UP_ICON_TEXTURE;
+    }
+    V2 arrow_position =
+        v2f(at.x + button_size.width - 24.0f, at.y + middle(button_size.height, 12.0f));
+    ui_window_add_icon(arrow_position, v2i(12.0f), full_icon_co, sort_icon, NULL);
+}
+
 internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                                   const b8 check_collision, const b8 context_menu_open,
                                   const V2 dimensions, const u32 shader, RecentPanel* recent,
@@ -712,7 +732,7 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
     {
 
         V2 position = v2f(0.0f, 0.0f);
-        V2 button_size = ui_window_get_button_dimensions(v2d(), "Date", NULL);
+        V2 button_size = ui_window_get_button_dimensions(v2d(), "D", NULL); // get height only
         const UiWindow* ui_window = ui_window_get(window);
         button_size.width = ui_window->size.width / 3.0f;
 
@@ -721,45 +741,45 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
         UiLayout layout = ui_layout_create(v2f(10.0f, position.y + button_size.height + 5.0f));
         if (current->grid_view)
         {
-            II32 result = ui_window_add_directory_item_grid(
-                v2f(0.0f, layout.at.y), &current->directory.sub_directories,
-                &current->directory.files, task_queue, &tab->textures, &tab->objects,
-                &tab->directory_list);
+            i32 result = ui_window_add_directory_item_grid(
+                v2f(0.0f, layout.at.y), &current->directory.items, task_queue, &tab->textures,
+                &tab->objects, &tab->directory_list);
 
-            if (result.first == 0)
+            if (result != -1)
             {
-                directory_open_folder(current->directory.sub_directories.data[result.second].path,
-                                      &tab->directory_history);
-                directory_clear_selected_items(&tab->directory_list.selected_item_values);
+                DirectoryItem* item = current->directory.items.data + result;
 
-                recent_panel_add_item(recent,
-                                      current->directory.sub_directories.data[result.second].path);
-            }
-            else if (result.first == 1)
-            {
-                platform_open_file(current->directory.files.data[result.second].path);
+                if (item->type == FOLDER_DEFAULT)
+                {
+                    directory_open_folder(item->path, &tab->directory_history);
+                    directory_clear_selected_items(&tab->directory_list.selected_item_values);
+                    recent_panel_add_item(recent, item->path);
+                }
+                else
+                {
+                    platform_open_file(item->path);
+                }
             }
         }
         else
         {
-            i32 selected_item = -1;
-            if (ui_window_add_folder_list(layout.at, list_item_height,
-                                          &current->directory.sub_directories, &tab->directory_list,
-                                          &selected_item, &layout))
+            i32 selected_item = ui_window_add_directory_item_list(layout.at, list_item_height,
+                                                                  &current->directory.items,
+                                                                  &tab->directory_list, &layout);
+            if (selected_item != -1)
             {
-                directory_open_folder(current->directory.sub_directories.data[selected_item].path,
-                                      &tab->directory_history);
+                DirectoryItem* item = current->directory.items.data + selected_item;
 
-                directory_clear_selected_items(&tab->directory_list.selected_item_values);
-
-                recent_panel_add_item(recent,
-                                      current->directory.sub_directories.data[selected_item].path);
-            }
-            ui_layout_row(&layout);
-            if (ui_window_add_file_list(layout.at, list_item_height, &current->directory.files,
-                                        &tab->directory_list, &selected_item, &layout))
-            {
-                platform_open_file(current->directory.files.data[selected_item].path);
+                if (item->type == FOLDER_DEFAULT)
+                {
+                    directory_open_folder(item->path, &tab->directory_history);
+                    directory_clear_selected_items(&tab->directory_list.selected_item_values);
+                    recent_panel_add_item(recent, item->path);
+                }
+                else
+                {
+                    platform_open_file(item->path);
+                }
             }
         }
         if (!tab->directory_list.item_selected && !tab->directory_list.inputs.data[0].active)
@@ -774,20 +794,36 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
         color.a = 0.95f;
         layout.at = position;
         layout.row_height = 0.0f;
+
         if (ui_window_add_button(layout.at, &button_size, &color, "Name", &layout))
         {
-            set_sorting_buttons(SORT_NAME, tab);
+            sort_directory(SORT_NAME, tab);
         }
+        if (current->sort_by == SORT_NAME)
+        {
+            add_arrow_icon(layout.at, button_size, current->sort_count);
+        }
+
         ui_layout_column(&layout);
         if (ui_window_add_button(layout.at, &button_size, &color, "Date", &layout))
         {
-            set_sorting_buttons(SORT_DATE, tab);
+            sort_directory(SORT_DATE, tab);
         }
+        if (current->sort_by == SORT_DATE)
+        {
+            add_arrow_icon(layout.at, button_size, current->sort_count);
+        }
+
         ui_layout_column(&layout);
         if (ui_window_add_button(layout.at, &button_size, &color, "Size", &layout))
         {
-            set_sorting_buttons(SORT_SIZE, tab);
+            sort_directory(SORT_SIZE, tab);
         }
+        if (current->sort_by == SORT_SIZE)
+        {
+            add_arrow_icon(layout.at, button_size, current->sort_count);
+        }
+
         return ui_window_end();
     }
     return false;
@@ -943,7 +979,7 @@ internal void get_suggestions(const V2 position, DirectoryPage* current,
         path[current_directory_len++] = '*';
         saved_chars[2] = path[current_directory_len];
         path[current_directory_len] = '\0';
-        directory = platform_get_directory(path, current_directory_len);
+        directory = platform_get_directory(path, current_directory_len, false);
         path[current_directory_len--] = saved_chars[2];
         path[current_directory_len--] = saved_chars[1];
 
@@ -951,23 +987,34 @@ internal void get_suggestions(const V2 position, DirectoryPage* current,
     }
     path[current_directory_len] = saved_chars[0];
 
-    for (u32 i = 0; i < directory.sub_directories.size; ++i)
+    for (u32 i = 0; i < directory.items.size; ++i)
     {
-        DirectoryItem* dir_item = directory.sub_directories.data + i;
+        DirectoryItem* dir_item = directory.items.data + i;
         dir_item->size =
             string_span_case_insensitive(item_name(dir_item), path + current_directory_len + 1);
     }
-    directory_sort_by_size(&directory.sub_directories);
-    directory_flip_array(&directory.sub_directories);
+    directory_sort_by_size(&directory.items);
+    directory_flip_array(&directory.items);
 
+    for (u32 i = 0; i < suggestion_data->items.size; ++i)
+    {
+        free(suggestion_data->items.data[i].path);
+    }
     suggestions->options.size = 0;
     suggestion_data->items.size = 0;
-    const u32 item_count = min(directory.sub_directories.size, 6);
+    const u32 item_count = min(directory.items.size, 6);
     for (u32 i = 0; i < item_count; ++i)
     {
-        array_push(&suggestions->options, item_name(directory.sub_directories.data + i));
-        array_push(&suggestion_data->items, directory.sub_directories.data[i]);
+        array_push(&suggestions->options, item_name(directory.items.data + i));
+        array_push(&suggestion_data->items, directory.items.data[i]);
     }
+
+    for (u32 i = item_count; i < directory.items.size; ++i)
+    {
+        free(directory.items.data[i].path);
+    }
+    array_free(&directory.items);
+    free(directory.parent);
 
     const FontTTF* ui_font = ui_context_get_font();
     const f32 x_advance = text_x_advance(ui_font->chars, parent_directory_input->buffer.data,
@@ -1968,27 +2015,6 @@ b8 search_page_has_result(const SearchPage* search_page)
            search_page->search_result_folder_array.array.size > 0;
 }
 
-internal void parse_all_subdirectories(const char* start_directory, const u32 length)
-{
-    Directory directory = platform_get_directory(start_directory, length);
-
-    for (u32 i = 0; i < directory.files.size; ++i)
-    {
-        const char* name = item_name(directory.files.data + i);
-        log_message(name, strlen(name));
-        free(directory.files.data[i].path);
-    }
-    for (u32 i = 0; i < directory.sub_directories.size; ++i)
-    {
-        char* path = directory.sub_directories.data[i].path;
-        size_t directory_name_length = strlen(path);
-        path[directory_name_length++] = '/';
-        path[directory_name_length++] = '*';
-        parse_all_subdirectories(path, (u32)directory_name_length);
-        free(path);
-    }
-}
-
 internal void safe_add_directory_item(const DirectoryItem* item,
                                       FindingCallbackAttribute* arguments,
                                       SafeFileArray* safe_array)
@@ -2017,42 +2043,43 @@ internal void finding_callback(void* data)
     Directory directory = { 0 };
     if (running)
     {
-        directory =
-            platform_get_directory(arguments->start_directory, arguments->start_directory_length);
+        directory = platform_get_directory(arguments->start_directory,
+                                           arguments->start_directory_length, true);
         should_free_directory = true;
     }
 
-    for (u32 i = 0; i < directory.sub_directories.size && running; ++i)
+    for (u32 i = 0; i < directory.items.size && running; ++i)
     {
+        DirectoryItem* item = directory.items.data + i;
+        if (item->type == FOLDER_DEFAULT)
+        {
+            safe_add_directory_item(item, arguments, arguments->folder_array);
 
-        safe_add_directory_item(&directory.sub_directories.data[i], arguments,
-                                arguments->folder_array);
+            FindingCallbackAttribute* next_arguments =
+                (FindingCallbackAttribute*)calloc(1, sizeof(FindingCallbackAttribute));
 
-        FindingCallbackAttribute* next_arguments =
-            (FindingCallbackAttribute*)calloc(1, sizeof(FindingCallbackAttribute));
+            char* path = item->path;
+            size_t directory_name_length = strlen(path);
 
-        char* path = directory.sub_directories.data[i].path;
-        size_t directory_name_length = strlen(path);
+            next_arguments->start_directory = string_copy(path, (u32)directory_name_length, 2);
+            next_arguments->start_directory[directory_name_length++] = '\\';
+            next_arguments->start_directory[directory_name_length++] = '*';
+            next_arguments->file_array = arguments->file_array;
+            next_arguments->folder_array = arguments->folder_array;
+            next_arguments->thread_queue = arguments->thread_queue;
+            next_arguments->start_directory_length = (u32)directory_name_length;
+            next_arguments->string_to_match = arguments->string_to_match;
+            next_arguments->string_to_match_length = arguments->string_to_match_length;
+            next_arguments->running_id = arguments->running_id;
+            next_arguments->running_callbacks = arguments->running_callbacks;
 
-        next_arguments->start_directory = string_copy(path, (u32)directory_name_length, 2);
-        next_arguments->start_directory[directory_name_length++] = '\\';
-        next_arguments->start_directory[directory_name_length++] = '*';
-        next_arguments->file_array = arguments->file_array;
-        next_arguments->folder_array = arguments->folder_array;
-        next_arguments->thread_queue = arguments->thread_queue;
-        next_arguments->start_directory_length = (u32)directory_name_length;
-        next_arguments->string_to_match = arguments->string_to_match;
-        next_arguments->string_to_match_length = arguments->string_to_match_length;
-        next_arguments->running_id = arguments->running_id;
-        next_arguments->running_callbacks = arguments->running_callbacks;
-
-        ThreadTask task = thread_task(finding_callback, next_arguments);
-        thread_tasks_push(next_arguments->thread_queue, &task, 1, NULL);
-    }
-
-    for (u32 i = 0; i < directory.files.size && running; ++i)
-    {
-        safe_add_directory_item(&directory.files.data[i], arguments, arguments->file_array);
+            ThreadTask task = thread_task(finding_callback, next_arguments);
+            thread_tasks_push(next_arguments->thread_queue, &task, 1, NULL);
+        }
+        else
+        {
+            safe_add_directory_item(item, arguments, arguments->file_array);
+        }
     }
     if (should_free_directory)
     {
@@ -2136,21 +2163,24 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
             }
             const char* font_directory_path = "C:\\Windows\\Fonts\\*";
             app->font_change_directory =
-                platform_get_directory(font_directory_path, (u32)strlen(font_directory_path));
-            DirectoryItemArray* files = &app->font_change_directory.files;
-            for (i32 i = 0; i < (i32)files->size; ++i)
+                platform_get_directory(font_directory_path, (u32)strlen(font_directory_path), true);
+            DirectoryItemArray* items = &app->font_change_directory.items;
+            for (i32 i = 0; i < (i32)items->size; ++i)
             {
-                const char* extension = file_get_extension(item_name(files->data + i),
-                                                           (u32)strlen(item_name(files->data + i)));
+                const char* extension =
+                    items->data[i].type == FOLDER_DEFAULT
+                        ? NULL
+                        : file_get_extension(item_name(items->data + i),
+                                             (u32)strlen(item_name(items->data + i)));
                 if (!extension || strcmp(extension, "ttf"))
                 {
-                    char* path_to_remove = files->data[i].path;
-                    for (u32 j = i; j < files->size - 1; ++j)
+                    char* path_to_remove = items->data[i].path;
+                    for (u32 j = i; j < items->size - 1; ++j)
                     {
-                        files->data[j] = files->data[j + 1];
+                        items->data[j] = items->data[j + 1];
                     }
                     free(path_to_remove);
-                    files->size--;
+                    items->size--;
                     --i;
                 }
             }
@@ -2773,7 +2803,7 @@ void application_open_preview(ApplicationContext* app)
 
         V2 image_dimensions = load_and_scale_preview_image(
             app, &app->preview_image.dimensions, &app->preview_image.current_viewed_path,
-            &current->directory.files, &app->preview_image.textures);
+            &current->directory.items, &app->preview_image.textures);
 
         ui_window_set_size(app->preview_window, image_dimensions);
         ui_window_set_position(app->preview_window,
@@ -3068,12 +3098,12 @@ void application_run()
                                     UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
                 {
                     V2 list_position = v2f(10.0f, 10.0f);
-                    i32 selected_item = -1;
-                    if (ui_window_add_file_list(list_position, list_item_height,
-                                                &app.font_change_directory.files, NULL,
-                                                &selected_item, NULL))
+                    i32 selected_item = ui_window_add_directory_item_list(
+                        list_position, list_item_height, &app.font_change_directory.items, NULL,
+                        NULL);
+                    if (selected_item != -1)
                     {
-                        const char* path = app.font_change_directory.files.data[selected_item].path;
+                        const char* path = app.font_change_directory.items.data[selected_item].path;
                         ui_context_set_font_path(path);
                         ui_context_change_font_pixel_height(ui_font_pixel_height);
                         app.open_font_change_window = false;
@@ -3297,8 +3327,7 @@ void application_run()
                 UiLayout ui_layout = ui_layout_create(v2f(10.0f, 3.0f));
                 DirectoryPage* current = directory_current(&tab->directory_history);
                 char buffer[64] = { 0 };
-                sprintf_s(buffer, sizeof(buffer), "Folders: %u  |  Files: %u",
-                          current->directory.sub_directories.size, current->directory.files.size);
+                sprintf_s(buffer, sizeof(buffer), "Items: %u", current->directory.items.size);
                 ui_window_add_text(ui_layout.at, buffer, false, &ui_layout);
 
                 const f32 list_grid_icon_position = size.width - (2.0f * bottom_bar_height + 5.0f);

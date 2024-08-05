@@ -27,3 +27,6 @@ void ui_test_check_dock_space_resize();
 void ui_test_sync_current_frame_windows();
 void ui_test_handle_tab_change_or_close();
 void ui_test_ui_window_close();
+void ui_test_ui_window_close_current();
+void ui_test_ui_window_set_size();
+void ui_test_ui_window_set_position();

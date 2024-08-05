@@ -1588,7 +1588,6 @@ void ui_test_sync_current_frame_windows()
     array_free(&ui_context.last_frame_windows);
 }
 
-
 void ui_test_ui_window_close()
 {
     ui_test_init_context();
@@ -1667,6 +1666,44 @@ void ui_test_ui_window_close_current()
 {
     ui_test_init_context();
 
+    ui_context.current_window_id = 1;
+
+    ui_window_close_current();
+    const UiWindow* window = ui_window_get(1);
+    ASSERT_EQUALS(true, check_bit(window->flags, UI_WINDOW_CLOSING), EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, check_bit(window->flags, UI_WINDOW_HIDE), EQUALS_FORMAT_U32);
+    ASSERT_EQUALS(false, check_bit(window->flags, UI_WINDOW_DOCKED), EQUALS_FORMAT_U32);
 
     ui_test_uninit_context();
 }
+
+void ui_test_ui_window_set_size()
+{
+    ui_test_init_context();
+
+    ui_window_set_size(2, v2f(200.0f, 433.0f));
+
+    const UiWindow* window = ui_window_get(2);
+    ASSERT_EQUALS(200.0f, window->size.width, EQUALS_FORMAT_FLOAT);
+    ASSERT_EQUALS(433.0f, window->size.height, EQUALS_FORMAT_FLOAT);
+    ASSERT_EQUALS(200.0f, window->dock_node->aabb.size.width, EQUALS_FORMAT_FLOAT);
+    ASSERT_EQUALS(433.0f, window->dock_node->aabb.size.height, EQUALS_FORMAT_FLOAT);
+
+    ui_test_uninit_context();
+}
+
+void ui_test_ui_window_set_position()
+{
+    ui_test_init_context();
+
+    ui_window_set_position(3, v2f(3300.0f, 76.0f));
+
+    const UiWindow* window = ui_window_get(3);
+    ASSERT_EQUALS(3300.0f, window->position.x, EQUALS_FORMAT_FLOAT);
+    ASSERT_EQUALS(76.0f, window->position.y, EQUALS_FORMAT_FLOAT);
+    ASSERT_EQUALS(3300.0f, window->dock_node->aabb.min.x, EQUALS_FORMAT_FLOAT);
+    ASSERT_EQUALS(76.0f, window->dock_node->aabb.min.y, EQUALS_FORMAT_FLOAT);
+
+    ui_test_uninit_context();
+}
+
