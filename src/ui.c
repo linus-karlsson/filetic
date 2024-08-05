@@ -108,9 +108,6 @@ typedef struct UiContext
     u32 window_in_focus;
     u32 current_window_id;
 
-    U32Array id_to_index;
-    U32Array free_indices;
-
     F32Array animation_x;
     U32Array generated_textures;
 
@@ -129,6 +126,8 @@ typedef struct UiContext
     i32 frosted_blur_amount_location;
     i32 frosted_samples_location;
 
+    U32Array id_to_index;
+    U32Array free_indices;
     UiWindowArray windows;
     AABBArrayArray window_aabbs;
     HoverClickedIndexArray window_hover_clicked_indices;
@@ -146,6 +145,10 @@ typedef struct UiContext
 
     u32 extra_index_offset;
     u32 extra_index_count;
+
+    UnorderedCircularParticleBuffer particles;
+    u32 particles_index_offset;
+
     i32 dock_side_hit;
 
     DockNode* dock_tree;
@@ -156,12 +159,9 @@ typedef struct UiContext
 
     V2 mouse_drag_box_point;
     AABB mouse_drag_box;
-    b8 mouse_box_is_dragging;
 
     FontTTF font;
 
-    UnorderedCircularParticleBuffer particles;
-    u32 particles_index_offset;
 
     V4 docking_color;
 
@@ -182,6 +182,8 @@ typedef struct UiContext
     b8 highlight_fucused_window_off;
 
     b8 non_docked_window_hover;
+
+    b8 mouse_box_is_dragging;
 
     u8 window_pressed_resize_dragging;
     b8 window_pressed;
@@ -1504,6 +1506,18 @@ void ui_context_create()
     particle_buffer_create(&ui_context.particles, 1000);
 }
 
+internal WindowRenderData render_data_create(const UiWindow* window)
+{
+    AABB window_aabb = { .min = window->position, .size = window->size };
+    WindowRenderData render_data = {
+        .id = window->id,
+        .aabb = window_aabb,
+        .index_offset = ui_context.current_index_offset,
+        .index_count = ui_context.current_window_index_count,
+    };
+    return render_data;
+}
+
 internal u8 look_for_window_resize(UiWindow* window)
 {
     AABB left, top, right, bottom;
@@ -2105,39 +2119,7 @@ internal void check_and_display_mouse_drag_box()
     }
 }
 
-internal void sync_current_frame_windows(U32Array* current_frame, U32Array* last_frame)
-{
-    // TODO: can be very expensive. Consider a more efficient way.
-    for (u32 i = 0; i < last_frame->size; ++i)
-    {
-        u32 window = last_frame->data[i];
-        b8 exist = false;
-        for (u32 j = 0; j < current_frame->size; ++j)
-        {
-            if (current_frame->data[j] == window)
-            {
-                push_window_to_back(current_frame, j--);
-                current_frame->size--;
-                exist = true;
-                break;
-            }
-        }
-
-        if (!exist)
-        {
-            push_window_to_back(last_frame, i--);
-            last_frame->size--;
-        }
-    }
-
-    for (u32 i = 0; i < current_frame->size; ++i)
-    {
-        array_push(last_frame, current_frame->data[i]);
-    }
-    current_frame->size = 0;
-}
-
-internal void sync_current_frame_windows2(WindowRenderDataArray* current_frame,
+internal void sync_current_frame_windows(WindowRenderDataArray* current_frame,
                                           WindowRenderDataArray* last_frame)
 {
     // TODO: can be very expensive. Consider a more efficient way.
@@ -2508,9 +2490,9 @@ void ui_context_end()
     WindowRenderDataArray* docked_windows = &ui_context.last_frame_docked_windows;
     WindowRenderDataArray* floating_windows = &ui_context.last_frame_windows;
     WindowRenderDataArray* overlay_windows = &ui_context.last_frame_overlay_windows;
-    sync_current_frame_windows2(&ui_context.current_frame_docked_windows, docked_windows);
-    sync_current_frame_windows2(&ui_context.current_frame_windows, floating_windows);
-    sync_current_frame_windows2(&ui_context.current_frame_overlay_windows, overlay_windows);
+    sync_current_frame_windows(&ui_context.current_frame_docked_windows, docked_windows);
+    sync_current_frame_windows(&ui_context.current_frame_windows, floating_windows);
+    sync_current_frame_windows(&ui_context.current_frame_overlay_windows, overlay_windows);
 
     if (ui_context.dimensions.y == 0.0f)
     {
@@ -2698,7 +2680,7 @@ internal void window_animate(UiWindow* window)
 
 #if 1
     f32* x = ui_context.animation_x.data + window->id;
-    if (*x <= 1.0f)
+    if (*x <= 1.0f && !ui_context.animation_off)
     {
         f32 value = ease_out_cubic(*x);
         value = ftic_clamp_high(value, 1.0f);
@@ -3023,13 +3005,7 @@ b8 ui_window_end()
         (!check_bit(window->flags, UI_WINDOW_CLOSING) || size_animation_on ||
          position_animation_on))
     {
-        AABB window_aabb = { .min = window->position, .size = window->size };
-        WindowRenderData render_data = {
-            .id = window->id,
-            .aabb = window_aabb,
-            .index_offset = ui_context.current_index_offset,
-            .index_count = ui_context.current_window_index_count,
-        };
+        WindowRenderData render_data = render_data_create(window);
         if (check_bit(window->flags, UI_WINDOW_OVERLAY))
         {
             array_push(&ui_context.current_frame_overlay_windows, render_data);
