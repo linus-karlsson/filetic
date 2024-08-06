@@ -3411,6 +3411,32 @@ void application_run()
                 }
             }
 
+            i32 tab_in_fucus = -1;
+            for (u32 i = 0; i < app.tabs.size; ++i)
+            {
+                const u32 window_id = app.tabs.data[i].window_id;
+                tab_in_fucus =
+                    tab_in_fucus + ((i - tab_in_fucus) * (ui_window_in_focus() == window_id));
+            }
+
+            if (tab_in_fucus != -1)
+            {
+                if (event_is_key_pressed_repeat(FTIC_KEY_TAB))
+                {
+                    if (event_get_key_event()->shift_pressed)
+                    {
+                        --tab_in_fucus;
+                        tab_in_fucus = tab_in_fucus < 0 ? app.tabs.size - 1 : tab_in_fucus;
+                    }
+                    else
+                    {
+                        ++tab_in_fucus;
+                        tab_in_fucus %= app.tabs.size;
+                    }
+                    ui_context_set_window_in_focus(app.tabs.data[tab_in_fucus].window_id);
+                }
+            }
+
             for (u32 i = 0; i < app.tabs.size; ++i)
             {
                 const u32 window_id = app.tabs.data[i].window_id;

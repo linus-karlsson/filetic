@@ -2628,6 +2628,11 @@ void ui_context_destroy()
     save_layout();
 }
 
+void ui_context_set_window_in_focus(const u32 window_id)
+{
+    ui_context.window_in_focus = ui_context.id_to_index.data[window_id];
+}
+
 void ui_context_set_animation(b8 on)
 {
     ui_context.animation_off = !on;

@@ -219,6 +219,8 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
 void ui_context_end();
 void ui_context_destroy();
 
+void ui_context_set_window_in_focus(const u32 window_id);
+
 f32 ui_get_big_icon_size();
 void ui_set_big_icon_size(f32 new_size);
 void ui_set_big_icon_min_size(f32 new_min);
