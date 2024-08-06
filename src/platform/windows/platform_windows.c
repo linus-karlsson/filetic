@@ -711,6 +711,10 @@ Directory platform_get_directory(const char* directory_path, const u32 directory
                                           last_write_time, type, path, &files);
                 }
             }
+            else
+            {
+                free(path);
+            }
 
         } while (FindNextFile(file_handle, &ffd));
         FindClose(file_handle);

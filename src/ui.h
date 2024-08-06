@@ -164,6 +164,7 @@ typedef struct List
     InputBufferArray inputs;
     f64 input_pressed;
     i32 input_index;
+    i32 last_selected_index;
     b8 item_selected;
 } List;
 
@@ -288,4 +289,4 @@ void ui_window_add_radio_button(V2 position, const V2 size, b8* selected, UiLayo
 // (NOTE): this is very specific for this project and maybe should be implemented outside this ui.
 b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list);
 i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, UiLayout* layout);
-i32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* items, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, List* list);
+i32 ui_window_add_directory_item_grid(V2 position, DirectoryItemArray* items, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, List* list);

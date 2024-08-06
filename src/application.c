@@ -412,6 +412,12 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
         platform_mutex_lock(&page->search_result_file_array.mutex);
         platform_mutex_lock(&page->search_result_folder_array.mutex);
 
+        if (page->search_result_folder_array.array.size ||
+            page->search_result_file_array.array.size)
+        {
+            int i = 0;
+        }
+
         UiLayout layout = { .at = v2f(10.0f, 10.0f) };
         i32 selected_item = -1;
         selected_item = ui_window_add_directory_item_list(
@@ -490,6 +496,7 @@ internal void tab_clear_selected(DirectoryTab* tab)
         tab->directory_list.selected_item_values.last_selected = NULL;
     }
     directory_clear_selected_items(&tab->directory_list.selected_item_values);
+    tab->directory_list.last_selected_index = 0;
 }
 
 internal void render_3d_initialize(Render* render, const u32 shader, int* light_dir_location)
@@ -751,9 +758,9 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
 
                 if (item->type == FOLDER_DEFAULT)
                 {
-                    directory_open_folder(item->path, &tab->directory_history);
-                    directory_clear_selected_items(&tab->directory_list.selected_item_values);
                     recent_panel_add_item(recent, item->path);
+                    directory_open_folder(item->path, &tab->directory_history);
+                    tab_clear_selected(tab);
                 }
                 else
                 {
@@ -772,9 +779,9 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
 
                 if (item->type == FOLDER_DEFAULT)
                 {
-                    directory_open_folder(item->path, &tab->directory_history);
-                    directory_clear_selected_items(&tab->directory_list.selected_item_values);
                     recent_panel_add_item(recent, item->path);
+                    directory_open_folder(item->path, &tab->directory_history);
+                    tab_clear_selected(tab);
                 }
                 else
                 {
@@ -2025,11 +2032,10 @@ internal void safe_add_directory_item(const DirectoryItem* item,
     {
         const u32 name_length = (u32)strlen(name);
         const u32 path_length = (u32)strlen(path);
-        DirectoryItem copy = {
-            .size = item->size,
-            .path = string_copy(path, path_length, 2),
-            .name_offset = (u16)(path_length - name_length),
-        };
+
+        DirectoryItem copy = *item;
+        copy.path = string_copy(path, path_length, 2);
+        copy.name_offset = (u16)(path_length - name_length);
         safe_array_push(safe_array, copy);
     }
 }

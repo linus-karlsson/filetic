@@ -3953,7 +3953,8 @@ internal b8 item_in_view(const f32 position_y, const f32 height, const f32 windo
 }
 
 internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensions,
-                                           DirectoryItem* item, b8* selected, List* list)
+                                           const i32 item_index, DirectoryItem* item, b8* selected,
+                                           List* list)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     AABBArray* aabbs = ui_context.window_aabbs.data + window_index;
@@ -3996,6 +3997,8 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
     {
         if (hit)
         {
+            list->last_selected_index = item_index;
+
             const u32 path_length = (u32)strlen(item->path);
             const u32 name_length = path_length - item->name_offset;
 
@@ -4212,7 +4215,7 @@ internal AABB directory_item_render_icon(const V2 position, const V2 size, const
     return icon_aabb;
 }
 
-internal b8 directory_item(V2 starting_position, V2 item_dimensions, b8* selected,
+internal b8 directory_item(V2 starting_position, V2 item_dimensions, const i32 item_index,
                            DirectoryItem* item, List* list)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
@@ -4220,10 +4223,11 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions, b8* selecte
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    b8 hit =
-        check_directory_item_collision(starting_position, item_dimensions, item, selected, list);
+    b8 selected = false;
+    b8 hit = check_directory_item_collision(starting_position, item_dimensions, item_index, item,
+                                            &selected, list);
 
-    directory_item_update_position_and_background(item, hit, *selected, &starting_position,
+    directory_item_update_position_and_background(item, hit, selected, &starting_position,
                                                   &item_dimensions);
 
     AABB icon_aabb =
@@ -4250,7 +4254,7 @@ internal b8 directory_item(V2 starting_position, V2 item_dimensions, b8* selecte
     return hit && hover_clicked_index.double_clicked;
 }
 
-internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, b8* selected,
+internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, const i32 item_index,
                                 ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures,
                                 SafeObjectThumbnailArray* objects, DirectoryItem* item, List* list)
 {
@@ -4260,10 +4264,11 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, b8* se
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    b8 hit =
-        check_directory_item_collision(starting_position, item_dimensions, item, selected, list);
+    b8 selected = false;
+    b8 hit = check_directory_item_collision(starting_position, item_dimensions, item_index, item,
+                                            &selected, list);
 
-    item->animation_offset = animate_based_on_selection(*selected, hit, item->animation_offset,
+    item->animation_offset = animate_based_on_selection(selected, hit, item->animation_offset,
                                                         v2i(10.0f), ui_context.delta_time);
     v2_sub_equal(&starting_position, item->animation_offset);
     v2_add_equal(&item_dimensions, item->animation_offset);
@@ -4274,9 +4279,9 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, b8* se
     };
     array_push(aabbs, back_drop_aabb);
 
-    if (hit || *selected)
+    if (hit || selected)
     {
-        const V4 color = *selected ? v4ic(0.45f) : v4ic(0.3f);
+        const V4 color = selected ? v4ic(0.45f) : v4ic(0.3f);
         add_default_quad_aabb(&back_drop_aabb, add_window_alpha(window, color));
     }
 
@@ -4369,6 +4374,38 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, b8* se
     return hit && hover_clicked_index.double_clicked;
 }
 
+internal void increase_index(i32 what_to_increase, DirectoryItemArray* items, List* list)
+{
+    const i32 high = (i32)items->size - 1;
+    const i32 low = 0;
+
+    const i32 new_index = list->last_selected_index + what_to_increase;
+    if (new_index >= low && new_index <= high)
+    {
+        list->last_selected_index += what_to_increase;
+
+        if (!event_get_key_event()->shift_pressed)
+        {
+            directory_clear_selected_items(&list->selected_item_values);
+        }
+
+        DirectoryItem* item = items->data + list->last_selected_index;
+        char** check_if_selected =
+            hash_table_get_guid(&list->selected_item_values.selected_items, item->id);
+        if (!check_if_selected)
+        {
+            char* path = string_copy(item->path, (u32)strlen(item->path), 2);
+            hash_table_insert_guid(&list->selected_item_values.selected_items, item->id, path);
+            array_push(&list->selected_item_values.paths, path);
+        }
+        else
+        {
+            item = items->data + (list->last_selected_index - what_to_increase);
+            directory_remove_selected_item(&list->selected_item_values, item->id);
+        }
+    }
+}
+
 i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, DirectoryItemArray* items,
                                       List* list, UiLayout* layout)
 {
@@ -4382,6 +4419,18 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, Direct
     const b8 enter_presssed = event_is_key_pressed_once(FTIC_KEY_ENTER);
     const b8 scroll = event_get_mouse_wheel_event()->activated;
 
+    if (list && window_index == ui_context.window_in_focus && items->size)
+    {
+        if (event_is_key_pressed_repeat(FTIC_KEY_DOWN))
+        {
+            increase_index(1, items, list);
+        }
+        else if (event_is_key_pressed_repeat(FTIC_KEY_UP))
+        {
+            increase_index(-1, items, list);
+        }
+    }
+
     UiLayout temp_layout = { 0 };
     if (list) list->input_index = -1;
     i32 double_clicked_index = -1;
@@ -4391,14 +4440,10 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, Direct
         if (item_in_view(position.y, item_dimensions.height, window->position.y,
                          window->size.height))
         {
-            b8 selected = false;
             DirectoryItem* item = items->data + i;
-            if (directory_item(position, item_dimensions, &selected, item, list))
+            if (directory_item(position, item_dimensions, i, item, list))
             {
                 double_clicked_index = i;
-            }
-            if (selected)
-            {
             }
             if (item->rename && list && list->inputs.data[list->input_index].active)
             {
@@ -4440,15 +4485,14 @@ internal void display_grid_item(const V2 position, const i32 index, const Direct
                                 SafeObjectThumbnailArray* objects, i32* hit_index, List* list)
 {
     DirectoryItem* item = items->data + index;
-    b8 selected = false;
-    if (directory_item_grid(position, item_dimensions, &selected, task_queue, textures, objects,
-                            item, list))
+    if (directory_item_grid(position, item_dimensions, index, task_queue, textures, objects, item,
+                            list))
     {
         *hit_index = index;
     }
 }
 
-i32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* items,
+i32 ui_window_add_directory_item_grid(V2 position, DirectoryItemArray* items,
                                       ThreadTaskQueue* task_queue,
                                       SafeIdTexturePropertiesArray* textures,
                                       SafeObjectThumbnailArray* objects, List* list)
@@ -4476,6 +4520,26 @@ i32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* ite
     position.x += grid_padding_width;
     const f32 start_x = position.x;
 
+    if (list && window_index == ui_context.window_in_focus && items->size)
+    {
+        if (event_is_key_pressed_repeat(FTIC_KEY_RIGHT))
+        {
+            increase_index(1, items, list);
+        }
+        else if (event_is_key_pressed_repeat(FTIC_KEY_LEFT))
+        {
+            increase_index(-1, items, list);
+        }
+        else if (event_is_key_pressed_repeat(FTIC_KEY_UP))
+        {
+            increase_index(-columns, items, list);
+        }
+        else if (event_is_key_pressed_repeat(FTIC_KEY_DOWN))
+        {
+            increase_index(columns, items, list);
+        }
+    }
+
     i32 hit_index = -1;
     for (i32 row = 0; row < rows; ++row)
     {
@@ -4499,8 +4563,8 @@ i32 ui_window_add_directory_item_grid(V2 position, const DirectoryItemArray* ite
         for (i32 column = 0; column < last_row; ++column)
         {
             const i32 index = (rows * columns) + column;
-            display_grid_item(position, index, items, item_dimensions, task_queue,
-                              textures, objects, &hit_index, list);
+            display_grid_item(position, index, items, item_dimensions, task_queue, textures,
+                              objects, &hit_index, list);
             position.x += item_dimensions.width + grid_padding_width;
         }
     }
