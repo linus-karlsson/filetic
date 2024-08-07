@@ -1721,6 +1721,17 @@ internal void main_render_initialize(RenderingProperties* main_render,
     array_free(&vertex_buffer_layout.items);
 }
 
+internal void application_set_colors(ApplicationContext* app)
+{
+    app->secondary_color = global_get_secondary_color();
+    app->clear_color = global_get_clear_color();
+    app->text_color = global_get_text_color();
+    app->tab_color = global_get_tab_color();
+    app->bar_top_color = global_get_bar_top_color();
+    app->bar_bottom_color = global_get_bar_bottom_color();
+    app->border_color = global_get_border_color();
+}
+
 u8* application_initialize(ApplicationContext* app)
 {
     app->window = window_create("FileTic", 1250, 800);
@@ -1861,13 +1872,10 @@ u8* application_initialize(ApplicationContext* app)
     app->style_menu_window = app->windows.data[window_index++];
     app->color_picker_window = app->windows.data[window_index++];
     app->filter_menu_window = app->windows.data[window_index++];
+    app->menu_bar_window = app->windows.data[window_index++];
 
-    theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker, &app->text_color_picker,
-                   &app->tab_color_picker);
-    app->secondary_color = global_get_secondary_color();
-    app->clear_color = global_get_clear_color();
-    app->text_color = global_get_text_color();
-    app->tab_color = global_get_tab_color();
+    theme_set_dark(&app->picker);
+    application_set_colors(app);
 
     app->parent_directory_input = ui_input_buffer_create();
 
@@ -2369,13 +2377,6 @@ internal void drop_down_layout_add_color_picker_button(DropDownLayout* layout, c
     ui_layout_row(&layout->ui_layout);
 }
 
-internal void application_set_colors(ApplicationContext* app)
-{
-    app->secondary_color = global_get_secondary_color();
-    app->clear_color = global_get_clear_color();
-    app->text_color = global_get_text_color();
-    app->tab_color = global_get_tab_color();
-}
 
 internal void application_open_style_menu_window(ApplicationContext* app, DropDownLayout layout,
                                                  V4 button_color)
@@ -2391,26 +2392,46 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
         {
             drop_down_layout_add_color_picker_button(
                 &layout, "Secondary color:", button_size, app->secondary_color,
-                top_bar_style->position, app, &app->secondary_color_picker, &app->secondary_color);
+                top_bar_style->position, app, &app->picker.secondary_color, &app->secondary_color);
             global_set_secondary_color(app->secondary_color);
         }
         {
             drop_down_layout_add_color_picker_button(&layout, "Clear color:", button_size,
                                                      app->clear_color, top_bar_style->position, app,
-                                                     &app->clear_color_picker, &app->clear_color);
+                                                     &app->picker.clear_color, &app->clear_color);
             global_set_clear_color(app->clear_color);
         }
         {
             drop_down_layout_add_color_picker_button(&layout, "Text color:", button_size,
                                                      app->text_color, top_bar_style->position, app,
-                                                     &app->text_color_picker, &app->text_color);
+                                                     &app->picker.text_color, &app->text_color);
             global_set_text_color(app->text_color);
         }
         {
             drop_down_layout_add_color_picker_button(&layout, "Tab color:", button_size,
                                                      app->tab_color, top_bar_style->position, app,
-                                                     &app->tab_color_picker, &app->tab_color);
+                                                     &app->picker.tab_color, &app->tab_color);
             global_set_tab_color(app->tab_color);
+        }
+        {
+            drop_down_layout_add_color_picker_button(
+                &layout, "Bar top color:", button_size, app->bar_top_color, top_bar_style->position,
+                app, &app->picker.bar_top_color, &app->bar_top_color);
+            global_set_bar_top_color(app->bar_top_color);
+        }
+        {
+            drop_down_layout_add_color_picker_button(&layout, "Bar bottom color:", button_size,
+                                                     app->bar_bottom_color, top_bar_style->position,
+                                                     app, &app->picker.bar_bottom_color,
+                                                     &app->bar_bottom_color);
+            global_set_bar_bottom_color(app->bar_bottom_color);
+        }
+        {
+            drop_down_layout_add_color_picker_button(&layout, "Border color:", button_size,
+                                                     app->border_color, top_bar_style->position,
+                                                     app, &app->picker.border_color,
+                                                     &app->border_color);
+            global_set_border_color(app->border_color);
         }
 
         drop_down_layout_add_line(&layout);
@@ -2419,16 +2440,14 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
             if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Dark Theme",
                                      &layout.ui_layout))
             {
-                theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker,
-                               &app->text_color_picker, &app->tab_color_picker);
+                theme_set_dark(&app->picker);
                 application_set_colors(app);
             }
             ui_layout_column(&layout.ui_layout);
             if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Light Theme",
                                      &layout.ui_layout))
             {
-                theme_set_light(&app->clear_color_picker, &app->secondary_color_picker,
-                                &app->text_color_picker, &app->tab_color_picker);
+                theme_set_light(&app->picker);
                 application_set_colors(app);
             }
             ui_layout_reset_column(&layout.ui_layout);
@@ -2436,16 +2455,14 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
             if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Tron Theme",
                                      &layout.ui_layout))
             {
-                theme_set_tron(&app->clear_color_picker, &app->secondary_color_picker,
-                               &app->text_color_picker, &app->tab_color_picker);
+                theme_set_tron(&app->picker);
                 application_set_colors(app);
             }
             ui_layout_column(&layout.ui_layout);
             if (ui_window_add_button(layout.ui_layout.at, NULL, &button_color, "Slime Theme",
                                      &layout.ui_layout))
             {
-                theme_set_slime(&app->clear_color_picker, &app->secondary_color_picker,
-                                &app->text_color_picker, &app->tab_color_picker);
+                theme_set_slime(&app->picker);
                 application_set_colors(app);
             }
             ui_layout_reset_column(&layout.ui_layout);
@@ -2454,8 +2471,7 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
 
         if (drop_down_layout_add_reset_button(&layout, button_color))
         {
-            theme_set_dark(&app->clear_color_picker, &app->secondary_color_picker,
-                           &app->text_color_picker, &app->tab_color_picker);
+            theme_set_dark(&app->picker);
             application_set_colors(app);
         }
 
@@ -2832,7 +2848,7 @@ void application_open_preview(ApplicationContext* app)
         };
         app->preview_camera.view_port = view_port;
         app->preview_camera.view_projection.projection =
-            perspective(PI * 0.5f, view_port.size.width / view_port.size.height, 0.1f, 100.0f);
+            perspective(PI * 0.5f, view_port.size.width / view_port.size.height, 0.01f, 100.0f);
         app->preview_camera.view_projection.view =
             view(app->preview_camera.position,
                  v3_add(app->preview_camera.position, app->preview_camera.orientation),
@@ -3058,7 +3074,7 @@ void application_run()
         }
         look_for_dropped_files(directory_current(&tab->directory_history), directory_to_drop_in);
 
-        const f32 top_bar_height = 24.0f + ui_font_pixel_height;
+        const f32 top_bar_height = 20.0f + ui_font_pixel_height;
         const f32 top_bar_menu_height = 10.0f + ui_font_pixel_height;
         const f32 bottom_bar_height = 15.0f + ui_font_pixel_height;
         const f32 list_item_height = 16.0f + ui_font_pixel_height;
@@ -3127,7 +3143,7 @@ void application_run()
                     UiLayout ui_layout = ui_layout_create(v2i(10.0f));
                     *app.color_to_change = ui_window_add_color_picker(
                         v2i(10.0f), v2f(200.0f, 200.0f), app.color_picker_to_use, &ui_layout);
-#if 0
+#if 1
                     char buffer[64] = { 0 };
                     value_to_string(buffer, V2_FMT(app.color_picker_to_use->at));
                     log_message(buffer, strlen(buffer));
@@ -3146,11 +3162,9 @@ void application_run()
                 }
             }
 
-            ui_window_set_position(app.top_bar_window, v2d());
-            ui_window_set_size(app.top_bar_window,
-                               v2f(app.dimensions.width, top_bar_height + top_bar_menu_height));
-
-            if (ui_window_begin(app.top_bar_window, NULL, UI_WINDOW_NONE))
+            ui_window_set_position(app.menu_bar_window, v2d());
+            ui_window_set_size(app.menu_bar_window, v2f(app.dimensions.width, top_bar_menu_height));
+            if (ui_window_begin(app.menu_bar_window, NULL, UI_WINDOW_NONE))
             {
                 V2 drop_down_position = v2d();
                 i32 index_clicked = ui_window_add_menu_bar(&menu_values, &drop_down_position);
@@ -3186,10 +3200,20 @@ void application_run()
                     app.open_style_menu_window = false;
                     app.open_filter_menu_window = true;
                 }
+                ui_window_end();
+            }
 
-                const f32 button_size = 32.0f;
-                UiLayout ui_layout = ui_layout_create(
-                    v2f(10.0f, top_bar_menu_height - 2.0f + middle(top_bar_height, button_size)));
+            ui_window_set_position(app.top_bar_window, v2f(0.0f, top_bar_menu_height));
+            ui_window_set_size(app.top_bar_window, v2f(app.dimensions.width, top_bar_height));
+
+            ui_context_set_window_top_color(global_get_bar_top_color());
+            ui_context_set_window_bottom_color(global_get_bar_bottom_color());
+
+            if (ui_window_begin(app.top_bar_window, NULL, UI_WINDOW_NONE))
+            {
+                const f32 button_size = top_bar_height - 10.0f;
+                UiLayout ui_layout =
+                    ui_layout_create(v2f(10.0f, middle(top_bar_height, button_size)));
                 ui_layout.column_width = button_size;
                 b8 disable = tab->directory_history.current_index <= 0;
                 add_move_in_history_button(
@@ -3220,7 +3244,7 @@ void application_run()
                     v2f((app.dimensions.width - (search_bar_width + 20.0f)) - ui_layout.at.x,
                         top_bar_height - 10.0f);
 
-                ui_layout.at.y = top_bar_menu_height + middle(top_bar_height, bar_size.height);
+                ui_layout.at.y = middle(top_bar_height, bar_size.height);
 
                 b8 active_before = app.parent_directory_input.active;
                 if (ui_window_add_input_field(ui_layout.at, bar_size, &app.parent_directory_input,
@@ -3285,7 +3309,7 @@ void application_run()
                 }
 
                 ui_layout_column(&ui_layout);
-                if (ui_window_add_input_field(ui_layout.at, v2f(search_bar_width, button_size),
+                if (ui_window_add_input_field(ui_layout.at, v2f(search_bar_width, bar_size.height),
                                               &app.search_page.input, &ui_layout))
                 {
                     search_page_clear_result(&app.search_page);
@@ -3328,9 +3352,11 @@ void application_run()
             ui_window_set_position(app.bottom_bar_window,
                                    v2f(0.0f, app.dimensions.height - bottom_bar_height));
             ui_window_set_size(app.bottom_bar_window, size);
+            ui_context_set_window_top_color(global_get_bar_top_color());
+            ui_context_set_window_bottom_color(global_get_bar_bottom_color());
             if (ui_window_begin(app.bottom_bar_window, NULL, UI_WINDOW_NONE))
             {
-                UiLayout ui_layout = ui_layout_create(v2f(10.0f, 3.0f));
+                UiLayout ui_layout = ui_layout_create(v2f(10.0f, 4.0f));
                 DirectoryPage* current = directory_current(&tab->directory_history);
                 char buffer[64] = { 0 };
                 sprintf_s(buffer, sizeof(buffer), "Items: %u", current->directory.items.size);

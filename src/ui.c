@@ -455,6 +455,12 @@ internal AABB add_border_rounded(const V2 position, const V2 size, const V4 colo
                                position, size, color, 1.0f, 0.4f, 3, 0.0f);
 }
 
+internal AABB add_border(const V2 position, const V2 size, const V4 color)
+{
+    return quad_border(&ui_context.render.vertices, &ui_context.current_window_index_count,
+                               position, size, color, 1.0f, 0.0f);
+}
+
 internal V4 add_window_alpha(const UiWindow* window, const V4 color)
 {
     return v4a(color, window->alpha);
@@ -1753,6 +1759,16 @@ internal void reset_last_frame_windows(WindowRenderDataArray* last_frame)
     }
 }
 
+void ui_context_set_window_top_color(V4 color)
+{
+   ui_context.current_window_top_color = color;
+}
+
+void ui_context_set_window_bottom_color(V4 color)
+{
+   ui_context.current_window_bottom_color = color;
+}
+
 void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 delta_time,
                       const b8 check_collisions)
 {
@@ -3035,6 +3051,8 @@ b8 ui_window_end()
     }
     ui_context.current_index_offset += ui_context.current_window_index_count;
     ui_context.current_window_index_count = 0;
+    ui_context.current_window_bottom_color = global_get_clear_color();
+    ui_context.current_window_top_color = global_get_clear_color();
 
     if (check_bit(window->flags, UI_WINDOW_CLOSING) && !size_animation_on && !position_animation_on)
     {
@@ -3339,7 +3357,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input, UiL
         v2f(position.x + 5.0f, position.y + (middle(size.y, ui_context.font.pixel_height) * 0.8f));
     render_input(window, ui_context.delta_time, text_position, input);
 
-    add_border_rounded(position, size, global_get_border_color());
+    add_border(position, size, global_get_border_color());
 
     ui_layout_set_width_and_height(layout, size.width, size.height);
     return typed;
@@ -3508,7 +3526,7 @@ i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item)
 
     i32 index = -1;
 
-    f32 pixel_height = 10.0f + ui_context.font.pixel_height;
+    f32 pixel_height = 8.0f + ui_context.font.pixel_height;
     add_default_quad(window->position, v2f(ui_context.dimensions.width, pixel_height),
                      global_get_clear_color());
 

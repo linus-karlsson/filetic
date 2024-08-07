@@ -193,6 +193,17 @@ typedef struct ColorPicker
     b8 spectrum_hold;
 } ColorPicker;
 
+typedef struct ThemeColorPicker
+{
+    ColorPicker secondary_color;
+    ColorPicker clear_color;
+    ColorPicker text_color;
+    ColorPicker tab_color;
+    ColorPicker bar_top_color;
+    ColorPicker bar_bottom_color;
+    ColorPicker border_color;
+}ThemeColorPicker;
+
 typedef struct UiLayout
 {
     V2 at;
@@ -240,6 +251,9 @@ void ui_context_set_font_path(const char* new_path);
 
 void ui_context_set_animation(b8 on);
 void ui_context_set_highlight_focused_window(b8 on);
+
+void ui_context_set_window_top_color(V4 color);
+void ui_context_set_window_bottom_color(V4 color);
 
 u32 ui_window_create();
 const UiWindow* ui_window_get(const u32 window_id);

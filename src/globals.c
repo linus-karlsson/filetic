@@ -27,6 +27,7 @@ global const V4 default_lighter_color = {
     .b = 0.55f,
     .a = 1.0f,
 };
+
 global const V4 default_bright_color = {
     .r = 0.7f,
     .g = 0.7f,
@@ -108,8 +109,21 @@ global V4 tab_color = {
     .a = 1.0f,
 };
 
-global f32 border_width = 1.0f;
+global V4 bar_top_color = {
+    .r = 0.25f,
+    .g = 0.25f,
+    .b = 0.25f,
+    .a = 1.0f,
+};
 
+global V4 bar_bottom_color = {
+    .r = 0.16f,
+    .g = 0.16f,
+    .b = 0.16f,
+    .a = 1.0f,
+};
+
+global f32 border_width = 1.0f;
 
 V4 global_get_clear_color()
 {
@@ -151,6 +165,16 @@ V4 global_get_tab_color()
     return tab_color;
 }
 
+V4 global_get_bar_top_color()
+{
+    return bar_top_color;
+}
+
+V4 global_get_bar_bottom_color()
+{
+    return bar_bottom_color;
+}
+
 f32 global_get_border_width()
 {
     return border_width;
@@ -159,7 +183,7 @@ f32 global_get_border_width()
 void global_set_clear_color(V4 v)
 {
     clear_color = v;
-} 
+}
 
 void global_set_highlight_color(V4 v)
 {
@@ -196,6 +220,16 @@ void global_set_tab_color(V4 v)
     tab_color = v;
 }
 
+void global_set_bar_top_color(V4 v)
+{
+    bar_top_color = v;
+}
+
+void global_set_bar_bottom_color(V4 v)
+{
+    bar_bottom_color = v;
+}
+
 void global_set_border_width(f32 v)
 {
     border_width = v;
@@ -204,7 +238,7 @@ void global_set_border_width(f32 v)
 void global_set_default_clear_color()
 {
     clear_color = default_clear_color;
-} 
+}
 
 void global_set_default_highlight_color()
 {

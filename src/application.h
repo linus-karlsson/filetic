@@ -151,6 +151,7 @@ typedef struct Filter
     b8 on;
 } Filter;
 
+
 typedef struct ApplicationContext
 {
     FTicWindow* window;
@@ -195,6 +196,7 @@ typedef struct ApplicationContext
     u32 color_picker_window;
     u32 style_menu_window;
     u32 filter_menu_window;
+    u32 menu_bar_window;
 
     f32 context_menu_x;
 
@@ -212,14 +214,14 @@ typedef struct ApplicationContext
 
     CharPtrArray context_menu_options;
 
-    ColorPicker secondary_color_picker;
-    ColorPicker clear_color_picker;
-    ColorPicker text_color_picker;
-    ColorPicker tab_color_picker;
+    ThemeColorPicker picker;
     V4 secondary_color;
     V4 clear_color;
     V4 text_color;
     V4 tab_color;
+    V4 bar_top_color;
+    V4 bar_bottom_color;
+    V4 border_color;
     V2 color_picker_position;
     ColorPicker* color_picker_to_use;
     V4* color_to_change;
