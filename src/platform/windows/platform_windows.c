@@ -549,10 +549,9 @@ b8 platform_directory_exists(const char* directory_path)
             (file_attributes & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-internal void insert_directory_item(const u32 directory_len, const u64 size,
-                                    const u64 last_write_time, const DirectoryItemType type,
-                                    char* path, DirectoryItemArray* items)
+b8 platform_get_id_from_path(const char* path, FticGUID* id)
 {
+    b8 result = false;
     HANDLE h = CreateFile(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
                           OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
     if (h != INVALID_HANDLE_VALUE)
@@ -563,18 +562,32 @@ internal void insert_directory_item(const u32 directory_len, const u64 size,
         if (DeviceIoControl(h, FSCTL_CREATE_OR_GET_OBJECT_ID, NULL, 0, &buffer, sizeof(buffer),
                             &cb_out, NULL))
         {
-            DirectoryItem item = {
-                .size = size,
-                .last_write_time = last_write_time,
-                .path = path,
-                .name_offset = (u16)(directory_len - 1),
-                .type = type,
-            };
-
-            item.id = guid_copy_bytes(buffer.ObjectId);
-            array_push(items, item);
+            *id = guid_copy_bytes(buffer.ObjectId);
+            result = true;
         }
         CloseHandle(h);
+    }
+    return result;
+}
+
+internal void insert_directory_item(const u32 directory_len, const u64 size,
+                                    const u64 last_write_time, const DirectoryItemType type,
+                                    char* path, DirectoryItemArray* items)
+{
+    DirectoryItem item = {
+        .size = size,
+        .last_write_time = last_write_time,
+        .path = path,
+        .name_offset = (u16)(directory_len - 1),
+        .type = type,
+    };
+    if (platform_get_id_from_path(path, &item.id))
+    {
+        array_push(items, item);
+    }
+    else
+    {
+        free(path);
     }
 }
 
@@ -658,8 +671,8 @@ internal DirectoryItemType get_file_type_based_on_extension(const char* name, co
 
 Directory platform_get_directory(const char* directory_path, const u32 directory_len, b8 get_files)
 {
-    DirectoryItemArray folders = {0};
-    DirectoryItemArray files = {0};
+    DirectoryItemArray folders = { 0 };
+    DirectoryItemArray files = { 0 };
     array_create(&folders, 10);
     array_create(&files, 10);
 
@@ -722,13 +735,14 @@ Directory platform_get_directory(const char* directory_path, const u32 directory
     Directory directory = { 0 };
     directory.parent = (char*)calloc(directory_len + 1, sizeof(char));
     memcpy(directory.parent, directory_path, directory_len - 2);
+    platform_get_id_from_path(directory.parent, &directory.parent_id);
 
     array_create(&directory.items, folders.size + files.size);
-    for(u32 i = 0; i < folders.size; ++i)
+    for (u32 i = 0; i < folders.size; ++i)
     {
         array_push(&directory.items, folders.data[i]);
     }
-    for(u32 i = 0; i < files.size; ++i)
+    for (u32 i = 0; i < files.size; ++i)
     {
         array_push(&directory.items, files.data[i]);
     }
@@ -1777,4 +1791,32 @@ void platform_open_terminal(const char* path)
     {
         log_last_error();
     }
+}
+
+char* platform_get_path_from_id(FticGUID id)
+{
+    char* path = NULL;
+
+    HANDLE hRoot = CreateFile("C:\\", 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (hRoot != INVALID_HANDLE_VALUE)
+    {
+        FILE_ID_DESCRIPTOR desc;
+        desc.dwSize = sizeof(desc);
+        desc.Type = ExtendedFileIdType;
+        memcpy(desc.ExtendedFileId.Identifier, id.bytes, 16);
+        HANDLE h = OpenFileById(hRoot, &desc, GENERIC_READ,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, 0);
+        if (h != INVALID_HANDLE_VALUE)
+        {
+            char file_path[MAX_PATH] = { 0 };
+            GetFinalPathNameByHandle(h, file_path, MAX_PATH, FILE_NAME_OPENED);
+            const u32 path_length = (u32)strlen(file_path) - 3;
+            memcpy(file_path, file_path + 4, path_length);
+            path = string_copy(file_path, path_length, 3);
+            CloseHandle(h);
+        }
+        CloseHandle(hRoot);
+    }
+    return path;
 }

@@ -103,6 +103,8 @@ typedef struct UiWindow
     V2 position;
 
     f32 end_scroll_offset;
+    f32 start_scroll_offset;
+    f32 scroll_x;
     f32 current_scroll_offset;
 
     f32 end_scroll_offset_width;

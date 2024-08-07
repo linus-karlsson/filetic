@@ -5,7 +5,7 @@
 
 typedef enum DirectoryItemType
 {
-    FOLDER_DEFAULT,
+    FOLDER_DEFAULT = 0,
     FILE_DEFAULT,
     FILE_PNG,
     FILE_JPG,
@@ -79,6 +79,7 @@ typedef struct DirectoryItemArray
 
 typedef struct Directory
 {
+    FticGUID parent_id;
     char* parent;
     DirectoryItemArray items;
 } Directory;
@@ -214,3 +215,7 @@ void platform_insert_filter_value(char* value, b8 selected);
 void platform_set_filter_on(const char* value, b8 selected);
 void platform_set_filter(b8 on);
 void platform_set_folder_filter(b8 on);
+
+char* platform_get_path_from_id(FticGUID id);
+b8 platform_get_id_from_path(const char* path, FticGUID* id);
+

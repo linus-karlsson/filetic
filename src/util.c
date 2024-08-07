@@ -180,7 +180,7 @@ void file_rename(const char* full_path, const char* new_name, const u32 name_len
     char* to = string_copy(full_path, path_length, name_length + 2);
     memcpy(to + path_length, new_name, name_length);
 
-    rename(full_path, to);
+    int result = rename(full_path, to);
 
     free(to);
 }

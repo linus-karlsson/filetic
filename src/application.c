@@ -443,14 +443,14 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
     return false;
 }
 
-internal void recent_panel_add_item(RecentPanel* recent, const char* path_temp)
+internal void recent_panel_add_item(RecentPanel* recent, const DirectoryItem* item)
 {
-    if (platform_directory_exists(path_temp))
+    if (platform_directory_exists(item->path))
     {
         DirectoryItemArray* items = &recent->panel.items;
         for (u32 i = 0; i < items->size; ++i)
         {
-            if (!strcmp(path_temp, items->data[i].path))
+            if (guid_compare(items->data[i].id, item->id) == 0)
             {
                 DirectoryItem temp = items->data[i];
                 for (i32 j = i; j >= 1; --j)
@@ -461,24 +461,21 @@ internal void recent_panel_add_item(RecentPanel* recent, const char* path_temp)
                 return;
             }
         }
-        const u32 length = (u32)strlen(path_temp);
-        char* path = (char*)calloc(length + 1, sizeof(char));
-        memcpy(path, path_temp, length);
-        DirectoryItem item = {
-            .path = path,
-            .name_offset = (u16)get_path_length(path, length),
-        };
+        DirectoryItem item_to_add = *item;
+        item_to_add.id = item->id;
+        item_to_add.path = string_copy_d(item_to_add.path);
+        item_to_add.name_offset = item->name_offset;
         if (items->size == recent->total)
         {
             free(array_back(items)->path);
             items->size--;
         }
-        array_push(items, item);
+        array_push(items, item_to_add);
         for (i32 i = (i32)items->size - 1; i >= 1; --i)
         {
             items->data[i] = items->data[i - 1];
         }
-        items->data[0] = item;
+        items->data[0] = item_to_add;
     }
 }
 
@@ -758,7 +755,7 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
 
                 if (item->type == FOLDER_DEFAULT)
                 {
-                    recent_panel_add_item(recent, item->path);
+                    recent_panel_add_item(recent, item);
                     directory_open_folder(item->path, &tab->directory_history);
                     tab_clear_selected(tab);
                 }
@@ -779,7 +776,7 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
 
                 if (item->type == FOLDER_DEFAULT)
                 {
-                    recent_panel_add_item(recent, item->path);
+                    recent_panel_add_item(recent, item);
                     directory_open_folder(item->path, &tab->directory_history);
                     tab_clear_selected(tab);
                 }
@@ -1508,10 +1505,8 @@ internal void save_application_state(ApplicationContext* app)
     fwrite(&app->tabs.size, sizeof(app->tabs.size), 1, file);
     for (u32 i = 0; i < app->tabs.size; ++i)
     {
-        char* path = directory_current(&app->tabs.data[i].directory_history)->directory.parent;
-        u32 path_length = (u32)strlen(path);
-        fwrite(&path_length, sizeof(u32), 1, file);
-        fwrite(path, sizeof(char), path_length, file);
+        FticGUID id = directory_current(&app->tabs.data[i].directory_history)->directory.parent_id;
+        fwrite(&id, sizeof(FticGUID), 1, file);
         fwrite(&app->tabs.data[i].window_id, sizeof(app->tabs.data[i].window_id), 1, file);
     }
     fclose(file);
@@ -1535,16 +1530,14 @@ internal void load_application_state(ApplicationContext* app)
     }
     for (u32 i = 0; i < size; ++i)
     {
-        u32 path_length = 0;
-        fread(&path_length, sizeof(u32), 1, file);
-
-        char* path = (char*)calloc(path_length + 3, sizeof(char));
-        fread(path, sizeof(char), path_length, file);
-
+        FticGUID id = { 0 };
+        fread(&id, sizeof(FticGUID), 1, file);
         u32 window_id = 0;
         fread(&window_id, sizeof(window_id), 1, file);
 
-        if (platform_directory_exists(path))
+        char* path = platform_get_path_from_id(id);
+        u32 path_length = (u32)strlen(path);
+        if (path && platform_directory_exists(path))
         {
             path[path_length++] = '\\';
             path[path_length++] = '*';
@@ -1567,28 +1560,18 @@ internal void access_panel_save(AccessPanel* panel, const char* file_path)
 {
     if (!panel->items.size) return;
 
-    u32 buffer_size = 0;
-    u32* path_lengths = (u32*)calloc(panel->items.size, sizeof(u32));
-    for (u32 i = 0; i < panel->items.size; ++i)
-    {
-        path_lengths[i] = (u32)strlen(panel->items.data[i].path);
-        buffer_size += path_lengths[i];
-        buffer_size++;
-    }
-
-    char* buffer = (char*)calloc(buffer_size, sizeof(char));
     u32 buffer_offset = 0;
+    u32 buffer_size = panel->items.size * sizeof(FticGUID);
+    char* buffer = (char*)calloc(panel->items.size, sizeof(FticGUID));
     for (u32 i = 0; i < panel->items.size; ++i)
     {
-        memcpy(buffer + buffer_offset, panel->items.data[i].path, path_lengths[i]);
-        buffer_offset += path_lengths[i];
-        buffer[buffer_offset++] = '\n';
+        DirectoryItem* item = panel->items.data + i;
+        for (u32 j = 0; j < static_array_size(item->id.bytes); ++j)
+        {
+            buffer[buffer_offset++] = item->id.bytes[j];
+        }
     }
-    buffer[--buffer_offset] = '\0';
-
     file_write(file_path, buffer, buffer_offset);
-
-    free(path_lengths);
     free(buffer);
 }
 
@@ -1599,30 +1582,23 @@ internal void access_panel_load(AccessPanel* panel, const char* file_path)
     {
         return;
     }
-    CharArray line = { 0 };
-    array_create(&line, 500);
-
     while (!file_end_of_file(&file))
     {
-        file_line_read(&file, true, &line);
-        if (*array_back(&line) == '\r')
+        FticGUID guid = { 0 };
+        for (u32 i = 0; i < static_array_size(guid.bytes); ++i)
         {
-            *array_back(&line) = '\0';
-            line.size--;
+            guid.bytes[i] = file.buffer[file.current_pos++];
         }
-        if (line.size && platform_directory_exists(line.data))
+        DirectoryItem item = {
+            .id = guid,
+            .path = platform_get_path_from_id(guid),
+        };
+        if (item.path)
         {
-            char* path = (char*)calloc(line.size + 1, sizeof(char));
-            memcpy(path, line.data, line.size);
-            DirectoryItem item = {
-                .path = path,
-                .name_offset = (u16)get_path_length(path, line.size),
-            };
+            item.name_offset = (u16)get_path_length(item.path, (u32)strlen(item.path));
             array_push(&panel->items, item);
         }
-        line.size = 0;
     }
-    free(line.data);
     free(file.buffer);
 }
 
@@ -1652,7 +1628,7 @@ internal b8 access_panel_open(AccessPanel* panel, const char* title, const f32 l
                 directory_open_folder(panel->items.data[panel->list.selected_item].path,
                                       directory_history);
 
-                recent_panel_add_item(recent, panel->items.data[panel->list.selected_item].path);
+                recent_panel_add_item(recent, &panel->items.data[panel->list.selected_item]);
             }
 
             panel->menu_item.show = !ui_window_end();
@@ -2377,7 +2353,6 @@ internal void drop_down_layout_add_color_picker_button(DropDownLayout* layout, c
     ui_layout_row(&layout->ui_layout);
 }
 
-
 internal void application_open_style_menu_window(ApplicationContext* app, DropDownLayout layout,
                                                  V4 button_color)
 {
@@ -2427,10 +2402,9 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
             global_set_bar_bottom_color(app->bar_bottom_color);
         }
         {
-            drop_down_layout_add_color_picker_button(&layout, "Border color:", button_size,
-                                                     app->border_color, top_bar_style->position,
-                                                     app, &app->picker.border_color,
-                                                     &app->border_color);
+            drop_down_layout_add_color_picker_button(
+                &layout, "Border color:", button_size, app->border_color, top_bar_style->position,
+                app, &app->picker.border_color, &app->border_color);
             global_set_border_color(app->border_color);
         }
 
@@ -2670,14 +2644,16 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
                     }
                     if (!exist)
                     {
-                        const u32 length = (u32)strlen(path_temp);
-                        char* path = (char*)calloc(length + 1, sizeof(char));
-                        memcpy(path, path_temp, length);
-                        DirectoryItem directory_item = {
-                            .path = path,
-                            .name_offset = (u16)get_path_length(path, length),
-                        };
-                        array_push(quick_access, directory_item);
+                        DirectoryItem directory_item = { 0 };
+                        if (platform_get_id_from_path(path_temp, &directory_item.id))
+                        {
+                            const u32 length = (u32)strlen(path_temp);
+                            char* path = (char*)calloc(length + 1, sizeof(char));
+                            memcpy(path, path_temp, length);
+                            directory_item.path = path;
+                            directory_item.name_offset = (u16)get_path_length(path, length);
+                            array_push(quick_access, directory_item);
+                        }
                     }
                 }
             }

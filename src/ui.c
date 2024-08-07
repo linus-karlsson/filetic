@@ -313,7 +313,7 @@ internal void ui_layout_set_width_and_height(UiLayout* layout, const f32 width, 
 
 internal f32 set_scroll_offset(const f32 total_height, const f32 area_y, f32 offset)
 {
-    const f32 y_offset = event_get_mouse_wheel_event()->y_offset * 100.0f;
+    const f32 y_offset = event_get_mouse_wheel_event()->y_offset * 80.0f;
     offset += y_offset;
     offset = ftic_clamp_high(offset, 0.0f);
 
@@ -322,12 +322,14 @@ internal f32 set_scroll_offset(const f32 total_height, const f32 area_y, f32 off
     return ftic_clamp_low(offset, low);
 }
 
-internal f32 smooth_scroll(const f64 delta_time, const f32 offset, const f32 speed,
-                           f32 scroll_offset)
+internal void smooth_scroll(UiWindow* window, const f64 delta_time, const f32 speed)
 {
-    scroll_offset += (f32)((offset - scroll_offset) * (delta_time * speed));
-    scroll_offset += (offset - scroll_offset) * ui_context.animation_off;
-    return scroll_offset;
+    window->scroll_x += (f32)delta_time * speed;
+    window->scroll_x += 1.0f * ui_context.animation_off;
+    window->scroll_x = ftic_min(window->scroll_x, 1.0f);
+
+    window->current_scroll_offset = lerp_f32(window->start_scroll_offset, window->end_scroll_offset,
+                                             ease_out_cubic(window->scroll_x));
 }
 
 internal void push_window_to_front(U32Array* window_array, const u32 index)
@@ -458,7 +460,7 @@ internal AABB add_border_rounded(const V2 position, const V2 size, const V4 colo
 internal AABB add_border(const V2 position, const V2 size, const V4 color)
 {
     return quad_border(&ui_context.render.vertices, &ui_context.current_window_index_count,
-                               position, size, color, 1.0f, 0.0f);
+                       position, size, color, 1.0f, 0.0f);
 }
 
 internal V4 add_window_alpha(const UiWindow* window, const V4 color)
@@ -696,6 +698,8 @@ internal void dock_node_dock_window(DockNode* root, DockNode* window, SplitAxis 
                 UiWindow* ui_window = ui_window_get_(window->windows.data[i]);
                 ui_window->position = root->aabb.min;
                 ui_window->size = root->aabb.size;
+                ui_window->dock_node->aabb.min = ui_window->position;
+                ui_window->dock_node->aabb.size = ui_window->size;
             }
             root->children[0] = window;
             return;
@@ -1119,6 +1123,8 @@ internal void insert_window(DockNode* node, const u32 id, const b8 docked)
         .dock_node = node,
         .alpha = 1.0f,
     };
+    window.dock_node->aabb.min = window.position;
+    window.dock_node->aabb.size = window.size;
     set_bit(window.flags, UI_WINDOW_DOCKED * docked);
     array_push(&ui_context.windows, window);
     array_push(&ui_context.animation_x, 1.0f);
@@ -1761,12 +1767,12 @@ internal void reset_last_frame_windows(WindowRenderDataArray* last_frame)
 
 void ui_context_set_window_top_color(V4 color)
 {
-   ui_context.current_window_top_color = color;
+    ui_context.current_window_top_color = color;
 }
 
 void ui_context_set_window_bottom_color(V4 color)
 {
-   ui_context.current_window_bottom_color = color;
+    ui_context.current_window_bottom_color = color;
 }
 
 void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 delta_time,
@@ -3013,14 +3019,14 @@ b8 ui_window_end()
         if (event_get_mouse_wheel_event()->activated &&
             check_bit(window->flags, UI_WINDOW_AREA_HIT))
         {
+            window->scroll_x = 0.0f;
+            window->start_scroll_offset = window->current_scroll_offset;
             window->end_scroll_offset = set_scroll_offset(
                 ui_context.current_window_total_height, window->size.y, window->end_scroll_offset);
         }
         if (ui_context.delta_time < 0.5f)
         {
-            window->current_scroll_offset =
-                smooth_scroll(ui_context.delta_time, window->end_scroll_offset, 12.0f,
-                              window->current_scroll_offset);
+            smooth_scroll(window, ui_context.delta_time, 4.0f);
         }
     }
 
@@ -4217,7 +4223,7 @@ internal void directory_item_update_position_and_background(DirectoryItem* item,
         ui_context.current_window_index_count += 6;
     }
     item->animation_offset = animate_based_on_selection(selected, hit, item->animation_offset,
-                                                        v2f(16.0f, 0.0f), ui_context.delta_time);
+                                                        v2f(12.0f, 0.0f), ui_context.delta_time);
     position->x += item->animation_offset.x;
     item_dimensions->width -= item->animation_offset.x;
 }
@@ -4484,7 +4490,11 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, Direct
 
                 if (enter_presssed)
                 {
+#if 0
+                    platform_rename_file(item->path, input->buffer.data, input->buffer.size);
+#else
                     file_rename(item->path, input->buffer.data, input->buffer.size);
+#endif
                     input->active = false;
                     item->rename = false;
                 }
