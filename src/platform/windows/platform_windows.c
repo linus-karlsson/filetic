@@ -1056,20 +1056,27 @@ DWORD CALLBACK copy_progress_routine(LARGE_INTEGER TotalFileSize,
     return PROGRESS_CONTINUE;
 }
 
-#if 1
-void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path)
+internal void file_operation(const CharPtrArray* paths, const char* directory_path, u32 function,
+                             FILEOP_FLAGS operation)
 {
     for (u32 i = 0; i < paths->size; ++i)
     {
         const char* path = paths->data[i];
         SHFILEOPSTRUCT file_op = {
-            .wFunc = FO_COPY,
+            .wFunc = function,
             .pFrom = path,
             .pTo = directory_path,
-            .fFlags = FOF_ALLOWUNDO,
+            .fFlags = operation,
         };
         int result = SHFileOperation(&file_op);
     }
+}
+
+#if 1
+void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path)
+
+{
+    file_operation(paths, directory_path, FO_COPY, FOF_ALLOWUNDO);
 }
 #elif 0
 void platform_paste_to_directory(const CharPtrArray* paths, const char* directory_path)
@@ -1141,6 +1148,11 @@ void platform_paste_to_directory(const CharPtrArray* paths, const char* director
     CoUninitialize();
 }
 #endif
+
+void platform_move_to_directory(const CharPtrArray* paths, const char* directory_path)
+{
+    file_operation(paths, directory_path, FO_MOVE, FOF_ALLOWUNDO);
+}
 
 #if 1
 void platform_delete_files(const CharPtrArray* paths)

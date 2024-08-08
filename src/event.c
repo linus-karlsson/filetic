@@ -65,7 +65,6 @@ internal void on_mouse_move_event(void* window, double x_pos, double y_pos)
     event_context.mouse_move_event.activated = true;
 
     event_context.last_event_time = window_get_time();
-    event_context.position = v2f((f32)x_pos, (f32)y_pos);
 }
 
 internal void on_mouse_button_event(void* window, int button, int action,
@@ -137,7 +136,7 @@ void event_uninitialize()
     free(event_context.drop_paths.data);
 }
 
-void event_poll()
+void event_poll(V2 mouse_position)
 {
     event_context.key_event.activated = false;
     event_context.mouse_move_event.activated = false;
@@ -145,6 +144,8 @@ void event_poll()
     event_context.mouse_wheel_event.activated = false;
 
     event_context.mouse_button_event.double_clicked = false;
+
+    event_context.position = mouse_position;
 
     if (event_context.key_buffer.size)
     {
@@ -175,6 +176,11 @@ void event_poll()
 #endif
 }
 
+void event_update_position(V2 mouse_position)
+{
+    event_context.position = mouse_position;
+}
+
 const KeyEvent* event_get_key_event()
 {
     return &event_context.key_event;
@@ -197,8 +203,8 @@ const MouseWheelEvent* event_get_mouse_wheel_event()
 
 V2 event_get_mouse_position()
 {
-    return v2f((f32)event_context.mouse_move_event.position_x,
-               (f32)event_context.mouse_move_event.position_y);
+    return event_context.position;
+          
 }
 
 const CharArray* event_get_key_buffer()

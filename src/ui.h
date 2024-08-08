@@ -263,6 +263,8 @@ u32 ui_window_in_focus();
 b8 ui_window_begin(u32 window_id, const char* title, u8 flags);
 b8 ui_window_end();
 
+b8 ui_window_is_hit(const u32 window_id);
+
 void ui_window_set_end_scroll_offset(const u32 window_id, const f32 offest);
 void ui_window_set_current_scroll_offset(const u32 window_id, const f32 offset);
 
@@ -305,6 +307,6 @@ void ui_window_add_rectangle(V2 position, const V2 size, const V4 color, UiLayou
 void ui_window_add_radio_button(V2 position, const V2 size, b8* selected, UiLayout* layout);
 
 // (NOTE): this is very specific for this project and maybe should be implemented outside this ui.
-b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, MovableList* list);
-i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, UiLayout* layout);
-i32 ui_window_add_directory_item_grid(V2 position, DirectoryItemArray* items, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, List* list);
+b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, i32* hit_index, MovableList* list);
+i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, DirectoryItemArray* items, List* list, i32* hit_index, UiLayout* layout);
+i32 ui_window_add_directory_item_grid(V2 position, DirectoryItemArray* items, ThreadTaskQueue* task_queue, SafeIdTexturePropertiesArray* textures, SafeObjectThumbnailArray* objects, i32* hit_index, List* list);

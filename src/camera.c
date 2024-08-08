@@ -152,3 +152,19 @@ b8 camera_update(Camera* camera, const f64 delta_time)
     }
     return moved;
 }
+
+void camera_set_based_on_mesh_aabb(Camera* camera, const AABB3D* mesh_aabb)
+{
+    const V3 aabb_center = v3_add(mesh_aabb->min, v3_s_multi(mesh_aabb->size, 0.5f));
+
+    const V3 top_right_corner =
+        v3_add(mesh_aabb->min, v3f(mesh_aabb->size.x, mesh_aabb->size.y, mesh_aabb->size.z));
+
+    camera->position = top_right_corner;
+    camera->orientation = v3_normalize(v3_sub(aabb_center, camera->position));
+
+    const f32 diagonal_length = v3_len(v3_sub(top_right_corner, aabb_center));
+    const f32 scale_factor = 0.082f * diagonal_length;
+
+    camera->position = v3_sub(camera->position, v3_s_multi(camera->orientation, scale_factor));
+}

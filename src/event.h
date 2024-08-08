@@ -182,7 +182,8 @@ typedef struct MouseWheelEvent
 
 void event_initialize(FTicWindow* window);
 void event_uninitialize();
-void event_poll();
+void event_poll(V2 mouse_position);
+void event_update_position(V2 mouse_position);
 
 const KeyEvent* event_get_key_event();
 const MouseMoveEvent* event_get_mouse_move_event();

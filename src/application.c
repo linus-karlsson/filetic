@@ -241,22 +241,6 @@ internal void enable_gldebugging()
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 }
 
-internal void camera_set_based_on_mesh_aabb(Camera* camera, const AABB3D* mesh_aabb)
-{
-    const V3 aabb_center = v3_add(mesh_aabb->min, v3_s_multi(mesh_aabb->size, 0.5f));
-
-    const V3 top_right_corner =
-        v3_add(mesh_aabb->min, v3f(mesh_aabb->size.x, mesh_aabb->size.y, mesh_aabb->size.z));
-
-    camera->position = top_right_corner;
-    camera->orientation = v3_normalize(v3_sub(aabb_center, camera->position));
-
-    const f32 diagonal_length = v3_len(v3_sub(top_right_corner, aabb_center));
-    const f32 scale_factor = 0.082f * diagonal_length;
-
-    camera->position = v3_sub(camera->position, v3_s_multi(camera->orientation, scale_factor));
-}
-
 internal b8 load_preview_image(const char* path, V2* image_dimensions, U32Array* textures)
 {
     b8 result = false;
@@ -280,8 +264,8 @@ internal b8 load_preview_image(const char* path, V2* image_dimensions, U32Array*
     return result;
 }
 
-internal b8 check_and_load_image(const i32 index, V2* image_dimensions, char** current_path,
-                                 const DirectoryItemArray* files, U32Array* textures)
+internal b8 check_and_load_preview_image(const i32 index, V2* image_dimensions, char** current_path,
+                                         const DirectoryItemArray* files, U32Array* textures)
 {
     const char* path = files->data[index].path;
     if (load_preview_image(path, image_dimensions, textures))
@@ -314,8 +298,8 @@ internal V2 load_and_scale_preview_image(const ApplicationContext* application,
                     for (i32 count = 1; count <= (i32)items->size; ++count)
                     {
                         const i32 index = (i + count) % items->size;
-                        if (check_and_load_image(index, image_dimensions, current_path, items,
-                                                 textures))
+                        if (check_and_load_preview_image(index, image_dimensions, current_path,
+                                                         items, textures))
                         {
                             break;
                         }
@@ -327,8 +311,8 @@ internal V2 load_and_scale_preview_image(const ApplicationContext* application,
                          ++count, --index)
                     {
                         if (index < 0) index = items->size - 1;
-                        if (check_and_load_image(index, image_dimensions, current_path, items,
-                                                 textures))
+                        if (check_and_load_preview_image(index, image_dimensions, current_path,
+                                                         items, textures))
                         {
                             break;
                         }
@@ -350,13 +334,12 @@ internal V2 load_and_scale_preview_image(const ApplicationContext* application,
     return image_dimensions_internal;
 }
 
-internal void look_for_dropped_files(DirectoryPage* current, const char* directory_path)
+internal void look_for_dropped_files(DirectoryPage* current, char* item_hit)
 {
     const CharPtrArray* dropped_paths = event_get_drop_buffer();
     if (dropped_paths->size)
     {
-        platform_paste_to_directory(dropped_paths,
-                                    directory_path ? directory_path : current->directory.parent);
+        platform_move_to_directory(dropped_paths, item_hit ? item_hit : current->directory.parent);
     }
 }
 
@@ -404,7 +387,7 @@ internal void add_move_in_history_button(UiLayout* layout, const V4 icon_co, con
 }
 
 internal b8 show_search_result_window(SearchPage* page, const u32 window,
-                                      const f32 list_item_height,
+                                      const f32 list_item_height, char** item_hit,
                                       DirectoryHistory* directory_history)
 {
     if (ui_window_begin(window, "Search result", UI_WINDOW_TOP_BAR | UI_WINDOW_RESIZEABLE))
@@ -412,24 +395,26 @@ internal b8 show_search_result_window(SearchPage* page, const u32 window,
         platform_mutex_lock(&page->search_result_file_array.mutex);
         platform_mutex_lock(&page->search_result_folder_array.mutex);
 
-        if (page->search_result_folder_array.array.size ||
-            page->search_result_file_array.array.size)
-        {
-            int i = 0;
-        }
+        i32 hit_index = -1;
 
         UiLayout layout = { .at = v2f(10.0f, 10.0f) };
         i32 selected_item = -1;
-        selected_item = ui_window_add_directory_item_list(
-            layout.at, list_item_height, &page->search_result_folder_array.array, NULL, &layout);
+        selected_item = ui_window_add_directory_item_list(layout.at, list_item_height,
+                                                          &page->search_result_folder_array.array,
+                                                          NULL, &hit_index, &layout);
         if (selected_item != -1)
         {
             directory_open_folder(page->search_result_folder_array.array.data[selected_item].path,
                                   directory_history);
         }
+        else if (hit_index != -1)
+        {
+            *item_hit = page->search_result_folder_array.array.data[hit_index].path;
+        }
         ui_layout_row(&layout);
-        selected_item = ui_window_add_directory_item_list(
-            layout.at, list_item_height, &page->search_result_file_array.array, NULL, &layout);
+        selected_item = ui_window_add_directory_item_list(layout.at, list_item_height,
+                                                          &page->search_result_file_array.array,
+                                                          NULL, &hit_index, &layout);
         if (selected_item != -1)
         {
             platform_open_file(page->search_result_file_array.array.data[selected_item].path);
@@ -721,15 +706,15 @@ internal void add_arrow_icon(const V2 at, const V2 button_size, const u32 sort_c
     ui_window_add_icon(arrow_position, v2i(12.0f), full_icon_co, sort_icon, NULL);
 }
 
-internal b8 show_directory_window(const u32 window, const f32 list_item_height,
-                                  const b8 check_collision, const b8 context_menu_open,
-                                  const V2 dimensions, const u32 shader, RecentPanel* recent,
-                                  ThreadTaskQueue* task_queue, DirectoryTab* tab)
+internal b8 application_show_directory_window(ApplicationContext* app, const u32 window,
+                                              const f32 list_item_height, const b8 check_collision,
+                                              char** item_hit, DirectoryTab* tab)
 {
     DirectoryPage* current = directory_current(&tab->directory_history);
 
     look_for_and_load_image_thumbnails(tab);
-    look_for_and_load_object_thumbnails(dimensions, shader, tab);
+    look_for_and_load_object_thumbnails(app->dimensions, app->render_3d.shader_properties.shader,
+                                        tab);
 
     if (ui_window_begin(window, get_parent_directory_name(current),
                         UI_WINDOW_TOP_BAR | UI_WINDOW_RESIZEABLE))
@@ -742,20 +727,23 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
 
         tab->directory_list.item_selected = false;
 
+        i32 hit_index = -1;
+        i32 selected_item = -1;
+
         UiLayout layout = ui_layout_create(v2f(10.0f, position.y + button_size.height + 5.0f));
         if (current->grid_view)
         {
-            i32 result = ui_window_add_directory_item_grid(
-                v2f(0.0f, layout.at.y), &current->directory.items, task_queue, &tab->textures,
-                &tab->objects, &tab->directory_list);
+            selected_item = ui_window_add_directory_item_grid(
+                v2f(0.0f, layout.at.y), &current->directory.items, &app->thread_queue.task_queue,
+                &tab->textures, &tab->objects, &hit_index, &tab->directory_list);
 
-            if (result != -1)
+            if (selected_item != -1)
             {
-                DirectoryItem* item = current->directory.items.data + result;
+                DirectoryItem* item = current->directory.items.data + selected_item;
 
                 if (item->type == FOLDER_DEFAULT)
                 {
-                    recent_panel_add_item(recent, item);
+                    recent_panel_add_item(&app->recent, item);
                     directory_open_folder(item->path, &tab->directory_history);
                     tab_clear_selected(tab);
                 }
@@ -767,16 +755,16 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
         }
         else
         {
-            i32 selected_item = ui_window_add_directory_item_list(layout.at, list_item_height,
-                                                                  &current->directory.items,
-                                                                  &tab->directory_list, &layout);
+            selected_item = ui_window_add_directory_item_list(
+                layout.at, list_item_height, &current->directory.items, &tab->directory_list,
+                &hit_index, &layout);
             if (selected_item != -1)
             {
                 DirectoryItem* item = current->directory.items.data + selected_item;
 
                 if (item->type == FOLDER_DEFAULT)
                 {
-                    recent_panel_add_item(recent, item);
+                    recent_panel_add_item(&app->recent, item);
                     directory_open_folder(item->path, &tab->directory_history);
                     tab_clear_selected(tab);
                 }
@@ -786,9 +774,15 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
                 }
             }
         }
+        if (hit_index != -1 && selected_item == -1 &&
+            current->directory.items.data[hit_index].type == FOLDER_DEFAULT)
+        {
+            *item_hit = current->directory.items.data[hit_index].path;
+        }
         if (!tab->directory_list.item_selected && !tab->directory_list.inputs.data[0].active)
         {
-            if ((!context_menu_open && event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT)) ||
+            if ((!app->open_context_menu_window &&
+                 event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT)) ||
                 event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT))
             {
                 tab_clear_selected(tab);
@@ -833,8 +827,8 @@ internal b8 show_directory_window(const u32 window, const f32 list_item_height,
     return false;
 }
 
-internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu, const b8 icons,
-                               const ApplicationContext* application, void* option_data)
+internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu, const ApplicationContext* application,
+                               void* option_data)
 {
     const u32 drop_down_item_count = drop_down_menu->options.size;
     if (drop_down_item_count == 0) return true;
@@ -870,17 +864,16 @@ internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu, const b8 icons,
              v2f(drop_down_menu->position.x - drop_down_border_width,
                  drop_down_menu->position.y - drop_down_border_width),
              v2f(drop_down_width + border_extra_padding, current_y + border_extra_padding),
-             v4a(v4ic(0.15f), 0.92f), 0.0f);
+             v4a(global_get_clear_color(), 0.92f), 0.0f);
     *drop_down_menu->index_count += 6;
 
-    quad_border_gradiant(&drop_down_menu->render->vertices, drop_down_menu->index_count,
-                         drop_down_menu->aabb.min, drop_down_menu->aabb.size,
-                         global_get_lighter_color(), global_get_lighter_color(),
-                         drop_down_border_width, 0.0f);
+    quad_border(&drop_down_menu->render->vertices, drop_down_menu->index_count,
+                drop_down_menu->aabb.min, drop_down_menu->aabb.size, global_get_secondary_color(),
+                drop_down_border_width, 0.0f);
 
     b8 item_clicked = false;
 
-    b8 mouse_button_clicked = event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_1);
+    b8 mouse_button_pressed = event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_1);
 
     if (event_is_key_pressed_repeat(FTIC_KEY_TAB))
     {
@@ -922,7 +915,7 @@ internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu, const b8 icons,
                 drop_down_item_hit = true;
                 drop_down_menu->tab_index = -1;
                 any_drop_down_item_hit = true;
-                item_clicked = mouse_button_clicked;
+                item_clicked = mouse_button_pressed;
             }
         }
 
@@ -937,21 +930,10 @@ internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu, const b8 icons,
         promt_item_text_position.y +=
             application->font.pixel_height + promt_item_text_padding + 3.0f;
         promt_item_text_position.x += promt_item_text_padding;
-        promt_item_text_position.x += 32.0f * icons;
 
         V4 text_color = v4i(1.0f);
         should_close = drop_down_menu->menu_options_selection(
             i, drop_down_item_hit, should_close, item_clicked, &text_color, option_data);
-
-        if (icons && i < 3)
-        {
-            V2 icon_position = promt_item_position;
-            icon_position.x += promt_item_text_padding;
-            icon_position.y += middle(drop_down_item_aabb.size.height, 24.0f);
-            quad(&drop_down_menu->render->vertices, icon_position, v2i(24.0f), text_color,
-                 2.0f + (f32)i);
-            *drop_down_menu->index_count += 6;
-        }
 
         *drop_down_menu->index_count += text_generation_color(
             application->font.chars, drop_down_menu->options.data[i], 1.0f,
@@ -960,7 +942,7 @@ internal b8 drop_down_menu_add(DropDownMenu2* drop_down_menu, const b8 icons,
 
         promt_item_position.y += drop_down_item_aabb.size.y;
     }
-    return should_close || ((!any_drop_down_item_hit) && mouse_button_clicked) ||
+    return should_close || ((!any_drop_down_item_hit) && mouse_button_pressed) ||
            event_is_key_clicked(FTIC_KEY_ESCAPE);
 }
 
@@ -1452,6 +1434,15 @@ internal b8 main_drop_down_selection(u32 index, b8 hit, b8 should_close, b8 item
     return should_close;
 }
 
+internal void suggestions_add_extra_space(SuggestionSelectionData* arguments)
+{
+    array_push(arguments->parent_directory, '\0');
+    array_push(arguments->parent_directory, '\0');
+    array_push(arguments->parent_directory, '\0');
+    arguments->parent_directory->size -= 3;
+    *arguments->cursor_index = arguments->parent_directory->size;
+}
+
 internal b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_clicked,
                                  V4* text_color, void* data)
 {
@@ -1467,11 +1458,7 @@ internal b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_cli
             {
                 array_push(arguments->parent_directory, path[i]);
             }
-            array_push(arguments->parent_directory, '\0');
-            array_push(arguments->parent_directory, '\0');
-            array_push(arguments->parent_directory, '\0');
-            arguments->parent_directory->size -= 3;
-            *arguments->cursor_index = arguments->parent_directory->size;
+            suggestions_add_extra_space(arguments);
             arguments->change_directory = item_clicked;
             return item_clicked;
         }
@@ -1615,22 +1602,27 @@ internal void access_panel_initialize(AccessPanel* panel, const u32 window,
 }
 
 internal b8 access_panel_open(AccessPanel* panel, const char* title, const f32 list_item_height,
-                              RecentPanel* recent, DirectoryHistory* directory_history)
+                              char** item_hit, RecentPanel* recent,
+                              DirectoryHistory* directory_history)
 {
     if (panel->menu_item.show)
     {
         if (ui_window_begin(panel->menu_item.window, title,
                             UI_WINDOW_TOP_BAR | UI_WINDOW_RESIZEABLE))
         {
+            i32 hit_index = -1;
             V2 list_position = v2i(10.0f);
-            if (ui_window_add_movable_list(list_position, &panel->items, &panel->list))
+            if (ui_window_add_movable_list(list_position, &panel->items, &hit_index, &panel->list))
             {
                 directory_open_folder(panel->items.data[panel->list.selected_item].path,
                                       directory_history);
 
                 recent_panel_add_item(recent, &panel->items.data[panel->list.selected_item]);
             }
-
+            else if (hit_index != -1)
+            {
+                *item_hit = panel->items.data[hit_index].path;
+            }
             panel->menu_item.show = !ui_window_end();
         }
         if (!panel->menu_item.show)
@@ -1970,7 +1962,7 @@ void application_begin_frame(ApplicationContext* app)
 void application_end_frame(ApplicationContext* app)
 {
     window_swap(app->window);
-    event_poll();
+    event_poll(app->mouse_position);
 
     f64 now = window_get_time();
     app->delta_time = now - app->last_time;
@@ -2886,12 +2878,14 @@ void application_run()
     array_push(&menu_values, menu_options[2]);
     array_push(&menu_values, menu_options[3]);
 
+#if 0
     // Only doing this because somehow this makes the context menu open faster
     ThreadTask task = {
         .data = &app.context_menu,
         .task_callback = pre_open_context_menu,
     };
     thread_tasks_push(&app.thread_queue.task_queue, &task, 1, NULL);
+#endif
 
     enable_gldebugging();
     glEnable(GL_BLEND);
@@ -2925,9 +2919,47 @@ void application_run()
             distance = v2_distance(last_mouse_position, app.mouse_position);
             if (distance >= 10.0f)
             {
-                // platform_start_drag_drop(&tab->selected_item_values.paths);
+                platform_start_drag_drop(&tab->directory_list.selected_item_values.paths);
                 activated = false;
+
+                double x, y;
+                window_get_mouse_position(app.window, &x, &y);
+                app.mouse_position = v2f((f32)x, (f32)y);
+                event_update_position(app.mouse_position);
+                app.last_time = window_get_time();
             }
+        }
+
+        b8 use_shortcuts_for_tabs = false;
+        i32 tab_in_fucus = -1;
+        for (u32 i = 0; i < app.tabs.size; ++i)
+        {
+            const u32 window_id = app.tabs.data[i].window_id;
+            tab_in_fucus =
+                tab_in_fucus + ((i - tab_in_fucus) * (ui_window_in_focus() == window_id));
+        }
+
+        if (tab_in_fucus != -1)
+        {
+            if (event_is_key_pressed_repeat(FTIC_KEY_TAB))
+            {
+                if (event_get_key_event()->shift_pressed)
+                {
+                    --tab_in_fucus;
+                    tab_in_fucus = tab_in_fucus < 0 ? app.tabs.size - 1 : tab_in_fucus;
+                }
+                else
+                {
+                    ++tab_in_fucus;
+                    tab_in_fucus %= app.tabs.size;
+                }
+                ui_context_set_window_in_focus(app.tabs.data[tab_in_fucus].window_id);
+                app.tab_index = tab_in_fucus;
+                tab = app.tabs.data + app.tab_index;
+            }
+
+            // Rename of files should stop ctrl-c, ctrl-v and so on of files.
+            use_shortcuts_for_tabs = !tab->directory_list.inputs.data[0].active;
         }
 
         b8 check_collision = app.preview_index != 1;
@@ -2937,12 +2969,12 @@ void application_run()
             check_collision = false;
         }
 
-        if (app.preview_index != 1 && tab->directory_list.selected_item_values.paths.size)
+        if (tab_in_fucus != -1 && app.preview_index != 1 &&
+            tab->directory_list.selected_item_values.paths.size)
         {
             if (event_is_ctrl_and_key_pressed(FTIC_KEY_C))
             {
-                // TODO: this is used in input fields
-                // platform_copy_to_clipboard(&tab->selected_item_values.paths);
+                platform_copy_to_clipboard(&tab->directory_list.selected_item_values.paths);
             }
             else if (app.preview_index == -1 &&
                      tab->directory_list.selected_item_values.paths.size == 1 &&
@@ -2995,24 +3027,6 @@ void application_run()
             //   directory_current(&tab->directory_history));
         }
         const char* directory_to_drop_in = NULL;
-#if 0
-        if (main_list_return_value.hit_index >= 0 &&
-            main_list_return_value.type == TYPE_FOLDER)
-        {
-            directory_to_drop_in = directory_current(&tab->directory_history)
-                                       ->directory.sub_directories
-                                       .data[main_list_return_value.hit_index]
-                                       .path;
-        }
-        else if (quick_access_list_return_value.hit_index >= 0 &&
-                 quick_access_list_return_value.type == TYPE_FOLDER)
-        {
-            directory_to_drop_in =
-                quick_access_folders
-                    .data[quick_access_list_return_value.hit_index]
-                    .path;
-        }
-#else
 
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
@@ -3021,34 +3035,18 @@ void application_run()
         if (app.preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
             event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT))
         {
-#if 0
-            if (tab->directory_list.selected_item_values.paths.size)
-            {
-#if 0
-                platform_context_menu_create(
-                    &menu,
-                    tab->directory_list.selected_item_values.paths.data[0]);
-#else
-                platform_open_context(
-                    app.window,
-                    tab->directory_list.selected_item_values.paths.data[0]);
-#endif
-            }
-            else
-#endif
-            {
-                app.open_context_menu_window = true;
-                V2 item_size = v2f(300.0f, 8.0f + ui_font_pixel_height);
-                const f32 end_height = CONTEXT_ITEM_COUNT * item_size.height;
+            app.open_context_menu_window = true;
+            V2 item_size = v2f(300.0f, 8.0f + ui_font_pixel_height);
+            const f32 end_height = CONTEXT_ITEM_COUNT * item_size.height;
 
-                V2 position = app.mouse_position;
-                position.x = min(app.dimensions.width - item_size.width - 10.0f, position.x);
-                ui_window_set_position(app.context_menu_window, position);
-                app.context_menu_open_position_y = position.y;
-                menu_open = true;
-            }
+            V2 position = app.mouse_position;
+            position.x = min(app.dimensions.width - item_size.width - 10.0f, position.x);
+            ui_window_set_position(app.context_menu_window, position);
+            app.context_menu_open_position_y = position.y;
+            menu_open = true;
         }
-        look_for_dropped_files(directory_current(&tab->directory_history), directory_to_drop_in);
+
+        char* item_hit = NULL;
 
         const f32 top_bar_height = 20.0f + ui_font_pixel_height;
         const f32 top_bar_menu_height = 10.0f + ui_font_pixel_height;
@@ -3060,7 +3058,6 @@ void application_run()
         dock_space.size.height -= bottom_bar_height;
         ui_context_begin(app.dimensions, &dock_space, app.delta_time, check_collision);
         {
-
             const DirectoryTab* current_tab = tab;
             const DirectoryPage* current_directory = directory_current(&tab->directory_history);
 
@@ -3095,10 +3092,11 @@ void application_run()
                 if (ui_window_begin(app.font_change_window, NULL,
                                     UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
                 {
+                    i32 hit_index = -1;
                     V2 list_position = v2f(10.0f, 10.0f);
                     i32 selected_item = ui_window_add_directory_item_list(
                         list_position, list_item_height, &app.font_change_directory.items, NULL,
-                        NULL);
+                        &hit_index, NULL);
                     if (selected_item != -1)
                     {
                         const char* path = app.font_change_directory.items.data[selected_item].path;
@@ -3119,7 +3117,7 @@ void application_run()
                     UiLayout ui_layout = ui_layout_create(v2i(10.0f));
                     *app.color_to_change = ui_window_add_color_picker(
                         v2i(10.0f), v2f(200.0f, 200.0f), app.color_picker_to_use, &ui_layout);
-#if 1
+#if 0
                     char buffer[64] = { 0 };
                     value_to_string(buffer, V2_FMT(app.color_picker_to_use->at));
                     log_message(buffer, strlen(buffer));
@@ -3227,10 +3225,15 @@ void application_run()
                                               &ui_layout))
                 {
                     DirectoryPage* current = directory_current(&tab->directory_history);
-                    get_suggestions(ui_layout.at, current, &app.parent_directory_input,
-                                    &app.suggestions, &app.suggestion_data);
+                    get_suggestions(v2f(ui_layout.at.x, ui_layout.at.y + top_bar_menu_height),
+                                    current, &app.parent_directory_input, &app.suggestions,
+                                    &app.suggestion_data);
                 }
 
+                if (collision_point_in_aabb(app.mouse_position, &app.suggestions.aabb))
+                {
+                    app.parent_directory_input.active = true;
+                }
                 if (app.parent_directory_input.active)
                 {
                     if (!active_before)
@@ -3240,11 +3243,16 @@ void application_run()
                         set_input_buffer_to_current_directory(path, &app.parent_directory_input);
                     }
                     app.suggestion_data.change_directory = false;
-                    drop_down_menu_add(&app.suggestions, false, &app, &app.suggestion_data);
+                    drop_down_menu_add(&app.suggestions, &app, &app.suggestion_data);
 
                     if (app.suggestion_data.change_directory ||
                         event_is_key_pressed_once(FTIC_KEY_ENTER))
                     {
+                        if (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
+                        {
+                            array_push(app.suggestion_data.parent_directory, '\\');
+                            suggestions_add_extra_space(&app.suggestion_data);
+                        }
                         char* last_char = array_back(&app.parent_directory_input.buffer);
                         char saved = *last_char;
                         b8 should_restore = *last_char == '\\' || *last_char == '/';
@@ -3263,25 +3271,21 @@ void application_run()
                             *last_char = saved;
                             app.parent_directory_input.buffer.size++;
                         }
-                        app.parent_directory_input.input_index =
-                            app.parent_directory_input.buffer.size;
+
+                        app.parent_directory_input.input_index = -1;
                         app.suggestions.tab_index = -1;
-                        app.suggestions.options.size = 0;
-                        app.suggestions.aabb = (AABB){ 0 };
+                        DirectoryPage* current = directory_current(&tab->directory_history);
+                        get_suggestions(v2f(ui_layout.at.x, ui_layout.at.y + top_bar_menu_height),
+                                        current, &app.parent_directory_input, &app.suggestions,
+                                        &app.suggestion_data);
                     }
                 }
                 else
                 {
                     const char* path = directory_current(&tab->directory_history)->directory.parent;
                     set_input_buffer_to_current_directory(path, &app.parent_directory_input);
-                }
-                if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
-                {
-                    if (!collision_point_in_aabb(app.mouse_position, &app.suggestions.aabb))
-                    {
-                        app.suggestions.aabb = (AABB){ 0 };
-                        app.suggestions.x = 0;
-                    }
+                    app.suggestions.aabb = (AABB){ 0 };
+                    app.suggestions.x = 0;
                 }
 
                 ui_layout_column(&ui_layout);
@@ -3374,20 +3378,20 @@ void application_run()
                 app.panel_right_clicked = NULL;
             }
 
-            if (access_panel_open(&app.quick_access, "Quick access", list_item_height, &app.recent,
-                                  &tab->directory_history))
+            if (access_panel_open(&app.quick_access, "Quick access", list_item_height, &item_hit,
+                                  &app.recent, &tab->directory_history))
             {
                 app.panel_right_clicked = &app.quick_access;
             }
 
-            access_panel_open(&app.recent.panel, "Recent", list_item_height, &app.recent,
+            access_panel_open(&app.recent.panel, "Recent", list_item_height, &item_hit, &app.recent,
                               &tab->directory_history);
 
             if (app.search_result_window_item.show)
             {
                 app.search_result_window_item.show = !show_search_result_window(
                     &app.search_page, app.search_result_window_item.window, list_item_height,
-                    &tab->directory_history);
+                    &item_hit, &tab->directory_history);
                 if (!app.search_result_window_item.show)
                 {
                     app.search_result_window_item.switch_on = false;
@@ -3413,32 +3417,6 @@ void application_run()
                 }
             }
 
-            i32 tab_in_fucus = -1;
-            for (u32 i = 0; i < app.tabs.size; ++i)
-            {
-                const u32 window_id = app.tabs.data[i].window_id;
-                tab_in_fucus =
-                    tab_in_fucus + ((i - tab_in_fucus) * (ui_window_in_focus() == window_id));
-            }
-
-            if (tab_in_fucus != -1)
-            {
-                if (event_is_key_pressed_repeat(FTIC_KEY_TAB))
-                {
-                    if (event_get_key_event()->shift_pressed)
-                    {
-                        --tab_in_fucus;
-                        tab_in_fucus = tab_in_fucus < 0 ? app.tabs.size - 1 : tab_in_fucus;
-                    }
-                    else
-                    {
-                        ++tab_in_fucus;
-                        tab_in_fucus %= app.tabs.size;
-                    }
-                    ui_context_set_window_in_focus(app.tabs.data[tab_in_fucus].window_id);
-                }
-            }
-
             for (u32 i = 0; i < app.tabs.size; ++i)
             {
                 const u32 window_id = app.tabs.data[i].window_id;
@@ -3448,12 +3426,17 @@ void application_run()
                     tab = app.tabs.data + app.tab_index;
                 }
 
+                DirectoryTab* tab_to_update = app.tabs.data + i;
+                if (item_hit == NULL && ui_window_is_hit(window_id))
+                {
+                    item_hit =
+                        directory_current(&tab_to_update->directory_history)->directory.parent;
+                }
+
                 ui_window_set_alpha(window_id, i == app.tab_index ? 1.0f : 0.7f);
 
-                if (show_directory_window(window_id, list_item_height, check_collision,
-                                          app.open_context_menu_window, app.dimensions,
-                                          app.render_3d.shader_properties.shader, &app.recent,
-                                          &app.thread_queue.task_queue, app.tabs.data + i))
+                if (application_show_directory_window(&app, window_id, list_item_height,
+                                                      check_collision, &item_hit, tab_to_update))
                 {
                     DirectoryTab tab_to_remove = app.tabs.data[i];
                     for (u32 j = i; j < app.tabs.size - 1; ++j)
@@ -3552,7 +3535,8 @@ void application_run()
             }
         }
 
-#endif
+        look_for_dropped_files(directory_current(&tab->directory_history), item_hit);
+
         for (u32 i = 0; i < app.tabs.size; ++i)
         {
             DirectoryTab* current = app.tabs.data + i;

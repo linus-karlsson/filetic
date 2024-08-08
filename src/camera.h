@@ -25,5 +25,4 @@ Camera camera_create(f32 speed, f32 sensitivity);
 
 b8 camera_update(Camera* camera, const f64 delta_time);
 void camera_print(const Camera* camera);
-V2 get_mouse_rotation(Camera* camera, const f64 delta_time);
-
+void camera_set_based_on_mesh_aabb(Camera* camera, const AABB3D* mesh_aabb);
