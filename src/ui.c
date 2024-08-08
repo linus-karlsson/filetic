@@ -486,7 +486,7 @@ internal f32 add_text(UiWindow* window, const V2 position, const char* buffer)
 
 internal V2 get_text_position(const V2 position)
 {
-    return v2f(position.x, position.y + ui_context.font.pixel_height);
+    return v2f(position.x, position.y + ui_context.font.pixel_height - 2.0f);
 }
 
 internal V2 add_first_item_offset(const UiWindow* window, const V2 relative_position)
@@ -3176,7 +3176,7 @@ internal void render_input(UiWindow* window, const f64 delta_time, const V2 text
             const f32 x_advance =
                 text_x_advance(ui_context.font.chars, input->buffer.data, input->input_index, 1.0f);
 
-            add_default_quad(v2f(text_position.x + x_advance + 1.0f, text_position.y + 2.0f),
+            add_default_quad(v2f(text_position.x + x_advance + 1.0f, text_position.y + 1.0f),
                              v2f(1.0f, ui_context.font.pixel_height), v4i(1.0f));
 
             input->time = input->time >= 0.8f ? 0 : input->time;

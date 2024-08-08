@@ -158,11 +158,18 @@ typedef struct ApplicationContext
     FontTTF font;
     ThreadQueue thread_queue;
 
+    CharPtrArray menu_values;
+
     u32 tab_index;
+    i32 tab_in_fucus;
+    DirectoryTab* current_tab;
     DirectoryTabArray tabs;
+    char* item_hit;
 
     V2 dimensions;
     V2 mouse_position;
+    V2 last_mouse_position;
+    f32 mouse_drag_distance;
 
     f64 last_time;
     f64 delta_time;
@@ -226,14 +233,6 @@ typedef struct ApplicationContext
     ColorPicker* color_picker_to_use;
     V4* color_to_change;
 
-    b8 open_font_change_window;
-    b8 open_menu_window;
-    b8 open_windows_window;
-    b8 open_context_menu_window;
-    b8 open_style_menu_window;
-    b8 open_filter_menu_window;
-    b8 open_color_picker_window;
-
     AccessPanel quick_access;
     RecentPanel recent;
 
@@ -246,12 +245,24 @@ typedef struct ApplicationContext
     ContextMenu context_menu;
     f32 context_menu_open_position_y;
 
+    b8 use_shortcuts_for_tabs;
     b8 show_hidden_files;
+
+    b8 open_font_change_window;
+    b8 open_menu_window;
+    b8 open_windows_window;
+    b8 open_context_menu_window;
+    b8 open_style_menu_window;
+    b8 open_filter_menu_window;
+    b8 open_color_picker_window;
+
+    b8 check_collision_in_ui;
+
 } ApplicationContext;
 
 void application_run();
 
-u8* application_initialize(ApplicationContext* application);
+void application_initialize(ApplicationContext* application);
 void application_uninitialize(ApplicationContext* application);
 void application_begin_frame(ApplicationContext* application);
 void application_end_frame(ApplicationContext* application);

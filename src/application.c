@@ -479,6 +479,10 @@ internal void tab_clear_selected(DirectoryTab* tab)
     }
     directory_clear_selected_items(&tab->directory_list.selected_item_values);
     tab->directory_list.last_selected_index = 0;
+    for(u32 i = 0; i < tab->directory_list.inputs.size; ++i)
+    {
+        tab->directory_list.inputs.data[i].active = false;
+    }
 }
 
 internal void render_3d_initialize(Render* render, const u32 shader, int* light_dir_location)
@@ -1700,7 +1704,7 @@ internal void application_set_colors(ApplicationContext* app)
     app->border_color = global_get_border_color();
 }
 
-u8* application_initialize(ApplicationContext* app)
+void application_initialize(ApplicationContext* app)
 {
     app->window = window_create("FileTic", 1250, 800);
     event_initialize(app->window);
@@ -1732,7 +1736,6 @@ u8* application_initialize(ApplicationContext* app)
         .height = height_atlas,
         .bytes = font_bitmap,
     };
-
     main_render_initialize(&app->main_render, &font_texture_properties);
 
     u32 shader = shader_create("res/shaders/vertex3d.glsl", "res/shaders/fragment.glsl");
@@ -1868,7 +1871,17 @@ u8* application_initialize(ApplicationContext* app)
     array_create(&app->preview_image.textures, 10);
     array_create(&app->preview_text.file_colored, 1000);
 
-    return font_bitmap;
+    char* menu_options[] = { "Menu", "Windows", "Style", "Filter" };
+    array_create(&app->menu_values, 10);
+    array_push(&app->menu_values, menu_options[0]);
+    array_push(&app->menu_values, menu_options[1]);
+    array_push(&app->menu_values, menu_options[2]);
+    array_push(&app->menu_values, menu_options[3]);
+
+    enable_gldebugging();
+    glEnable(GL_BLEND);
+    glEnable(GL_MULTISAMPLE);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 void application_uninitialize(ApplicationContext* app)
@@ -2855,181 +2868,603 @@ void open_menu_window(const u32 window, const V2 position, const f32 starting_wi
     ui_window_set_animation_x(window, 0.2f);
 }
 
+internal void application_handle_file_drag(ApplicationContext* app)
+{
+    const MouseMoveEvent* mouse_move_event = event_get_mouse_move_event();
+    const MouseButtonEvent* mouse_button_event = event_get_mouse_button_event();
+
+    presist b8 activated = false;
+    if (mouse_button_event->activated)
+    {
+        app->last_mouse_position = app->mouse_position;
+        app->mouse_drag_distance = 0.0f;
+        activated = true;
+    }
+
+    if (mouse_button_event->action == FTIC_RELEASE)
+    {
+        activated = false;
+    }
+
+    if (activated && mouse_button_event->action == FTIC_PRESS && mouse_move_event->activated &&
+        app->current_tab->directory_list.selected_item_values.paths.size > 0)
+    {
+        app->mouse_drag_distance = v2_distance(app->last_mouse_position, app->mouse_position);
+        if (app->mouse_drag_distance >= 10.0f)
+        {
+            platform_start_drag_drop(&app->current_tab->directory_list.selected_item_values.paths);
+            activated = false;
+
+            double x, y;
+            window_get_mouse_position(app->window, &x, &y);
+            app->mouse_position = v2f((f32)x, (f32)y);
+            event_update_position(app->mouse_position);
+            app->last_time = window_get_time();
+        }
+    }
+}
+
+internal void application_handle_keyboard_shortcuts(ApplicationContext* app)
+{
+    if (!app->use_shortcuts_for_tabs || app->preview_index == 1)
+    {
+        return;
+    }
+    if (app->current_tab->directory_list.selected_item_values.paths.size)
+    {
+        if (event_is_ctrl_and_key_pressed(FTIC_KEY_C))
+        {
+            platform_copy_to_clipboard(
+                &app->current_tab->directory_list.selected_item_values.paths);
+        }
+        else if (app->preview_index == -1 &&
+                 app->current_tab->directory_list.selected_item_values.paths.size == 1 &&
+                 event_is_key_pressed_once(FTIC_KEY_E) && event_get_key_event()->shift_pressed)
+        {
+            const char* path = app->current_tab->directory_list.selected_item_values.paths.data[0];
+
+            if (load_preview_image(path, &app->preview_image.dimensions,
+                                   &app->preview_image.textures))
+            {
+                app->preview_image.current_viewed_path = string_copy(path, (u32)strlen(path), 0);
+                directory_clear_selected_items(
+                    &app->current_tab->directory_list.selected_item_values);
+                app->preview_index = 0;
+            }
+            else
+            {
+                const char* extension = file_get_extension(path, (u32)strlen(path));
+                if (strcmp(extension, "obj") == 0)
+                {
+                    app->preview_index = 1;
+                    app->index_count_3d =
+                        load_object(&app->render_3d, path, &app->preview_mesh_aabb);
+
+                    app->preview_camera = camera_create_default();
+                    camera_set_based_on_mesh_aabb(&app->preview_camera, &app->preview_mesh_aabb);
+                }
+                else
+                {
+                    app->preview_text.file = file_read_full_path(path);
+                    parse_file(&app->preview_text.file, &app->preview_text.file_colored);
+                    app->preview_index = 2;
+                }
+            }
+        }
+    }
+
+    if (event_is_ctrl_and_key_pressed(FTIC_KEY_V))
+    {
+        directory_paste_in_directory(directory_current(&app->current_tab->directory_history));
+    }
+}
+
+internal void application_check_if_any_tab_is_in_focus(ApplicationContext* app)
+{
+    app->use_shortcuts_for_tabs = false;
+    app->tab_in_fucus = -1;
+    for (u32 i = 0; i < app->tabs.size; ++i)
+    {
+        const u32 window_id = app->tabs.data[i].window_id;
+        app->tab_in_fucus =
+            app->tab_in_fucus + ((i - app->tab_in_fucus) * (ui_window_in_focus() == window_id));
+    }
+
+    if (app->tab_in_fucus != -1)
+    {
+        if (event_is_key_pressed_repeat(FTIC_KEY_TAB))
+        {
+            if (event_get_key_event()->shift_pressed)
+            {
+                --app->tab_in_fucus;
+                app->tab_in_fucus = app->tab_in_fucus < 0 ? app->tabs.size - 1 : app->tab_in_fucus;
+            }
+            else
+            {
+                ++app->tab_in_fucus;
+                app->tab_in_fucus %= app->tabs.size;
+            }
+            ui_context_set_window_in_focus(app->tabs.data[app->tab_in_fucus].window_id);
+            app->tab_index = app->tab_in_fucus;
+            app->current_tab = app->tabs.data + app->tab_index;
+        }
+        // Rename of files should stop ctrl-c, ctrl-v and so on of files.
+        app->use_shortcuts_for_tabs =
+            !app->tabs.data[app->tab_in_fucus].directory_list.inputs.data[0].active;
+    }
+}
+
+void application_update_ui(ApplicationContext* app, const b8 menu_open)
+{
+    const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
+    const f32 search_bar_width = 250.0f;
+    const f32 top_bar_height = 20.0f + ui_font_pixel_height;
+    const f32 top_bar_menu_height = 10.0f + ui_font_pixel_height;
+    const f32 bottom_bar_height = 15.0f + ui_font_pixel_height;
+    const f32 list_item_height = 16.0f + ui_font_pixel_height;
+
+    AABB dock_space = { .min = v2f(0.0f, top_bar_height + top_bar_menu_height) };
+    dock_space.size = v2_sub(app->dimensions, dock_space.min);
+    dock_space.size.height -= bottom_bar_height;
+    ui_context_begin(app->dimensions, &dock_space, app->delta_time, app->check_collision_in_ui);
+    {
+        const DirectoryTab* current_tab = app->current_tab;
+        const DirectoryPage* current_directory =
+            directory_current(&app->current_tab->directory_history);
+
+        const V4 button_color = v4a(v4_s_multi(global_get_clear_color(), 3.0f), 1.0f);
+
+        DropDownLayout layout = drop_down_layout_create(350.0f, v2i(10.0f));
+        layout.ui_layout.padding = 10.0f;
+        if (app->open_menu_window)
+        {
+            application_open_menu_window(app, layout, button_color);
+        }
+        if (app->open_windows_window)
+        {
+            application_open_windows_window(app, layout, button_color);
+        }
+        if (app->open_style_menu_window)
+        {
+            application_open_style_menu_window(app, layout, button_color);
+        }
+        if (app->open_filter_menu_window)
+        {
+            application_open_filter_menu_window(app, layout, button_color);
+        }
+
+        if (app->open_font_change_window)
+        {
+            const V2 size = v2f(app->dimensions.width * 0.5f, app->dimensions.height * 0.9f);
+            ui_window_set_size(app->font_change_window, size);
+            ui_window_set_position(app->font_change_window,
+                                   v2f(middle(app->dimensions.width, size.width),
+                                       middle(app->dimensions.height, size.height)));
+            if (ui_window_begin(app->font_change_window, NULL,
+                                UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+            {
+                i32 hit_index = -1;
+                V2 list_position = v2f(10.0f, 10.0f);
+                i32 selected_item = ui_window_add_directory_item_list(
+                    list_position, list_item_height, &app->font_change_directory.items, NULL,
+                    &hit_index, NULL);
+                if (selected_item != -1)
+                {
+                    const char* path = app->font_change_directory.items.data[selected_item].path;
+                    ui_context_set_font_path(path);
+                    ui_context_change_font_pixel_height(ui_font_pixel_height);
+                    app->open_font_change_window = false;
+                    app->open_menu_window = true;
+                }
+                app->open_font_change_window = !ui_window_end();
+            }
+        }
+
+        if (app->open_color_picker_window)
+        {
+            if (ui_window_begin(app->color_picker_window, NULL,
+                                UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+            {
+                UiLayout ui_layout = ui_layout_create(v2i(10.0f));
+                *app->color_to_change = ui_window_add_color_picker(
+                    v2i(10.0f), v2f(200.0f, 200.0f), app->color_picker_to_use, &ui_layout);
+#if 0
+                    char buffer[64] = { 0 };
+                    value_to_string(buffer, V2_FMT(app->color_picker_to_use->at));
+                    log_message(buffer, strlen(buffer));
+                    memset(buffer, 0, sizeof(buffer));
+                    value_to_string(buffer, "%f", app->color_picker_to_use->spectrum_at);
+                    log_message(buffer, strlen(buffer));
+                    memset(buffer, 0, sizeof(buffer));
+                    value_to_string(buffer, V3_FMT(*app->color_to_change));
+                    log_message(buffer, strlen(buffer));
+#endif
+                ui_window_set_position(app->color_picker_window, app->color_picker_position);
+                ui_window_set_size(app->color_picker_window, v2f(ui_layout.column_width + 20.0f,
+                                                                 ui_layout.row_height + 20.0f));
+
+                app->open_color_picker_window = !ui_window_end();
+            }
+        }
+
+        ui_window_set_position(app->menu_bar_window, v2d());
+        ui_window_set_size(app->menu_bar_window, v2f(app->dimensions.width, top_bar_menu_height));
+        if (ui_window_begin(app->menu_bar_window, NULL, UI_WINDOW_NONE))
+        {
+            V2 drop_down_position = v2d();
+            i32 index_clicked = ui_window_add_menu_bar(&app->menu_values, &drop_down_position);
+            if (index_clicked == 0)
+            {
+                open_menu_window(app->menu_window, drop_down_position, layout.width);
+                app->open_windows_window = false;
+                app->open_style_menu_window = false;
+                app->open_filter_menu_window = false;
+                app->open_menu_window = true;
+            }
+            else if (index_clicked == 1)
+            {
+                open_menu_window(app->windows_window, drop_down_position, layout.width);
+                app->open_menu_window = false;
+                app->open_style_menu_window = false;
+                app->open_filter_menu_window = false;
+                app->open_windows_window = true;
+            }
+            else if (index_clicked == 2)
+            {
+                open_menu_window(app->style_menu_window, drop_down_position, layout.width);
+                app->open_menu_window = false;
+                app->open_windows_window = false;
+                app->open_filter_menu_window = false;
+                app->open_style_menu_window = true;
+            }
+            else if (index_clicked == 3)
+            {
+                open_menu_window(app->filter_menu_window, drop_down_position, layout.width);
+                app->open_menu_window = false;
+                app->open_windows_window = false;
+                app->open_style_menu_window = false;
+                app->open_filter_menu_window = true;
+            }
+            ui_window_end();
+        }
+
+        ui_window_set_position(app->top_bar_window, v2f(0.0f, top_bar_menu_height));
+        ui_window_set_size(app->top_bar_window, v2f(app->dimensions.width, top_bar_height));
+
+        ui_context_set_window_top_color(global_get_bar_top_color());
+        ui_context_set_window_bottom_color(global_get_bar_bottom_color());
+
+        if (ui_window_begin(app->top_bar_window, NULL, UI_WINDOW_NONE))
+        {
+            const f32 button_size = top_bar_height - 10.0f;
+            UiLayout ui_layout = ui_layout_create(v2f(10.0f, middle(top_bar_height, button_size)));
+            ui_layout.column_width = button_size;
+            b8 disable = app->current_tab->directory_history.current_index <= 0;
+            add_move_in_history_button(&ui_layout, arrow_back_icon_co, disable, FTIC_MOUSE_BUTTON_4,
+                                       -1, &app->current_tab->directory_list.selected_item_values,
+                                       &app->current_tab->directory_history);
+
+            ui_layout_column(&ui_layout);
+            disable = app->current_tab->directory_history.history.size <=
+                      app->current_tab->directory_history.current_index + 1;
+            add_move_in_history_button(&ui_layout, arrow_right_icon_co, disable,
+                                       FTIC_MOUSE_BUTTON_4, 1,
+                                       &app->current_tab->directory_list.selected_item_values,
+                                       &app->current_tab->directory_history);
+
+            ui_layout_column(&ui_layout);
+            disable = !directory_can_go_up(
+                directory_current(&app->current_tab->directory_history)->directory.parent);
+            if (ui_window_add_icon_button(ui_layout.at, v2i(ui_layout.column_width),
+                                          global_get_highlight_color(), arrow_up_icon_co,
+                                          UI_ARROW_ICON_TEXTURE, disable, &ui_layout))
+            {
+                directory_go_up(&app->current_tab->directory_history);
+            }
+
+            ui_layout.padding = 10.0f;
+            ui_layout_column(&ui_layout);
+
+            const V2 bar_size =
+                v2f((app->dimensions.width - (search_bar_width + 20.0f)) - ui_layout.at.x,
+                    top_bar_height - 10.0f);
+
+            ui_layout.at.y = middle(top_bar_height, bar_size.height);
+
+            b8 active_before = app->parent_directory_input.active;
+            if (ui_window_add_input_field(ui_layout.at, bar_size, &app->parent_directory_input,
+                                          &ui_layout))
+            {
+                DirectoryPage* current = directory_current(&app->current_tab->directory_history);
+                get_suggestions(v2f(ui_layout.at.x, ui_layout.at.y + top_bar_menu_height), current,
+                                &app->parent_directory_input, &app->suggestions,
+                                &app->suggestion_data);
+            }
+
+            if (collision_point_in_aabb(app->mouse_position, &app->suggestions.aabb))
+            {
+                app->parent_directory_input.active = true;
+            }
+            if (app->parent_directory_input.active)
+            {
+                if (!active_before)
+                {
+                    const char* path =
+                        directory_current(&app->current_tab->directory_history)->directory.parent;
+                    set_input_buffer_to_current_directory(path, &app->parent_directory_input);
+                }
+                app->suggestion_data.change_directory = false;
+                drop_down_menu_add(&app->suggestions, app, &app->suggestion_data);
+
+                if (app->suggestion_data.change_directory ||
+                    event_is_key_pressed_once(FTIC_KEY_ENTER))
+                {
+                    if (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
+                    {
+                        array_push(app->suggestion_data.parent_directory, '\\');
+                        suggestions_add_extra_space(&app->suggestion_data);
+                    }
+                    char* last_char = array_back(&app->parent_directory_input.buffer);
+                    char saved = *last_char;
+                    b8 should_restore = *last_char == '\\' || *last_char == '/';
+                    if (should_restore)
+                    {
+                        *last_char = '\0';
+                        app->parent_directory_input.buffer.size--;
+                    }
+                    if (!directory_go_to(app->parent_directory_input.buffer.data,
+                                         app->parent_directory_input.buffer.size,
+                                         &app->current_tab->directory_history))
+                    {
+                    }
+                    if (should_restore)
+                    {
+                        *last_char = saved;
+                        app->parent_directory_input.buffer.size++;
+                    }
+
+                    app->parent_directory_input.input_index = -1;
+                    app->suggestions.tab_index = -1;
+                    DirectoryPage* current =
+                        directory_current(&app->current_tab->directory_history);
+                    get_suggestions(v2f(ui_layout.at.x, ui_layout.at.y + top_bar_menu_height),
+                                    current, &app->parent_directory_input, &app->suggestions,
+                                    &app->suggestion_data);
+                }
+            }
+            else
+            {
+                const char* path =
+                    directory_current(&app->current_tab->directory_history)->directory.parent;
+                set_input_buffer_to_current_directory(path, &app->parent_directory_input);
+                app->suggestions.aabb = (AABB){ 0 };
+                app->suggestions.x = 0;
+            }
+
+            ui_layout_column(&ui_layout);
+            if (ui_window_add_input_field(ui_layout.at, v2f(search_bar_width, bar_size.height),
+                                          &app->search_page.input, &ui_layout))
+            {
+                search_page_clear_result(&app->search_page);
+                app->search_page.running_callbacks[app->search_page.last_running_id] = false;
+                if (!app->search_result_window_item.show)
+                {
+                    open_window(app->dimensions, app->search_result_window_item.window);
+                    app->search_result_window_item.show = true;
+                    app->search_result_window_item.switch_on = true;
+                }
+            }
+            if (app->search_page.running_callbacks[app->search_page.last_running_id])
+            {
+                ui_layout_column(&ui_layout);
+                V2 dim = v2f(ui_font_pixel_height + 12.0f, ui_font_pixel_height + 10.0f);
+                if (ui_window_add_button(v2f(ui_layout.at.x - dim.width - 5.0f,
+                                             ui_layout.at.y + middle(button_size, dim.height)),
+                                         &dim, &button_color, "X", &ui_layout))
+                {
+                    app->search_page.running_callbacks[app->search_page.last_running_id] = false;
+                }
+            }
+            if (app->search_page.input.active)
+            {
+                if (event_is_key_pressed_once(FTIC_KEY_ENTER))
+                {
+                    search_page_search(&app->search_page, &app->current_tab->directory_history,
+                                       &app->thread_queue.task_queue);
+                }
+            }
+            else
+            {
+                app->search_page.running_callbacks[app->search_page.last_running_id] = false;
+            }
+
+            ui_window_end();
+        }
+
+        const V2 size = v2f(app->dimensions.width, bottom_bar_height);
+        ui_window_set_position(app->bottom_bar_window,
+                               v2f(0.0f, app->dimensions.height - bottom_bar_height));
+        ui_window_set_size(app->bottom_bar_window, size);
+        ui_context_set_window_top_color(global_get_bar_top_color());
+        ui_context_set_window_bottom_color(global_get_bar_bottom_color());
+        if (ui_window_begin(app->bottom_bar_window, NULL, UI_WINDOW_NONE))
+        {
+            UiLayout ui_layout = ui_layout_create(v2f(10.0f, 4.0f));
+            DirectoryPage* current = directory_current(&app->current_tab->directory_history);
+            char buffer[64] = { 0 };
+            sprintf_s(buffer, sizeof(buffer), "Items: %u", current->directory.items.size);
+            ui_window_add_text(ui_layout.at, buffer, false, &ui_layout);
+
+            const f32 list_grid_icon_position = size.width - (2.0f * bottom_bar_height + 5.0f);
+            if (current->grid_view)
+            {
+                ui_layout.at =
+                    v2f(list_grid_icon_position - 120.0f, middle(bottom_bar_height, 5.0f));
+
+                const V2 ui_icon_min_max = ui_get_big_icon_min_max();
+                static b8 pressed = false;
+                ui_set_big_icon_size(ui_window_add_slider(
+                    ui_layout.at, v2f(110.0f, 5.0f), ui_icon_min_max.min, ui_icon_min_max.max,
+                    ui_get_big_icon_size(), &pressed, &ui_layout));
+            }
+            ui_layout.at.x = list_grid_icon_position;
+            ui_layout.at.y = 0.0f;
+
+            if (ui_window_add_icon_button(ui_layout.at, v2i(bottom_bar_height),
+                                          global_get_border_color(), full_icon_co,
+                                          UI_LIST_ICON_TEXTURE, false, &ui_layout))
+            {
+                current->grid_view = false;
+            }
+            ui_layout_column(&ui_layout);
+            if (ui_window_add_icon_button(ui_layout.at, v2i(bottom_bar_height),
+                                          global_get_border_color(), full_icon_co,
+                                          UI_GRID_ICON_TEXTURE, false, &ui_layout))
+            {
+                current->grid_view = true;
+            }
+            ui_window_end();
+        }
+
+        if (!app->open_context_menu_window)
+        {
+            app->panel_right_clicked = NULL;
+        }
+
+        if (access_panel_open(&app->quick_access, "Quick access", list_item_height, &app->item_hit,
+                              &app->recent, &app->current_tab->directory_history))
+        {
+            app->panel_right_clicked = &app->quick_access;
+        }
+
+        access_panel_open(&app->recent.panel, "Recent", list_item_height, &app->item_hit,
+                          &app->recent, &app->current_tab->directory_history);
+
+        if (app->search_result_window_item.show)
+        {
+            app->search_result_window_item.show = !show_search_result_window(
+                &app->search_page, app->search_result_window_item.window, list_item_height,
+                &app->item_hit, &app->current_tab->directory_history);
+            if (!app->search_result_window_item.show)
+            {
+                app->search_result_window_item.switch_on = false;
+            }
+        }
+
+        if (app->preview_index != -1)
+        {
+            application_open_preview(app);
+        }
+        else
+        {
+            if (app->preview_image.textures.size > 0)
+            {
+                texture_delete(
+                    app->preview_image.textures.data[--app->preview_image.textures.size]);
+            }
+            if (app->preview_text.file.buffer)
+            {
+                free(app->preview_text.file.buffer);
+                app->preview_text.file = (FileAttrib){ 0 };
+                app->preview_text.file_colored.size = 0;
+            }
+        }
+
+        for (u32 i = 0; i < app->tabs.size; ++i)
+        {
+            const u32 window_id = app->tabs.data[i].window_id;
+            if (ui_window_in_focus() == window_id)
+            {
+                app->tab_index = i;
+                app->current_tab = app->tabs.data + app->tab_index;
+            }
+
+            DirectoryTab* tab_to_update = app->tabs.data + i;
+            if (app->item_hit == NULL && ui_window_is_hit(window_id))
+            {
+                app->item_hit =
+                    directory_current(&tab_to_update->directory_history)->directory.parent;
+            }
+
+            ui_window_set_alpha(window_id, i == app->tab_index ? 1.0f : 0.7f);
+
+            if (application_show_directory_window(app, window_id, list_item_height,
+                                                  app->check_collision_in_ui, &app->item_hit,
+                                                  tab_to_update))
+            {
+                DirectoryTab tab_to_remove = app->tabs.data[i];
+                for (u32 j = i; j < app->tabs.size - 1; ++j)
+                {
+                    app->tabs.data[j] = app->tabs.data[j + 1];
+                }
+                directory_tab_clear(&tab_to_remove);
+                app->tabs.size--;
+                array_push(&app->free_window_ids, window_id);
+
+                // NOTE: this is probably always true
+                if (i == app->tab_index)
+                {
+                    app->tab_index = (app->tab_index + 1) % app->tabs.size;
+                }
+                --i;
+            }
+        }
+        if (current_tab == app->current_tab)
+        {
+            const DirectoryPage* next_directory =
+                directory_current(&app->current_tab->directory_history);
+            if (current_directory != next_directory)
+            {
+                ui_window_set_end_scroll_offset(app->current_tab->window_id,
+                                                next_directory->offset);
+                ui_window_set_current_scroll_offset(app->current_tab->window_id, 0.0f);
+            }
+        }
+        for (u32 i = 0; i < app->tabs.size; ++i)
+        {
+            directory_current(&app->tabs.data[i].directory_history)->offset =
+                ui_window_get(app->tabs.data[i].window_id)->end_scroll_offset;
+        }
+
+        if (app->open_context_menu_window)
+        {
+            if (menu_open && app->current_tab->directory_list.selected_item_values.paths.size)
+            {
+                if (app->context_menu.pcm != NULL)
+                {
+                    platform_context_menu_destroy(&app->context_menu);
+                }
+                platform_context_menu_create(
+                    &app->context_menu,
+                    app->current_tab->directory_list.selected_item_values.paths.data[0]);
+            }
+            application_open_context_menu_window(app, app->current_tab);
+        }
+    }
+    ui_context_end();
+}
+
 void application_run()
 {
     ApplicationContext app = { 0 };
-    u8* font_bitmap = application_initialize(&app);
-
-    ContextMenu menu = { 0 };
-
-    AABBArray parent_directory_aabbs = { 0 };
-    array_create(&parent_directory_aabbs, 10);
-
-    const f32 search_bar_width = 250.0f;
-    b8 activated = false;
-    V2 last_mouse_position = v2d();
-    f32 distance = 0.0f;
-
-    char* menu_options[] = { "Menu", "Windows", "Style", "Filter" };
-    CharPtrArray menu_values = { 0 };
-    array_create(&menu_values, 10);
-    array_push(&menu_values, menu_options[0]);
-    array_push(&menu_values, menu_options[1]);
-    array_push(&menu_values, menu_options[2]);
-    array_push(&menu_values, menu_options[3]);
-
-#if 0
-    // Only doing this because somehow this makes the context menu open faster
-    ThreadTask task = {
-        .data = &app.context_menu,
-        .task_callback = pre_open_context_menu,
-    };
-    thread_tasks_push(&app.thread_queue.task_queue, &task, 1, NULL);
-#endif
-
-    enable_gldebugging();
-    glEnable(GL_BLEND);
-    glEnable(GL_MULTISAMPLE);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    application_initialize(&app);
     while (!window_should_close(app.window))
     {
         application_begin_frame(&app);
+        app.current_tab = app.tabs.data + app.tab_index;
+        application_handle_file_drag(&app);
+        application_check_if_any_tab_is_in_focus(&app);
+        application_handle_keyboard_shortcuts(&app);
 
-        DirectoryTab* tab = app.tabs.data + app.tab_index;
-
-        const MouseButtonEvent* mouse_button_event = event_get_mouse_button_event();
-        const MouseMoveEvent* mouse_move_event = event_get_mouse_move_event();
-        const KeyEvent* key_event = event_get_key_event();
-
-        if (mouse_button_event->activated)
+        app.check_collision_in_ui = app.preview_index != 1;
+        if (app.check_collision_in_ui &&
+            collision_point_in_aabb(app.mouse_position, &app.suggestions.aabb))
         {
-            last_mouse_position = app.mouse_position;
-            distance = 0.0f;
-            activated = true;
+            app.check_collision_in_ui = false;
         }
 
-        if (mouse_button_event->action == FTIC_RELEASE)
-        {
-            activated = false;
-        }
-
-        if (activated && mouse_button_event->action == FTIC_PRESS && mouse_move_event->activated &&
-            tab->directory_list.selected_item_values.paths.size > 0)
-        {
-            distance = v2_distance(last_mouse_position, app.mouse_position);
-            if (distance >= 10.0f)
-            {
-                platform_start_drag_drop(&tab->directory_list.selected_item_values.paths);
-                activated = false;
-
-                double x, y;
-                window_get_mouse_position(app.window, &x, &y);
-                app.mouse_position = v2f((f32)x, (f32)y);
-                event_update_position(app.mouse_position);
-                app.last_time = window_get_time();
-            }
-        }
-
-        b8 use_shortcuts_for_tabs = false;
-        i32 tab_in_fucus = -1;
-        for (u32 i = 0; i < app.tabs.size; ++i)
-        {
-            const u32 window_id = app.tabs.data[i].window_id;
-            tab_in_fucus =
-                tab_in_fucus + ((i - tab_in_fucus) * (ui_window_in_focus() == window_id));
-        }
-
-        if (tab_in_fucus != -1)
-        {
-            if (event_is_key_pressed_repeat(FTIC_KEY_TAB))
-            {
-                if (event_get_key_event()->shift_pressed)
-                {
-                    --tab_in_fucus;
-                    tab_in_fucus = tab_in_fucus < 0 ? app.tabs.size - 1 : tab_in_fucus;
-                }
-                else
-                {
-                    ++tab_in_fucus;
-                    tab_in_fucus %= app.tabs.size;
-                }
-                ui_context_set_window_in_focus(app.tabs.data[tab_in_fucus].window_id);
-                app.tab_index = tab_in_fucus;
-                tab = app.tabs.data + app.tab_index;
-            }
-
-            // Rename of files should stop ctrl-c, ctrl-v and so on of files.
-            use_shortcuts_for_tabs = !tab->directory_list.inputs.data[0].active;
-        }
-
-        b8 check_collision = app.preview_index != 1;
-
-        if (check_collision && collision_point_in_aabb(app.mouse_position, &app.suggestions.aabb))
-        {
-            check_collision = false;
-        }
-
-        if (tab_in_fucus != -1 && app.preview_index != 1 &&
-            tab->directory_list.selected_item_values.paths.size)
-        {
-            if (event_is_ctrl_and_key_pressed(FTIC_KEY_C))
-            {
-                platform_copy_to_clipboard(&tab->directory_list.selected_item_values.paths);
-            }
-            else if (app.preview_index == -1 &&
-                     tab->directory_list.selected_item_values.paths.size == 1 &&
-                     event_is_key_pressed_once(FTIC_KEY_E) && event_get_key_event()->shift_pressed)
-            {
-                const char* path = tab->directory_list.selected_item_values.paths.data[0];
-
-                if (load_preview_image(path, &app.preview_image.dimensions,
-                                       &app.preview_image.textures))
-                {
-                    app.preview_image.current_viewed_path = string_copy(path, (u32)strlen(path), 0);
-                    directory_clear_selected_items(&tab->directory_list.selected_item_values);
-                    app.preview_index = 0;
-                }
-                else
-                {
-                    const char* extension = file_get_extension(path, (u32)strlen(path));
-                    if (strcmp(extension, "obj") == 0)
-                    {
-                        app.preview_index = 1;
-                        app.index_count_3d =
-                            load_object(&app.render_3d, path, &app.preview_mesh_aabb);
-
-                        app.preview_camera = camera_create_default();
-                        camera_set_based_on_mesh_aabb(&app.preview_camera, &app.preview_mesh_aabb);
-                    }
-                    else
-                    {
-                        app.preview_text.file = file_read_full_path(path);
-                        parse_file(&app.preview_text.file, &app.preview_text.file_colored);
-                        app.preview_index = 2;
-                    }
-                }
-            }
-            else if (key_event->activated && key_event->action == 1 &&
-                     key_event->key == FTIC_KEY_ESCAPE)
-            {
-                // TODO: Not get called when you press escape in a drop
-                // down for example
-                // platform_delete_files(&tab->selected_item_values.paths);
-                // directory_reload(
-                //   directory_current(&application.directory_history));
-            }
-        }
-
-        if (app.preview_index != 1 && event_is_ctrl_and_key_pressed(FTIC_KEY_V))
-        {
-            // TODO: this is used in input fields
-            // directory_paste_in_directory(
-            //   directory_current(&tab->directory_history));
-        }
         const char* directory_to_drop_in = NULL;
-
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
-
         b8 menu_open = false;
 
         if (app.preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
@@ -3046,445 +3481,9 @@ void application_run()
             menu_open = true;
         }
 
-        char* item_hit = NULL;
+        app.item_hit = NULL;
 
-        const f32 top_bar_height = 20.0f + ui_font_pixel_height;
-        const f32 top_bar_menu_height = 10.0f + ui_font_pixel_height;
-        const f32 bottom_bar_height = 15.0f + ui_font_pixel_height;
-        const f32 list_item_height = 16.0f + ui_font_pixel_height;
-
-        AABB dock_space = { .min = v2f(0.0f, top_bar_height + top_bar_menu_height) };
-        dock_space.size = v2_sub(app.dimensions, dock_space.min);
-        dock_space.size.height -= bottom_bar_height;
-        ui_context_begin(app.dimensions, &dock_space, app.delta_time, check_collision);
-        {
-            const DirectoryTab* current_tab = tab;
-            const DirectoryPage* current_directory = directory_current(&tab->directory_history);
-
-            const V4 button_color = v4a(v4_s_multi(global_get_clear_color(), 3.0f), 1.0f);
-
-            DropDownLayout layout = drop_down_layout_create(350.0f, v2i(10.0f));
-            layout.ui_layout.padding = 10.0f;
-            if (app.open_menu_window)
-            {
-                application_open_menu_window(&app, layout, button_color);
-            }
-            if (app.open_windows_window)
-            {
-                application_open_windows_window(&app, layout, button_color);
-            }
-            if (app.open_style_menu_window)
-            {
-                application_open_style_menu_window(&app, layout, button_color);
-            }
-            if (app.open_filter_menu_window)
-            {
-                application_open_filter_menu_window(&app, layout, button_color);
-            }
-
-            if (app.open_font_change_window)
-            {
-                const V2 size = v2f(app.dimensions.width * 0.5f, app.dimensions.height * 0.9f);
-                ui_window_set_size(app.font_change_window, size);
-                ui_window_set_position(app.font_change_window,
-                                       v2f(middle(app.dimensions.width, size.width),
-                                           middle(app.dimensions.height, size.height)));
-                if (ui_window_begin(app.font_change_window, NULL,
-                                    UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
-                {
-                    i32 hit_index = -1;
-                    V2 list_position = v2f(10.0f, 10.0f);
-                    i32 selected_item = ui_window_add_directory_item_list(
-                        list_position, list_item_height, &app.font_change_directory.items, NULL,
-                        &hit_index, NULL);
-                    if (selected_item != -1)
-                    {
-                        const char* path = app.font_change_directory.items.data[selected_item].path;
-                        ui_context_set_font_path(path);
-                        ui_context_change_font_pixel_height(ui_font_pixel_height);
-                        app.open_font_change_window = false;
-                        app.open_menu_window = true;
-                    }
-                    app.open_font_change_window = !ui_window_end();
-                }
-            }
-
-            if (app.open_color_picker_window)
-            {
-                if (ui_window_begin(app.color_picker_window, NULL,
-                                    UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
-                {
-                    UiLayout ui_layout = ui_layout_create(v2i(10.0f));
-                    *app.color_to_change = ui_window_add_color_picker(
-                        v2i(10.0f), v2f(200.0f, 200.0f), app.color_picker_to_use, &ui_layout);
-#if 0
-                    char buffer[64] = { 0 };
-                    value_to_string(buffer, V2_FMT(app.color_picker_to_use->at));
-                    log_message(buffer, strlen(buffer));
-                    memset(buffer, 0, sizeof(buffer));
-                    value_to_string(buffer, "%f", app.color_picker_to_use->spectrum_at);
-                    log_message(buffer, strlen(buffer));
-                    memset(buffer, 0, sizeof(buffer));
-                    value_to_string(buffer, V3_FMT(*app.color_to_change));
-                    log_message(buffer, strlen(buffer));
-#endif
-                    ui_window_set_position(app.color_picker_window, app.color_picker_position);
-                    ui_window_set_size(app.color_picker_window, v2f(ui_layout.column_width + 20.0f,
-                                                                    ui_layout.row_height + 20.0f));
-
-                    app.open_color_picker_window = !ui_window_end();
-                }
-            }
-
-            ui_window_set_position(app.menu_bar_window, v2d());
-            ui_window_set_size(app.menu_bar_window, v2f(app.dimensions.width, top_bar_menu_height));
-            if (ui_window_begin(app.menu_bar_window, NULL, UI_WINDOW_NONE))
-            {
-                V2 drop_down_position = v2d();
-                i32 index_clicked = ui_window_add_menu_bar(&menu_values, &drop_down_position);
-                if (index_clicked == 0)
-                {
-                    open_menu_window(app.menu_window, drop_down_position, layout.width);
-                    app.open_windows_window = false;
-                    app.open_style_menu_window = false;
-                    app.open_filter_menu_window = false;
-                    app.open_menu_window = true;
-                }
-                else if (index_clicked == 1)
-                {
-                    open_menu_window(app.windows_window, drop_down_position, layout.width);
-                    app.open_menu_window = false;
-                    app.open_style_menu_window = false;
-                    app.open_filter_menu_window = false;
-                    app.open_windows_window = true;
-                }
-                else if (index_clicked == 2)
-                {
-                    open_menu_window(app.style_menu_window, drop_down_position, layout.width);
-                    app.open_menu_window = false;
-                    app.open_windows_window = false;
-                    app.open_filter_menu_window = false;
-                    app.open_style_menu_window = true;
-                }
-                else if (index_clicked == 3)
-                {
-                    open_menu_window(app.filter_menu_window, drop_down_position, layout.width);
-                    app.open_menu_window = false;
-                    app.open_windows_window = false;
-                    app.open_style_menu_window = false;
-                    app.open_filter_menu_window = true;
-                }
-                ui_window_end();
-            }
-
-            ui_window_set_position(app.top_bar_window, v2f(0.0f, top_bar_menu_height));
-            ui_window_set_size(app.top_bar_window, v2f(app.dimensions.width, top_bar_height));
-
-            ui_context_set_window_top_color(global_get_bar_top_color());
-            ui_context_set_window_bottom_color(global_get_bar_bottom_color());
-
-            if (ui_window_begin(app.top_bar_window, NULL, UI_WINDOW_NONE))
-            {
-                const f32 button_size = top_bar_height - 10.0f;
-                UiLayout ui_layout =
-                    ui_layout_create(v2f(10.0f, middle(top_bar_height, button_size)));
-                ui_layout.column_width = button_size;
-                b8 disable = tab->directory_history.current_index <= 0;
-                add_move_in_history_button(
-                    &ui_layout, arrow_back_icon_co, disable, FTIC_MOUSE_BUTTON_4, -1,
-                    &tab->directory_list.selected_item_values, &tab->directory_history);
-
-                ui_layout_column(&ui_layout);
-                disable =
-                    tab->directory_history.history.size <= tab->directory_history.current_index + 1;
-                add_move_in_history_button(
-                    &ui_layout, arrow_right_icon_co, disable, FTIC_MOUSE_BUTTON_4, 1,
-                    &tab->directory_list.selected_item_values, &tab->directory_history);
-
-                ui_layout_column(&ui_layout);
-                disable = !directory_can_go_up(
-                    directory_current(&tab->directory_history)->directory.parent);
-                if (ui_window_add_icon_button(ui_layout.at, v2i(ui_layout.column_width),
-                                              global_get_highlight_color(), arrow_up_icon_co,
-                                              UI_ARROW_ICON_TEXTURE, disable, &ui_layout))
-                {
-                    directory_go_up(&tab->directory_history);
-                }
-
-                ui_layout.padding = 10.0f;
-                ui_layout_column(&ui_layout);
-
-                const V2 bar_size =
-                    v2f((app.dimensions.width - (search_bar_width + 20.0f)) - ui_layout.at.x,
-                        top_bar_height - 10.0f);
-
-                ui_layout.at.y = middle(top_bar_height, bar_size.height);
-
-                b8 active_before = app.parent_directory_input.active;
-                if (ui_window_add_input_field(ui_layout.at, bar_size, &app.parent_directory_input,
-                                              &ui_layout))
-                {
-                    DirectoryPage* current = directory_current(&tab->directory_history);
-                    get_suggestions(v2f(ui_layout.at.x, ui_layout.at.y + top_bar_menu_height),
-                                    current, &app.parent_directory_input, &app.suggestions,
-                                    &app.suggestion_data);
-                }
-
-                if (collision_point_in_aabb(app.mouse_position, &app.suggestions.aabb))
-                {
-                    app.parent_directory_input.active = true;
-                }
-                if (app.parent_directory_input.active)
-                {
-                    if (!active_before)
-                    {
-                        const char* path =
-                            directory_current(&tab->directory_history)->directory.parent;
-                        set_input_buffer_to_current_directory(path, &app.parent_directory_input);
-                    }
-                    app.suggestion_data.change_directory = false;
-                    drop_down_menu_add(&app.suggestions, &app, &app.suggestion_data);
-
-                    if (app.suggestion_data.change_directory ||
-                        event_is_key_pressed_once(FTIC_KEY_ENTER))
-                    {
-                        if (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
-                        {
-                            array_push(app.suggestion_data.parent_directory, '\\');
-                            suggestions_add_extra_space(&app.suggestion_data);
-                        }
-                        char* last_char = array_back(&app.parent_directory_input.buffer);
-                        char saved = *last_char;
-                        b8 should_restore = *last_char == '\\' || *last_char == '/';
-                        if (should_restore)
-                        {
-                            *last_char = '\0';
-                            app.parent_directory_input.buffer.size--;
-                        }
-                        if (!directory_go_to(app.parent_directory_input.buffer.data,
-                                             app.parent_directory_input.buffer.size,
-                                             &tab->directory_history))
-                        {
-                        }
-                        if (should_restore)
-                        {
-                            *last_char = saved;
-                            app.parent_directory_input.buffer.size++;
-                        }
-
-                        app.parent_directory_input.input_index = -1;
-                        app.suggestions.tab_index = -1;
-                        DirectoryPage* current = directory_current(&tab->directory_history);
-                        get_suggestions(v2f(ui_layout.at.x, ui_layout.at.y + top_bar_menu_height),
-                                        current, &app.parent_directory_input, &app.suggestions,
-                                        &app.suggestion_data);
-                    }
-                }
-                else
-                {
-                    const char* path = directory_current(&tab->directory_history)->directory.parent;
-                    set_input_buffer_to_current_directory(path, &app.parent_directory_input);
-                    app.suggestions.aabb = (AABB){ 0 };
-                    app.suggestions.x = 0;
-                }
-
-                ui_layout_column(&ui_layout);
-                if (ui_window_add_input_field(ui_layout.at, v2f(search_bar_width, bar_size.height),
-                                              &app.search_page.input, &ui_layout))
-                {
-                    search_page_clear_result(&app.search_page);
-                    app.search_page.running_callbacks[app.search_page.last_running_id] = false;
-                    if (!app.search_result_window_item.show)
-                    {
-                        open_window(app.dimensions, app.search_result_window_item.window);
-                        app.search_result_window_item.show = true;
-                        app.search_result_window_item.switch_on = true;
-                    }
-                }
-                if (app.search_page.running_callbacks[app.search_page.last_running_id])
-                {
-                    ui_layout_column(&ui_layout);
-                    V2 dim = v2f(ui_font_pixel_height + 12.0f, ui_font_pixel_height + 10.0f);
-                    if (ui_window_add_button(v2f(ui_layout.at.x - dim.width - 5.0f,
-                                                 ui_layout.at.y + middle(button_size, dim.height)),
-                                             &dim, &button_color, "X", &ui_layout))
-                    {
-                        app.search_page.running_callbacks[app.search_page.last_running_id] = false;
-                    }
-                }
-                if (app.search_page.input.active)
-                {
-                    if (event_is_key_pressed_once(FTIC_KEY_ENTER))
-                    {
-                        search_page_search(&app.search_page, &tab->directory_history,
-                                           &app.thread_queue.task_queue);
-                    }
-                }
-                else
-                {
-                    app.search_page.running_callbacks[app.search_page.last_running_id] = false;
-                }
-
-                ui_window_end();
-            }
-
-            const V2 size = v2f(app.dimensions.width, bottom_bar_height);
-            ui_window_set_position(app.bottom_bar_window,
-                                   v2f(0.0f, app.dimensions.height - bottom_bar_height));
-            ui_window_set_size(app.bottom_bar_window, size);
-            ui_context_set_window_top_color(global_get_bar_top_color());
-            ui_context_set_window_bottom_color(global_get_bar_bottom_color());
-            if (ui_window_begin(app.bottom_bar_window, NULL, UI_WINDOW_NONE))
-            {
-                UiLayout ui_layout = ui_layout_create(v2f(10.0f, 4.0f));
-                DirectoryPage* current = directory_current(&tab->directory_history);
-                char buffer[64] = { 0 };
-                sprintf_s(buffer, sizeof(buffer), "Items: %u", current->directory.items.size);
-                ui_window_add_text(ui_layout.at, buffer, false, &ui_layout);
-
-                const f32 list_grid_icon_position = size.width - (2.0f * bottom_bar_height + 5.0f);
-                if (current->grid_view)
-                {
-                    ui_layout.at =
-                        v2f(list_grid_icon_position - 120.0f, middle(bottom_bar_height, 5.0f));
-
-                    const V2 ui_icon_min_max = ui_get_big_icon_min_max();
-                    static b8 pressed = false;
-                    ui_set_big_icon_size(ui_window_add_slider(
-                        ui_layout.at, v2f(110.0f, 5.0f), ui_icon_min_max.min, ui_icon_min_max.max,
-                        ui_get_big_icon_size(), &pressed, &ui_layout));
-                }
-                ui_layout.at.x = list_grid_icon_position;
-                ui_layout.at.y = 0.0f;
-
-                if (ui_window_add_icon_button(ui_layout.at, v2i(bottom_bar_height),
-                                              global_get_border_color(), full_icon_co,
-                                              UI_LIST_ICON_TEXTURE, false, &ui_layout))
-                {
-                    current->grid_view = false;
-                }
-                ui_layout_column(&ui_layout);
-                if (ui_window_add_icon_button(ui_layout.at, v2i(bottom_bar_height),
-                                              global_get_border_color(), full_icon_co,
-                                              UI_GRID_ICON_TEXTURE, false, &ui_layout))
-                {
-                    current->grid_view = true;
-                }
-                ui_window_end();
-            }
-
-            if (!app.open_context_menu_window)
-            {
-                app.panel_right_clicked = NULL;
-            }
-
-            if (access_panel_open(&app.quick_access, "Quick access", list_item_height, &item_hit,
-                                  &app.recent, &tab->directory_history))
-            {
-                app.panel_right_clicked = &app.quick_access;
-            }
-
-            access_panel_open(&app.recent.panel, "Recent", list_item_height, &item_hit, &app.recent,
-                              &tab->directory_history);
-
-            if (app.search_result_window_item.show)
-            {
-                app.search_result_window_item.show = !show_search_result_window(
-                    &app.search_page, app.search_result_window_item.window, list_item_height,
-                    &item_hit, &tab->directory_history);
-                if (!app.search_result_window_item.show)
-                {
-                    app.search_result_window_item.switch_on = false;
-                }
-            }
-
-            if (app.preview_index != -1)
-            {
-                application_open_preview(&app);
-            }
-            else
-            {
-                if (app.preview_image.textures.size > 0)
-                {
-                    texture_delete(
-                        app.preview_image.textures.data[--app.preview_image.textures.size]);
-                }
-                if (app.preview_text.file.buffer)
-                {
-                    free(app.preview_text.file.buffer);
-                    app.preview_text.file = (FileAttrib){ 0 };
-                    app.preview_text.file_colored.size = 0;
-                }
-            }
-
-            for (u32 i = 0; i < app.tabs.size; ++i)
-            {
-                const u32 window_id = app.tabs.data[i].window_id;
-                if (ui_window_in_focus() == window_id)
-                {
-                    app.tab_index = i;
-                    tab = app.tabs.data + app.tab_index;
-                }
-
-                DirectoryTab* tab_to_update = app.tabs.data + i;
-                if (item_hit == NULL && ui_window_is_hit(window_id))
-                {
-                    item_hit =
-                        directory_current(&tab_to_update->directory_history)->directory.parent;
-                }
-
-                ui_window_set_alpha(window_id, i == app.tab_index ? 1.0f : 0.7f);
-
-                if (application_show_directory_window(&app, window_id, list_item_height,
-                                                      check_collision, &item_hit, tab_to_update))
-                {
-                    DirectoryTab tab_to_remove = app.tabs.data[i];
-                    for (u32 j = i; j < app.tabs.size - 1; ++j)
-                    {
-                        app.tabs.data[j] = app.tabs.data[j + 1];
-                    }
-                    directory_tab_clear(&tab_to_remove);
-                    app.tabs.size--;
-                    array_push(&app.free_window_ids, window_id);
-
-                    // NOTE: this is probably always true
-                    if (i == app.tab_index)
-                    {
-                        app.tab_index = (app.tab_index + 1) % app.tabs.size;
-                    }
-                    --i;
-                }
-            }
-            if (current_tab == tab)
-            {
-                const DirectoryPage* next_directory = directory_current(&tab->directory_history);
-                if (current_directory != next_directory)
-                {
-                    ui_window_set_end_scroll_offset(tab->window_id, next_directory->offset);
-                    ui_window_set_current_scroll_offset(tab->window_id, 0.0f);
-                }
-            }
-            for (u32 i = 0; i < app.tabs.size; ++i)
-            {
-                directory_current(&app.tabs.data[i].directory_history)->offset =
-                    ui_window_get(app.tabs.data[i].window_id)->end_scroll_offset;
-            }
-
-            if (app.open_context_menu_window)
-            {
-                if (menu_open && tab->directory_list.selected_item_values.paths.size)
-                {
-                    if (app.context_menu.pcm != NULL)
-                    {
-                        platform_context_menu_destroy(&app.context_menu);
-                    }
-                    platform_context_menu_create(
-                        &app.context_menu, tab->directory_list.selected_item_values.paths.data[0]);
-                }
-                application_open_context_menu_window(&app, tab);
-            }
-        }
-        ui_context_end();
+        application_update_ui(&app, menu_open);
 
         rendering_properties_check_and_grow_vertex_buffer(&app.main_render);
         rendering_properties_check_and_grow_index_buffer(&app.main_render, app.main_index_count);
@@ -3535,7 +3534,7 @@ void application_run()
             }
         }
 
-        look_for_dropped_files(directory_current(&tab->directory_history), item_hit);
+        look_for_dropped_files(directory_current(&app.current_tab->directory_history), app.item_hit);
 
         for (u32 i = 0; i < app.tabs.size; ++i)
         {
