@@ -479,7 +479,7 @@ internal void tab_clear_selected(DirectoryTab* tab)
     }
     directory_clear_selected_items(&tab->directory_list.selected_item_values);
     tab->directory_list.last_selected_index = 0;
-    for(u32 i = 0; i < tab->directory_list.inputs.size; ++i)
+    for (u32 i = 0; i < tab->directory_list.inputs.size; ++i)
     {
         tab->directory_list.inputs.data[i].active = false;
     }
@@ -2870,6 +2870,10 @@ void open_menu_window(const u32 window, const V2 position, const f32 starting_wi
 
 internal void application_handle_file_drag(ApplicationContext* app)
 {
+    if (app->current_tab->directory_list.inputs.data[0].active)
+    {
+        return;
+    }
     const MouseMoveEvent* mouse_move_event = event_get_mouse_move_event();
     const MouseButtonEvent* mouse_button_event = event_get_mouse_button_event();
 
@@ -3534,7 +3538,8 @@ void application_run()
             }
         }
 
-        look_for_dropped_files(directory_current(&app.current_tab->directory_history), app.item_hit);
+        look_for_dropped_files(directory_current(&app.current_tab->directory_history),
+                               app.item_hit);
 
         for (u32 i = 0; i < app.tabs.size; ++i)
         {
