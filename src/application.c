@@ -334,12 +334,31 @@ internal V2 load_and_scale_preview_image(const ApplicationContext* application,
     return image_dimensions_internal;
 }
 
-internal void look_for_dropped_files(DirectoryPage* current, char* item_hit)
+internal void application_look_for_dropped_files(ApplicationContext* app)
 {
     const CharPtrArray* dropped_paths = event_get_drop_buffer();
     if (dropped_paths->size)
     {
-        platform_move_to_directory(dropped_paths, item_hit ? item_hit : current->directory.parent);
+        Directory* current = &directory_current(&app->current_tab->directory_history)->directory;
+        char* path_to_dropp_in = app->item_hit ? app->item_hit : current->parent;
+        b8 same_directory = false;
+        for (u32 i = 0; i < dropped_paths->size; ++i)
+        {
+            char* path = dropped_paths->data[i];
+            const u32 path_length = get_path_length(path, (u32)strlen(path)) - 1;
+            char saved = path[path_length];
+            path[path_length] = '\0';
+            if (string_compare_case_insensitive(path, path_to_dropp_in) == 0)
+            {
+                same_directory = true;
+                break;
+            }
+            path[path_length] = saved;
+        }
+        if (!same_directory)
+        {
+            platform_move_to_directory(dropped_paths, path_to_dropp_in);
+        }
     }
 }
 
@@ -3537,9 +3556,7 @@ void application_run()
                 camera_set_based_on_mesh_aabb(&app.preview_camera, &app.preview_mesh_aabb);
             }
         }
-
-        look_for_dropped_files(directory_current(&app.current_tab->directory_history),
-                               app.item_hit);
+        application_look_for_dropped_files(&app);
 
         for (u32 i = 0; i < app.tabs.size; ++i)
         {
