@@ -2889,27 +2889,26 @@ void open_menu_window(const u32 window, const V2 position, const f32 starting_wi
 
 internal void application_handle_file_drag(ApplicationContext* app)
 {
+    const MouseMoveEvent* mouse_move_event = event_get_mouse_move_event();
+    const MouseButtonEvent* mouse_button_event = event_get_mouse_button_event();
+    presist b8 activated = false;
+    if (mouse_button_event->action == FTIC_RELEASE)
+    {
+        activated = false;
+    }
     if (app->current_tab->directory_list.inputs.data[0].active)
     {
         return;
     }
-    const MouseMoveEvent* mouse_move_event = event_get_mouse_move_event();
-    const MouseButtonEvent* mouse_button_event = event_get_mouse_button_event();
 
-    presist b8 activated = false;
-    if (mouse_button_event->activated)
+    if (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
     {
         app->last_mouse_position = app->mouse_position;
         app->mouse_drag_distance = 0.0f;
         activated = true;
     }
 
-    if (mouse_button_event->action == FTIC_RELEASE)
-    {
-        activated = false;
-    }
-
-    if (activated && mouse_button_event->action == FTIC_PRESS && mouse_move_event->activated &&
+    if (activated && mouse_button_event->action == FTIC_PRESS &&
         app->current_tab->directory_list.selected_item_values.paths.size > 0)
     {
         app->mouse_drag_distance = v2_distance(app->last_mouse_position, app->mouse_position);

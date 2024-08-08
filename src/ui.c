@@ -2543,8 +2543,7 @@ void ui_context_end()
     for (u32 i = 0; i < ui_context.particles.size; ++i)
     {
         Particle* particle = ui_context.particles.data + i;
-        quad(&ui_context.render.vertices, particle->position, particle->dimension, particle->color,
-             UI_CIRCLE_TEXTURE);
+        add_circle(particle->position, particle->dimension, particle->color);
     }
     ui_context.current_index_offset += ui_context.particles.size * 6;
 
