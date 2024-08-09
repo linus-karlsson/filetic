@@ -204,6 +204,7 @@ typedef struct ThemeColorPicker
     ColorPicker bar_top_color;
     ColorPicker bar_bottom_color;
     ColorPicker border_color;
+    ColorPicker scroll_bar_color;
 }ThemeColorPicker;
 
 typedef struct UiLayout

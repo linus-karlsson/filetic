@@ -229,6 +229,7 @@ typedef struct ApplicationContext
     V4 bar_top_color;
     V4 bar_bottom_color;
     V4 border_color;
+    V4 scroll_bar_color;
     V2 color_picker_position;
     ColorPicker* color_picker_to_use;
     V4* color_to_change;
@@ -257,6 +258,7 @@ typedef struct ApplicationContext
     b8 open_color_picker_window;
 
     b8 check_collision_in_ui;
+    b8 menu_open_this_frame;
 
 } ApplicationContext;
 

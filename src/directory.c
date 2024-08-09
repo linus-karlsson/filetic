@@ -69,7 +69,7 @@ internal void look_for_same_items(const DirectoryItemArray* existing_items,
 
 void directory_reload(DirectoryPage* directory_page)
 {
-    char* path = directory_page->directory.parent;
+    char* path = platform_get_path_from_id(directory_page->directory.parent_id);
     u32 length = (u32)strlen(path);
     path[length++] = '\\';
     path[length++] = '*';
@@ -424,10 +424,12 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
     return result;
 }
 
-void directory_open_folder(char* folder_path, DirectoryHistory* directory_history)
+void directory_open_folder(FticGUID id, DirectoryHistory* directory_history)
 {
+    char* folder_path = platform_get_path_from_id(id);
     u32 length = (u32)strlen(folder_path);
     directory_go_to(folder_path, length, directory_history);
+    free(folder_path);
 }
 
 void directory_move_in_history(const i32 index_add, SelectedItemValues* selected_item_values,

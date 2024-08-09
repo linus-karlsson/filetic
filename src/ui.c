@@ -489,7 +489,7 @@ internal V2 get_text_position(const V2 position)
     return v2f(position.x, position.y + ui_context.font.pixel_height - 2.0f);
 }
 
-internal V2 add_first_item_offset(const UiWindow* window, const V2 relative_position)
+internal V2 add_first_item_offset(V2 relative_position)
 {
     return v2_add(relative_position, ui_context.current_window_first_item_position);
 }
@@ -2838,7 +2838,7 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
     if (area_height < total_height)
     {
         quad(&ui_context.render.vertices, position, v2f(scroll_bar_width, area_height),
-             global_get_highlight_color(), 0.0f);
+             global_get_tab_color(), 0.0f);
         ui_context.current_window_index_count += 6;
 
         const f32 initial_y = position.y;
@@ -2863,13 +2863,13 @@ internal void add_scroll_bar_height(UiWindow* window, AABBArray* aabbs,
         if (collided || check_bit(window->scroll_bar_dragging, SCROLL_BAR_HEIGHT))
         {
             quad(&ui_context.render.vertices, position, scroll_bar_dimensions,
-                 global_get_bright_color(), 0.0f);
+                 v4a(v4_s_multi(global_get_scroll_bar_color(), 1.4f), 1.0f), 0.0f);
             ui_context.current_window_index_count += 6;
         }
         else
         {
-            quad_gradiant_t_b(&ui_context.render.vertices, position, scroll_bar_dimensions,
-                              global_get_lighter_color(), v4ic(0.45f), 0.0f);
+            quad(&ui_context.render.vertices, position, scroll_bar_dimensions,
+                 v4a(v4_s_multi(global_get_scroll_bar_color(), 1.2f), 1.0f), 0.0f);
             ui_context.current_window_index_count += 6;
         }
 
@@ -3096,7 +3096,7 @@ b8 ui_window_add_icon_button(V2 position, const V2 size, const V4 hover_color,
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
 
     V4 button_color = global_get_text_color();
     b8 hover = false;
@@ -3312,7 +3312,7 @@ b8 ui_window_add_input_field(V2 position, const V2 size, InputBuffer* input, UiL
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
 
     b8 hit = hover_clicked_index.index == (i32)aabbs->size;
     if (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) ||
@@ -3397,7 +3397,7 @@ void ui_window_add_text_c(V2 position, V4 color, const char* text, b8 scrolling,
     UiWindow* window = ui_context.windows.data + window_index;
 
     V2 relative_position = position;
-    position = add_scroll_offset(window, add_first_item_offset(window, position));
+    position = add_scroll_offset(window, add_first_item_offset(position));
 
     u32 new_lines = 0;
     f32 x_advance = 0.0f;
@@ -3422,7 +3422,7 @@ void ui_window_add_text_colored(V2 position, const ColoredCharacterArray* text, 
     UiWindow* window = ui_context.windows.data + window_index;
 
     V2 relative_position = position;
-    position = add_scroll_offset(window, add_first_item_offset(window, position));
+    position = add_scroll_offset(window, add_first_item_offset(position));
 
     u32 new_lines = 0;
     f32 x_advance = 0.0f;
@@ -3440,7 +3440,7 @@ void ui_window_add_image(V2 position, V2 image_dimensions, u32 image, UiLayout* 
     UiWindow* window = ui_context.windows.data + window_index;
 
     V2 relative_position = position;
-    position = add_scroll_offset(window, add_first_item_offset(window, position));
+    position = add_scroll_offset(window, add_first_item_offset(position));
 
     f32 texture_index = (f32)ui_context.render.render.textures.size;
     array_push(&ui_context.render.render.textures, image);
@@ -3483,7 +3483,7 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char
         ui_context.window_hover_clicked_indices.data[window_index];
 
     V2 relative_position = position;
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
 
     V2 end_dimensions;
     f32 x_advance;
@@ -3568,7 +3568,7 @@ void ui_window_add_icon(V2 position, const V2 size, const V4 texture_coordinates
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
 
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
     add_quad_co(position, size, v4ic(1.0f), texture_coordinates, texture_index);
 
     ui_layout_set_width_and_height(layout, size.width, size.height);
@@ -3587,7 +3587,7 @@ void ui_window_add_switch(V2 position, b8* selected, f32* x, UiLayout* layout)
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
 
     b8 hover = hover_clicked_index.index == (i32)aabbs->size;
     if (hover && hover_clicked_index.clicked)
@@ -3682,7 +3682,7 @@ f32 ui_window_add_slider(V2 position, V2 size, const f32 min_value, const f32 ma
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
 
     b8 hit = hover_clicked_index.index == (i32)aabbs->size;
     b8 slider_hit = hover_clicked_index.index == (i32)aabbs->size + 1;
@@ -3809,7 +3809,7 @@ V4 ui_window_add_color_picker(V2 position, V2 size, ColorPicker* picker, UiLayou
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
 
     if (event_get_mouse_button_event()->action == FTIC_RELEASE)
     {
@@ -3931,7 +3931,7 @@ void ui_window_add_border(V2 position, const V2 size, const V4 color, const f32 
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
     quad_border(&ui_context.render.vertices, &ui_context.current_window_index_count, position, size,
                 color, thickness, UI_DEFAULT_TEXTURE);
 }
@@ -3940,7 +3940,7 @@ void ui_window_add_rectangle(V2 position, const V2 size, const V4 color, UiLayou
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
     quad(&ui_context.render.vertices, position, size, color, UI_DEFAULT_TEXTURE);
     ui_context.current_window_index_count += 6;
     ui_layout_set_width_and_height(layout, size.width, size.height);
@@ -3954,7 +3954,7 @@ void ui_window_add_radio_button(V2 position, const V2 size, b8* selected, UiLayo
     HoverClickedIndex hover_clicked_index =
         ui_context.window_hover_clicked_indices.data[window_index];
 
-    position = add_first_item_offset(window, position);
+    position = add_first_item_offset(position);
 
     b8 hover = hover_clicked_index.index == (i32)aabbs->size;
     V4 color = global_get_secondary_color();
@@ -4011,12 +4011,14 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
     const b8 alt_pressed = event_get_key_event()->alt_pressed;
 
     AABB aabb = { .min = starting_position, .size = item_dimensions };
-    const b8 hit = (hover_clicked_index.index == (i32)aabbs->size) ||
-                   (collision_aabb_in_aabb(&ui_context.mouse_drag_box, &aabb) && alt_pressed);
+    const b8 drag_aabb_collision =
+        collision_aabb_in_aabb(&ui_context.mouse_drag_box, &aabb) && alt_pressed;
+    const b8 hit = (hover_clicked_index.index == (i32)aabbs->size) || drag_aabb_collision;
 
     const b8 mouse_button_clicked_right = event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT);
-    const b8 mouse_button_pressed =
-        event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) || mouse_button_clicked_right;
+    const b8 mouse_button_clicked =
+        event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) || mouse_button_clicked_right ||
+        (drag_aabb_collision && event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT));
 
     if (event_is_ctrl_and_key_pressed(FTIC_KEY_R) && check_if_selected)
     {
@@ -4029,7 +4031,7 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
     }
 
     b8 clicked_on_same = false;
-    if (mouse_button_pressed && list)
+    if (mouse_button_clicked && list)
     {
         if (hit)
         {
@@ -4223,7 +4225,8 @@ internal void directory_item_update_position_and_background(DirectoryItem* item,
     array_push(aabbs, back_drop_aabb);
     if (hit || selected)
     {
-        V4 color = selected ? v4ic(0.45f) : v4ic(0.3f);
+        V4 color =
+            selected ? v4a(v4_s_multi(global_get_tab_color(), 1.4f), 1.0f) : global_get_tab_color();
         color = v4a(color, window->alpha);
         quad_gradiant_l_r(&ui_context.render.vertices, back_drop_aabb.min, back_drop_aabb.size,
                           v4a(color, window->alpha), global_get_clear_color(), 0.0f);
@@ -4327,7 +4330,8 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, const 
 
     if (hit || selected)
     {
-        const V4 color = selected ? v4ic(0.45f) : v4ic(0.3f);
+        V4 color =
+            selected ? v4a(v4_s_multi(global_get_tab_color(), 1.4f), 1.0f) : global_get_tab_color();
         add_default_quad_aabb(&back_drop_aabb, add_window_alpha(window, color));
     }
 
@@ -4452,18 +4456,42 @@ internal void increase_index(i32 what_to_increase, DirectoryItemArray* items, Li
     }
 }
 
+internal void check_and_open_input_for_rename(const V2 position, const V2 size,
+                                              const b8 enter_presssed, DirectoryItem* item,
+                                              List* list)
+{
+    const b8 scroll = event_get_mouse_wheel_event()->activated;
+    UiLayout temp_layout = { 0 };
+    if (item->rename && list && list->inputs.data[list->input_index].active)
+    {
+        InputBuffer* input = list->inputs.data + list->input_index;
+        input->active = !scroll;
+        ui_window_add_input_field(position, size, input, &temp_layout);
+        item->rename = input->active;
+        if (enter_presssed)
+        {
+#if 0
+                    platform_rename_file(item->path, input->buffer.data, input->buffer.size);
+#else
+            file_rename(item->path, input->buffer.data, input->buffer.size);
+#endif
+            input->active = false;
+            item->rename = false;
+        }
+    }
+}
+
 i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, DirectoryItemArray* items,
                                       List* list, i32* hit_index, UiLayout* layout)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
     V2 relative_position = position;
-    position = add_scroll_offset(window, add_first_item_offset(window, position));
+    position = add_scroll_offset(window, add_first_item_offset(position));
 
     V2 item_dimensions = v2f(window->size.width - relative_position.x, item_height);
 
     const b8 enter_presssed = event_is_key_pressed_once(FTIC_KEY_ENTER);
-    const b8 scroll = event_get_mouse_wheel_event()->activated;
 
     if (list && window_index == ui_context.window_in_focus && items->size)
     {
@@ -4477,7 +4505,6 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, Direct
         }
     }
 
-    UiLayout temp_layout = { 0 };
     if (list) list->input_index = -1;
     i32 double_clicked_index = -1;
     f32 height = 0.0f;
@@ -4491,31 +4518,13 @@ i32 ui_window_add_directory_item_list(V2 position, const f32 item_height, Direct
             {
                 double_clicked_index = i;
             }
-            if (item->rename && list && list->inputs.data[list->input_index].active)
-            {
-                InputBuffer* input = list->inputs.data + list->input_index;
-                input->active = !scroll;
-                const f32 icon_size = 24.0f;
-                V2 input_field_position = v2f(relative_position.x + icon_size + 20.0f,
-                                              relative_position.y + window->current_scroll_offset);
-                ui_window_add_input_field(input_field_position,
-                                          v2f((item_dimensions.width * 0.9f) - (icon_size + 20.0f),
-                                              item_dimensions.height),
-                                          input, &temp_layout);
-
-                item->rename = input->active;
-
-                if (enter_presssed)
-                {
-#if 0
-                    platform_rename_file(item->path, input->buffer.data, input->buffer.size);
-#else
-                    file_rename(item->path, input->buffer.data, input->buffer.size);
-#endif
-                    input->active = false;
-                    item->rename = false;
-                }
-            }
+            const f32 icon_size = 24.0f;
+            V2 input_field_position = v2f(relative_position.x + icon_size + 20.0f,
+                                          relative_position.y + window->current_scroll_offset);
+            check_and_open_input_for_rename(
+                input_field_position,
+                v2f((item_dimensions.width * 0.9f) - (icon_size + 20.0f), item_dimensions.height),
+                enter_presssed, item, list);
         }
         height += item_height + ui_list_padding;
         position.y += item_height + ui_list_padding;
@@ -4537,7 +4546,7 @@ i32 ui_window_add_directory_item_grid(V2 position, DirectoryItemArray* items,
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
     V2 relative_position = position;
-    position = add_scroll_offset(window, add_first_item_offset(window, position));
+    position = add_scroll_offset(window, add_first_item_offset(position));
 
     V2 item_dimensions = v2i(ui_big_icon_size);
     item_dimensions.height += (ui_context.font.pixel_height + 5.0f);
@@ -4577,6 +4586,7 @@ i32 ui_window_add_directory_item_grid(V2 position, DirectoryItemArray* items,
         }
     }
 
+    if (list) list->input_index = -1;
     i32 selected_index = -1;
     for (i32 row = 0; row < rows; ++row)
     {
@@ -4586,10 +4596,17 @@ i32 ui_window_add_directory_item_grid(V2 position, DirectoryItemArray* items,
             for (i32 column = 0; column < columns; ++column)
             {
                 const i32 index = (row * columns) + column;
+                DirectoryItem* item = items->data + index;
                 if (directory_item_grid(position, item_dimensions, index, task_queue, textures,
-                                        objects, items->data + index, hit_index, list))
+                                        objects, item, hit_index, list))
                 {
                     selected_index = index;
+                }
+                if (item->rename && list && list->inputs.data[list->input_index].active)
+                {
+                    InputBuffer* input = list->inputs.data + list->input_index;
+                    input->active = false;
+                    item->rename = false;
                 }
                 position.x += item_dimensions.width + grid_padding_width;
             }
@@ -4650,7 +4667,7 @@ b8 ui_window_add_movable_list(V2 position, DirectoryItemArray* items, i32* hit_i
 
     V2 item_dimensions = v2f(window->size.width - position.x, list_item_height);
     V2 relative_position = position;
-    position = add_scroll_offset(window, add_first_item_offset(window, position));
+    position = add_scroll_offset(window, add_first_item_offset(position));
 
     list->right_click = false;
 

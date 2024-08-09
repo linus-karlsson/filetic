@@ -72,7 +72,7 @@ void directory_sort_by_date(DirectoryItemArray* array);
 void directory_merge_sort_by_date(DirectoryItemArray* array);
 void directory_flip_array(DirectoryItemArray* array);
 b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history);
-void directory_open_folder(char* folder_path, DirectoryHistory* directory_history);
+void directory_open_folder(FticGUID id, DirectoryHistory* directory_history);
 void directory_move_in_history(const i32 index_add, SelectedItemValues* selected_item_values, DirectoryHistory* directory_history);
 b8   directory_can_go_up(char* parent);
 void directory_go_up(DirectoryHistory* directory_history);
