@@ -439,12 +439,14 @@ void object_load_thumbnail(void* data)
     {
         array_free(&thumbnail.mesh.vertices);
         array_free(&thumbnail.mesh.indices);
-        free(data);
+        free(arguments->file_path);
+        free(arguments);
         return;
     }
     array_push(&arguments->array->array, thumbnail);
     platform_mutex_unlock(&arguments->array->mutex);
-    free(data);
+    free(arguments->file_path);
+    free(arguments);
 }
 
 u32 append_full_path(const char* path, char* destination)

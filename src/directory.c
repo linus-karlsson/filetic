@@ -17,7 +17,8 @@ void load_thumpnails(void* data)
     texture_load_full_path(arguments->file_path, &value.texture_properties);
     if (!value.texture_properties.bytes)
     {
-        free(data);
+        free(arguments->file_path);
+        free(arguments);
         return;
     }
 
@@ -31,13 +32,15 @@ void load_thumpnails(void* data)
     if (arguments->array->array.data == NULL)
     {
         free(value.texture_properties.bytes);
-        free(data);
+        free(arguments->file_path);
+        free(arguments);
         return;
     }
     array_push(&arguments->array->array, value);
 
     platform_mutex_unlock(&arguments->array->mutex);
-    free(data);
+    free(arguments->file_path);
+    free(arguments);
 }
 
 internal void look_for_same_items(const DirectoryItemArray* existing_items,

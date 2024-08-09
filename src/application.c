@@ -2648,7 +2648,7 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
         }
         else if (clicked)
         {
-            if (item->id == 160)
+            if (item->id == 160 || item->id == 162)
             {
                 for (u32 j = 0; j < selected_paths->size; ++j)
                 {
@@ -3466,10 +3466,41 @@ void application_update_ui(ApplicationContext* app, const b8 menu_open)
     ui_context_end();
 }
 
+internal void preview_render_3d(ApplicationContext* app)
+{
+    MVP mvp = {
+        .model = m4i(1.0f),
+        .view = app->preview_camera.view_projection.view,
+        .projection = app->preview_camera.view_projection.projection,
+    };
+
+    glEnable(GL_DEPTH_TEST);
+    render_begin_draw(&app->render_3d, app->render_3d.shader_properties.shader, &mvp);
+
+    glUniform3f(app->light_dir_location, -app->preview_camera.orientation.x,
+                -app->preview_camera.orientation.y, -app->preview_camera.orientation.z);
+
+    render_draw(0, app->index_count_3d, &app->preview_camera.view_port);
+    render_end_draw(&app->render_3d);
+    glDisable(GL_DEPTH_TEST);
+    if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+    {
+        app->preview_index = -1;
+    }
+
+    if (event_is_key_pressed_once(FTIC_KEY_R))
+    {
+        camera_set_based_on_mesh_aabb(&app->preview_camera, &app->preview_mesh_aabb);
+    }
+}
+
 void application_run()
 {
     ApplicationContext app = { 0 };
     application_initialize(&app);
+
+    //platform_get_quick_access_items();
+
     while (!window_should_close(app.window))
     {
         application_begin_frame(&app);
@@ -3485,13 +3516,11 @@ void application_run()
             app.check_collision_in_ui = false;
         }
 
-        const char* directory_to_drop_in = NULL;
-        const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
         b8 menu_open = false;
-
         if (app.preview_index != 1 && !event_get_key_event()->ctrl_pressed &&
             event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT))
         {
+            const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
             app.open_context_menu_window = true;
             V2 item_size = v2f(300.0f, 8.0f + ui_font_pixel_height);
             const f32 end_height = CONTEXT_ITEM_COUNT * item_size.height;
@@ -3523,38 +3552,9 @@ void application_run()
 
         if (app.preview_index == 1)
         {
-#if 0
-            glViewport((int)roundf(preview_camera.view_port.min.x),
-                       (int)roundf(preview_camera.view_port.min.y),
-                       (int)roundf(preview_camera.view_port.size.width),
-                       (int)roundf(preview_camera.view_port.size.height));
-#endif
-
-            MVP mvp = {
-                .model = m4i(1.0f),
-                .view = app.preview_camera.view_projection.view,
-                .projection = app.preview_camera.view_projection.projection,
-            };
-
-            glEnable(GL_DEPTH_TEST);
-            render_begin_draw(&app.render_3d, app.render_3d.shader_properties.shader, &mvp);
-
-            glUniform3f(app.light_dir_location, -app.preview_camera.orientation.x,
-                        -app.preview_camera.orientation.y, -app.preview_camera.orientation.z);
-
-            render_draw(0, app.index_count_3d, &app.preview_camera.view_port);
-            render_end_draw(&app.render_3d);
-            glDisable(GL_DEPTH_TEST);
-            if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
-            {
-                app.preview_index = -1;
-            }
-
-            if (event_is_key_pressed_once(FTIC_KEY_R))
-            {
-                camera_set_based_on_mesh_aabb(&app.preview_camera, &app.preview_mesh_aabb);
-            }
+            preview_render_3d(&app);
         }
+
         application_look_for_dropped_files(&app);
 
         for (u32 i = 0; i < app.tabs.size; ++i)

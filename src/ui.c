@@ -4363,7 +4363,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, const 
                     (LoadThumpnailData*)calloc(1, sizeof(LoadThumpnailData));
                 thumbnail_data->file_id = guid_copy(&item->id);
                 thumbnail_data->array = textures;
-                thumbnail_data->file_path = item->path;
+                thumbnail_data->file_path = string_copy_d(item->path);
                 thumbnail_data->size = 256;
                 ThreadTask task = {
                     .data = thumbnail_data,
@@ -4378,7 +4378,7 @@ internal b8 directory_item_grid(V2 starting_position, V2 item_dimensions, const 
                     (ObjectThumbnailData*)calloc(1, sizeof(ObjectThumbnailData));
                 thumbnail_data->file_id = guid_copy(&item->id);
                 thumbnail_data->array = objects;
-                thumbnail_data->file_path = item->path;
+                thumbnail_data->file_path = string_copy_d(item->path);
 
                 item->texture_width = 256;
                 item->texture_height = item->texture_width;

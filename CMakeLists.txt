@@ -50,7 +50,7 @@ IF (WIN32)
     target_link_options(${EXE} PRIVATE "/SUBSYSTEM:WINDOWS" PRIVATE "/ENTRY:mainCRTStartup") 
     # For gcc and g++, clang
     #target_link_options(${EXE} PRIVATE "-mwindows") 
-    target_link_libraries(${EXE} user32 Winmm opengl32)
+    target_link_libraries(${EXE} user32 Winmm opengl32 Shlwapi)
 
     option(WINDOW_32 "Windows" ON)
     option(LINUX "Linux" OFF)

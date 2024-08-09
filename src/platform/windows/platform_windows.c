@@ -1832,3 +1832,76 @@ char* platform_get_path_from_id(FticGUID id)
     }
     return path;
 }
+
+void platform_get_quick_access_items(CharPtrArray* paths)
+{
+    HRESULT hr;
+    IShellFolder* desktop_folder = NULL;
+    IShellFolder* quick_access_folder = NULL;
+    IEnumIDList* enum_id_list = NULL;
+    LPITEMIDLIST item_id_list = NULL;
+    LPITEMIDLIST item_id_list_relative = NULL;
+
+    CoInitialize(NULL);
+
+    hr = SHGetDesktopFolder(&desktop_folder);
+    if (FAILED(hr))
+    {
+        CoUninitialize();
+        return;
+    }
+
+    // NOTE:
+    // https://stackoverflow.com/questions/41048080/how-do-i-get-the-name-of-each-item-in-windows-10-quick-access-items-list-and-p#comment69305190_41048080
+    // Simon Mourier for the shell id to the quick access
+    hr = desktop_folder->lpVtbl->ParseDisplayName(desktop_folder, NULL, NULL,
+                                                  L"shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}",
+                                                  NULL, &item_id_list, NULL);
+    if (FAILED(hr))
+    {
+        desktop_folder->lpVtbl->Release(desktop_folder);
+        CoUninitialize();
+        return;
+    }
+
+    hr = desktop_folder->lpVtbl->BindToObject(desktop_folder, item_id_list, NULL, &IID_IShellFolder,
+                                              (void**)&quick_access_folder);
+    if (FAILED(hr))
+    {
+        CoTaskMemFree((void*)item_id_list);
+        desktop_folder->lpVtbl->Release(desktop_folder);
+        CoUninitialize();
+        return;
+    }
+
+    hr = quick_access_folder->lpVtbl->EnumObjects(
+        quick_access_folder, NULL, SHCONTF_FOLDERS | SHCONTF_NONFOLDERS, &enum_id_list);
+    if (FAILED(hr))
+    {
+        quick_access_folder->lpVtbl->Release(quick_access_folder);
+        CoTaskMemFree((void*)item_id_list);
+        desktop_folder->lpVtbl->Release(desktop_folder);
+        CoUninitialize();
+        return;
+    }
+
+    while (enum_id_list->lpVtbl->Next(enum_id_list, 1, &item_id_list_relative, NULL) == S_OK)
+    {
+        STRRET string;
+        hr = quick_access_folder->lpVtbl->GetDisplayNameOf(
+            quick_access_folder, item_id_list_relative, SHGDN_FORPARSING, &string);
+        if (SUCCEEDED(hr))
+        {
+            char path[MAX_PATH] = {0};
+            StrRetToBuf(&string, item_id_list_relative, path, MAX_PATH);
+            array_push(paths, string_copy(path, (u32)strlen(path), 3));
+        }
+        CoTaskMemFree((void*)item_id_list_relative);
+    }
+
+    enum_id_list->lpVtbl->Release(enum_id_list);
+    quick_access_folder->lpVtbl->Release(quick_access_folder);
+    CoTaskMemFree((void*)item_id_list);
+    desktop_folder->lpVtbl->Release(desktop_folder);
+    CoUninitialize();
+}

@@ -220,3 +220,4 @@ void platform_set_folder_filter(b8 on);
 char* platform_get_path_from_id(FticGUID id);
 b8 platform_get_id_from_path(const char* path, FticGUID* id);
 
+void platform_get_quick_access_items(CharPtrArray* paths);
