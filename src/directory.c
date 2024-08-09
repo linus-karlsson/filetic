@@ -411,13 +411,8 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
         }
         directory_history->history.size = ++directory_history->current_index;
         array_push(&directory_history->history, new_page); // size + 1
-                                                           //
+                                                           
         DirectoryPage* page = array_back(&directory_history->history);
-#if 0
-        u32 count = look_for_and_get_thumbnails(&page->directory.files,
-                                                task_queue, texures);
-
-#endif
         page->grid_view = should_be_grid_view(page);
 
         path[length--] = saved_chars[2];

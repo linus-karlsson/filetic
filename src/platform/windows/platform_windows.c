@@ -1754,7 +1754,10 @@ void platform_open_context(void* window, const char* path)
 
 void* directory_listen_to_directory_changes(const char* path)
 {
-    HANDLE handle = FindFirstChangeNotification(path, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME);
+    HANDLE handle =
+        FindFirstChangeNotification(path, FALSE,
+                                    FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
+                                        FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE);
     return handle;
 }
 
@@ -1892,7 +1895,7 @@ void platform_get_quick_access_items(CharPtrArray* paths)
             quick_access_folder, item_id_list_relative, SHGDN_FORPARSING, &string);
         if (SUCCEEDED(hr))
         {
-            char path[MAX_PATH] = {0};
+            char path[MAX_PATH] = { 0 };
             StrRetToBuf(&string, item_id_list_relative, path, MAX_PATH);
             array_push(paths, string_copy(path, (u32)strlen(path), 3));
         }

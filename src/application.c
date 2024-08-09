@@ -3562,6 +3562,7 @@ void application_run()
             DirectoryTab* current = app.tabs.data + i;
             if (directory_look_for_directory_change(current->directory_history.change_handle))
             {
+                log_message("reload", 6);
                 directory_reload(directory_current(&current->directory_history));
                 directory_history_update_directory_change_handle(&current->directory_history);
             }
