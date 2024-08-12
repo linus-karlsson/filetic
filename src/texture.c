@@ -61,7 +61,7 @@ void texture_resize(TextureProperties* texture_properties, int box_width, int bo
 u32 texture_create(const TextureProperties* texture_properties, int internal_format,
                    u32 format, int param)
 {
-    uint32_t texture;
+    uint32_t texture = 0;
     glCreateTextures(GL_TEXTURE_2D, 1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
     glTexImage2D(GL_TEXTURE_2D, 0, internal_format, texture_properties->width,

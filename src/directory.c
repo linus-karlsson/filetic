@@ -265,6 +265,7 @@ void directory_sort_by_date(DirectoryItemArray* array)
 void directory_sort(DirectoryPage* directory_page)
 {
     DirectoryItemArray* items = &directory_page->directory.items;
+    if (items->size <= 1) return;
     switch (directory_page->sort_by)
     {
         case SORT_NAME:
@@ -411,7 +412,7 @@ b8 directory_go_to(char* path, u32 length, DirectoryHistory* directory_history)
         }
         directory_history->history.size = ++directory_history->current_index;
         array_push(&directory_history->history, new_page); // size + 1
-                                                           
+
         DirectoryPage* page = array_back(&directory_history->history);
         page->grid_view = should_be_grid_view(page);
 
@@ -491,6 +492,7 @@ void directory_tab_add(const char* dir, ThreadTaskQueue* task_queue, DirectoryTa
     safe_array_create(&tab->textures, 10);
     safe_array_create(&tab->objects, 10);
 
+    array_create(&tab->directory_list.selected_item_values.aabbs, 10);
     array_create(&tab->directory_list.selected_item_values.paths, 10);
     tab->directory_list.selected_item_values.selected_items =
         hash_table_create_guid(100, hash_guid);
@@ -535,6 +537,7 @@ void directory_clear_selected_items(SelectedItemValues* selected_item_values)
     }
     hash_table_clear_guid(&selected_item_values->selected_items);
     selected_item_values->paths.size = 0;
+    selected_item_values->aabbs.size = 0;
 }
 
 void directory_remove_selected_item(SelectedItemValues* selected_item_values, const FticGUID guid)
@@ -554,6 +557,14 @@ void directory_remove_selected_item(SelectedItemValues* selected_item_values, co
                 }
                 paths->size--;
                 free(temp);
+
+                AABBArray* aabbs = &selected_item_values->aabbs;
+                for (u32 j = i; j < aabbs->size - 1; ++j)
+                {
+                    aabbs->data[j] = aabbs->data[j + 1];
+                }
+                aabbs->size--;
+
                 break;
             }
         }

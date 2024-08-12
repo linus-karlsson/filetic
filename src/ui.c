@@ -2999,7 +2999,7 @@ internal void add_scroll_bar_width(UiWindow* window, AABBArray* aabbs,
     }
 }
 
-b8 ui_window_end()
+b8 ui_window_end(b8 reset_textures)
 {
     const u32 window_index = ui_context.id_to_index.data[ui_context.current_window_id];
     UiWindow* window = ui_context.windows.data + window_index;
@@ -3072,7 +3072,10 @@ b8 ui_window_end()
                       event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_RIGHT));
         if (closing)
         {
-            ui_context.render.render.textures.size = ui_context.current_window_texture_offset;
+            if (reset_textures)
+            {
+                ui_context.render.render.textures.size = ui_context.current_window_texture_offset;
+            }
             return true;
         }
     }
@@ -4017,8 +4020,8 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
 
     const b8 mouse_button_clicked_right = event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT);
     const b8 mouse_button_clicked =
-        event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT) || mouse_button_clicked_right ||
-        (drag_aabb_collision && event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT));
+        event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT) || mouse_button_clicked_right; //||
+    //(drag_aabb_collision && event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT));
 
     if (event_is_ctrl_and_key_pressed(FTIC_KEY_R) && check_if_selected)
     {
@@ -4051,6 +4054,7 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
                 char* path = string_copy(item->path, path_length, 2);
                 hash_table_insert_guid(&list->selected_item_values.selected_items, item->id, path);
                 array_push(&list->selected_item_values.paths, path);
+                array_push(&list->selected_item_values.aabbs, aabb);
             }
             else if (!ctrl_pressed)
             {
@@ -4061,6 +4065,7 @@ internal b8 check_directory_item_collision(V2 starting_position, V2 item_dimensi
                     hash_table_insert_guid(&list->selected_item_values.selected_items, item->id,
                                            path);
                     array_push(&list->selected_item_values.paths, path);
+                    array_push(&list->selected_item_values.aabbs, aabb);
                 }
             }
             else
@@ -4198,6 +4203,8 @@ internal V2 animate_based_on_selection(const b8 selected, const b8 hit, V2 now, 
         const f32 speed = (f32)(delta_time * 15.0);
         now.x += diff_x * (f32)(diff_x > 0.0f) * speed;
         now.y += diff_y * (f32)(diff_y > 0.0f) * speed;
+        now.x = ftic_clamp_high(now.x, after.x);
+        now.y = ftic_clamp_high(now.y, after.y);
     }
     else
     {
@@ -4206,6 +4213,8 @@ internal V2 animate_based_on_selection(const b8 selected, const b8 hit, V2 now, 
         const f32 speed = (f32)(delta_time * 15.0);
         now.x += diff_x * (f32)(diff_x < 0.0f) * speed;
         now.y += diff_y * (f32)(diff_y < 0.0f) * speed;
+        now.x = ftic_clamp_low(now.x, 0.0f);
+        now.y = ftic_clamp_low(now.y, 0.0f);
     }
     return now;
 }

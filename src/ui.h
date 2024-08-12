@@ -262,7 +262,7 @@ u32 ui_window_create();
 const UiWindow* ui_window_get(const u32 window_id);
 u32 ui_window_in_focus();
 b8 ui_window_begin(u32 window_id, const char* title, u8 flags);
-b8 ui_window_end();
+b8 ui_window_end(b8 reset_textures);
 
 b8 ui_window_is_hit(const u32 window_id);
 

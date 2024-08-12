@@ -636,7 +636,7 @@ internal b8 application_show_directory_window(ApplicationContext* app, const u32
         if (!tab->directory_list.item_selected && !tab->directory_list.inputs.data[0].active)
         {
             if ((!app->open_context_menu_window &&
-                 event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT)) ||
+                 event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT)) ||
                 event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_RIGHT))
             {
                 tab_clear_selected(tab);
@@ -676,7 +676,7 @@ internal b8 application_show_directory_window(ApplicationContext* app, const u32
             add_arrow_icon(layout.at, button_size, current->sort_count);
         }
 
-        return ui_window_end();
+        return ui_window_end(false);
     }
     return false;
 }
@@ -1477,7 +1477,7 @@ internal b8 access_panel_open(AccessPanel* panel, const char* title, const f32 l
             {
                 *item_hit = panel->items.data[hit_index].path;
             }
-            panel->menu_item.show = !ui_window_end();
+            panel->menu_item.show = !ui_window_end(false);
         }
         if (!panel->menu_item.show)
         {
@@ -2130,7 +2130,7 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
     }
 
     ui_window_dock_space_size(app->menu_window, v2f(layout.width, layout.ui_layout.at.y));
-    if (ui_window_end() && !app->open_font_change_window && app->open_menu_window)
+    if (ui_window_end(false) && !app->open_font_change_window && app->open_menu_window)
     {
         dark_mode_x = 0.0f;
         focused_window_x = 0.0f;
@@ -2177,7 +2177,7 @@ internal void application_open_windows_window(ApplicationContext* app, DropDownL
                                   "Search result:", app->dimensions);
 
         ui_window_dock_space_size(app->windows_window, v2f(layout.width, layout.ui_layout.at.y));
-        if (ui_window_end() && app->open_windows_window)
+        if (ui_window_end(false) && app->open_windows_window)
         {
             app->quick_access.menu_item.switch_x = 0.0f;
             app->recent.panel.menu_item.switch_x = 0.0f;
@@ -2313,7 +2313,7 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
         }
 
         ui_window_dock_space_size(app->style_menu_window, v2f(layout.width, layout.ui_layout.at.y));
-        if (ui_window_end() && !app->open_color_picker_window && app->open_style_menu_window)
+        if (ui_window_end(false) && !app->open_color_picker_window && app->open_style_menu_window)
         {
             app->open_style_menu_window = false;
         }
@@ -2431,7 +2431,7 @@ internal void application_open_filter_menu_window(ApplicationContext* app, DropD
 
         ui_window_dock_space_size(app->filter_menu_window,
                                   v2f(layout.width, layout.ui_layout.at.y));
-        if (ui_window_end() && app->open_filter_menu_window)
+        if (ui_window_end(false) && app->open_filter_menu_window)
         {
             app->open_filter_menu_window = false;
             hidden_files_x = 0.0f;
@@ -2487,7 +2487,7 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
         }
         else if (clicked)
         {
-            if (item->id == 160 || item->id == 162)
+            if (item->id == 160 || item->id == 161 || item->id == 162)
             {
                 for (u32 j = 0; j < selected_paths->size; ++j)
                 {
@@ -2642,7 +2642,7 @@ internal void application_open_context_menu_window(ApplicationContext* app,
         app->context_menu_x += (f32)(app->delta_time * 8.0);
         app->context_menu_x = ftic_clamp_high(app->context_menu_x, 1.0f);
 
-        if (ui_window_end())
+        if (ui_window_end(true))
         {
             app->context_menu_x = 0.0f;
             app->open_context_menu_window = false;
@@ -2769,7 +2769,7 @@ void application_open_preview(ApplicationContext* app)
             ui_window_add_image(v2d(), image_dimensions, app->preview_image.textures.data[0],
                                 &layout);
 
-            if (ui_window_end()) app->preview_index = -1;
+            if (ui_window_end(false)) app->preview_index = -1;
         }
     }
     else if (app->preview_index == 1)
@@ -2799,7 +2799,7 @@ void application_open_preview(ApplicationContext* app)
         {
             ui_window_add_text_colored(v2f(10.0f, 10.0f), &app->preview_text.file_colored, true,
                                        &layout);
-            if (ui_window_end()) app->preview_index = -1;
+            if (ui_window_end(false)) app->preview_index = -1;
         }
     }
 }
@@ -2827,9 +2827,23 @@ internal void application_handle_file_drag(ApplicationContext* app)
     if (mouse_button_event->action == FTIC_RELEASE)
     {
         activated = false;
+        return;
     }
-    if (app->current_tab->directory_list.inputs.data[0].active)
+
+    b8 item_hit = false;
+    AABBArray* aabbs = &app->current_tab->directory_list.selected_item_values.aabbs;
+    for (u32 i = 0; i < aabbs->size; ++i)
     {
+        if(collision_point_in_aabb(app->mouse_position, aabbs->data + i))
+        {
+            item_hit = true;
+            break;
+        }
+    }
+    const b8 window_hit = ui_window_is_hit(app->current_tab->window_id);
+    if (!item_hit || !window_hit || app->current_tab->directory_list.inputs.data[0].active)
+    {
+        activated = false;
         return;
     }
 
@@ -2987,7 +3001,7 @@ internal b8 application_show_search_result_window(ApplicationContext* app,
         platform_mutex_unlock(&page->search_result_file_array.mutex);
         platform_mutex_unlock(&page->search_result_folder_array.mutex);
 
-        return ui_window_end();
+        return ui_window_end(false);
     }
     return false;
 }
@@ -3072,7 +3086,7 @@ void application_update_ui(ApplicationContext* app)
                     app->open_font_change_window = false;
                     app->open_menu_window = true;
                 }
-                app->open_font_change_window = !ui_window_end();
+                app->open_font_change_window = !ui_window_end(false);
             }
         }
 
@@ -3084,7 +3098,7 @@ void application_update_ui(ApplicationContext* app)
                 UiLayout ui_layout = ui_layout_create(v2i(10.0f));
                 *app->color_to_change = ui_window_add_color_picker(
                     v2i(10.0f), v2f(200.0f, 200.0f), app->color_picker_to_use, &ui_layout);
-#if 1
+#if 0
                 char buffer[64] = { 0 };
                 value_to_string(buffer, V2_FMT(app->color_picker_to_use->at));
                 log_message(buffer, strlen(buffer));
@@ -3099,7 +3113,7 @@ void application_update_ui(ApplicationContext* app)
                 ui_window_set_size(app->color_picker_window, v2f(ui_layout.column_width + 20.0f,
                                                                  ui_layout.row_height + 20.0f));
 
-                app->open_color_picker_window = !ui_window_end();
+                app->open_color_picker_window = !ui_window_end(false);
             }
         }
 
@@ -3141,7 +3155,7 @@ void application_update_ui(ApplicationContext* app)
                 app->open_style_menu_window = false;
                 app->open_filter_menu_window = true;
             }
-            ui_window_end();
+            ui_window_end(false);
         }
 
         ui_window_set_position(app->top_bar_window, v2f(0.0f, top_bar_menu_height));
@@ -3294,7 +3308,7 @@ void application_update_ui(ApplicationContext* app)
                 app->search_page.running_callbacks[app->search_page.last_running_id] = false;
             }
 
-            ui_window_end();
+            ui_window_end(false);
         }
 
         const V2 size = v2f(app->dimensions.width, bottom_bar_height);
@@ -3339,7 +3353,7 @@ void application_update_ui(ApplicationContext* app)
             {
                 current->grid_view = true;
             }
-            ui_window_end();
+            ui_window_end(false);
         }
 
         if (!app->open_context_menu_window)

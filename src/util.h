@@ -79,6 +79,7 @@ typedef struct CharArray
 
 typedef struct SelectedItemValues
 {
+    AABBArray aabbs;
     CharPtrArray paths;
     HashTableGuid selected_items;
     char* last_selected;
