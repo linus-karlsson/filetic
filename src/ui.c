@@ -2812,8 +2812,8 @@ b8 ui_window_begin(u32 window_id, const char* title, u8 flags)
     // window->position = round_v2(window->position);
     // window->size = round_v2(window->size);
 
-    V4 top_color = add_window_alpha(window, ui_context.current_window_top_color);
-    V4 bottom_color = add_window_alpha(window, ui_context.current_window_bottom_color);
+    V4 top_color = ui_context.current_window_top_color;
+    V4 bottom_color = ui_context.current_window_bottom_color;
     if (check_bit(window->flags, UI_WINDOW_FROSTED_GLASS))
     {
         const f32 alpha = 0.8f + (0.2f * !ui_frosted_glass);
