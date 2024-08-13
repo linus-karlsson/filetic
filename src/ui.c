@@ -3535,7 +3535,7 @@ b8 ui_window_add_button(V2 position, V2* dimensions, const V4* color, const char
     }
     ui_layout_set_width_and_height(layout, button_aabb.size.width, button_aabb.size.height);
 
-    return collided && hover_clicked_index.clicked;
+    return collided && hover_clicked_index.pressed;
 }
 
 i32 ui_window_add_menu_bar(CharPtrArray* values, V2* position_of_clicked_item)
