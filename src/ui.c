@@ -1673,6 +1673,7 @@ internal void handle_window_top_bar_events(UiWindow* window, V2 top_bar_offset)
                     ui_window_start_size_animation_(window, v2i(200.0f));
                 }
                 ui_context.window_pressed_release_from_dock_space = false;
+                ui_context.window_in_focus = ui_context.id_to_index.data[window->id];
             }
 
             if (check_bit(window->flags, UI_WINDOW_DOCKED))
