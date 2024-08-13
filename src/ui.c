@@ -1847,6 +1847,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
     {
         texture_delete(ui_context.generated_textures.data[i]);
     }
+    ui_context.generated_textures.size = 0;
 
     for (u32 i = 0; i < ui_context.window_hover_clicked_indices.size; ++i)
     {
@@ -2578,7 +2579,7 @@ void ui_context_end()
         glGenFramebuffers(1, &fbo);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-        glGenTextures(1, &fbo_texture);
+        glCreateTextures(GL_TEXTURE_2D, 1, &fbo_texture);
         glBindTexture(GL_TEXTURE_2D, fbo_texture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)ui_context.dimensions.width,
                      (GLsizei)ui_context.dimensions.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
@@ -2634,12 +2635,10 @@ void ui_context_end()
     }
     if (tab_change_docked.dock_space)
     {
-        log_message("1", 1);
         handle_tab_change_or_close(tab_change_docked);
     }
     if (tab_change.dock_space)
     {
-        log_message("2", 1);
         handle_tab_change_or_close(tab_change);
     }
 

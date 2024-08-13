@@ -2834,7 +2834,7 @@ internal void application_handle_file_drag(ApplicationContext* app)
     AABBArray* aabbs = &app->current_tab->directory_list.selected_item_values.aabbs;
     for (u32 i = 0; i < aabbs->size; ++i)
     {
-        if(collision_point_in_aabb(app->mouse_position, aabbs->data + i))
+        if (collision_point_in_aabb(app->mouse_position, aabbs->data + i))
         {
             item_hit = true;
             break;
@@ -3044,25 +3044,6 @@ void application_update_ui(ApplicationContext* app)
 
         const V4 button_color = v4a(v4_s_multi(global_get_clear_color(), 3.0f), 1.0f);
 
-        DropDownLayout layout = drop_down_layout_create(350.0f, v2i(10.0f));
-        layout.ui_layout.padding = 10.0f;
-        if (app->open_menu_window)
-        {
-            application_open_menu_window(app, layout, button_color);
-        }
-        if (app->open_windows_window)
-        {
-            application_open_windows_window(app, layout, button_color);
-        }
-        if (app->open_style_menu_window)
-        {
-            application_open_style_menu_window(app, layout, button_color);
-        }
-        if (app->open_filter_menu_window)
-        {
-            application_open_filter_menu_window(app, layout, button_color);
-        }
-
         if (app->open_font_change_window)
         {
             const V2 size = v2f(app->dimensions.width * 0.5f, app->dimensions.height * 0.9f);
@@ -3115,6 +3096,25 @@ void application_update_ui(ApplicationContext* app)
 
                 app->open_color_picker_window = !ui_window_end(false);
             }
+        }
+
+        DropDownLayout layout = drop_down_layout_create(350.0f, v2i(10.0f));
+        layout.ui_layout.padding = 10.0f;
+        if (app->open_menu_window)
+        {
+            application_open_menu_window(app, layout, button_color);
+        }
+        if (app->open_windows_window)
+        {
+            application_open_windows_window(app, layout, button_color);
+        }
+        if (app->open_style_menu_window)
+        {
+            application_open_style_menu_window(app, layout, button_color);
+        }
+        if (app->open_filter_menu_window)
+        {
+            application_open_filter_menu_window(app, layout, button_color);
         }
 
         ui_window_set_position(app->menu_bar_window, v2d());
