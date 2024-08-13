@@ -863,7 +863,7 @@ internal u32 remove_window_from_shared_dock_space(const u32 window_index,
             dock_space_to_change->windows.data[dock_space_to_change->window_in_focus]);
         window_to_show->position = window_to_remove->position;
         window_to_show->size = window_to_remove->size;
-        unset_bit(window_to_remove->flags, UI_WINDOW_HIDE);
+        unset_bit(window_to_show->flags, UI_WINDOW_HIDE);
     }
     return dock_space_to_change->windows.data[dock_space_to_change->window_in_focus];
 }
@@ -2281,7 +2281,8 @@ internal TabChange update_tabs(const WindowRenderDataArray* windows,
                     !tab_change.close_tab && !any_tab_hit &&
                     collision_point_in_aabb(mouse_position, &tab_aabb))
                 {
-                    if (j != (i32)dock_space->window_in_focus)
+                    const b8 window_in_focus = j == (i32)dock_space->window_in_focus;
+                    if (!window_in_focus)
                     {
                         if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
                         {
@@ -2292,7 +2293,6 @@ internal TabChange update_tabs(const WindowRenderDataArray* windows,
                         }
                         tab_color = v4ic(0.3f);
                     }
-
                     if (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
                     {
                         ui_context.window_pressed_release_from_dock_space = true;
@@ -2633,10 +2633,12 @@ void ui_context_end()
     }
     if (tab_change_docked.dock_space)
     {
+        log_message("1", 1);
         handle_tab_change_or_close(tab_change_docked);
     }
     if (tab_change.dock_space)
     {
+        log_message("2", 1);
         handle_tab_change_or_close(tab_change);
     }
 
