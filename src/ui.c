@@ -3167,11 +3167,37 @@ internal void render_input(UiWindow* window, const f64 delta_time, const V2 text
         if (event_is_key_pressed_repeat(FTIC_KEY_LEFT))
         {
             input->input_index = ftic_max(input->input_index - 1, 0);
+            if (event_get_key_event()->ctrl_pressed)
+            {
+                for (--input->input_index; input->input_index >= 0; --input->input_index)
+                {
+                    char current_char = input->buffer.data[input->input_index];
+                    if (current_char == '.' || current_char == '\\' || current_char == '-')
+                    {
+                        input->input_index++;
+                        break;
+                    }
+                }
+            }
+            input->input_index = ftic_max(input->input_index, 0);
             input->time = 0.4f;
         }
         if (event_is_key_pressed_repeat(FTIC_KEY_RIGHT))
         {
             input->input_index = ftic_min(input->input_index + 1, (i32)input->buffer.size);
+            if (event_get_key_event()->ctrl_pressed)
+            {
+                for (++input->input_index; input->input_index < (i32)input->buffer.size;
+                     ++input->input_index)
+                {
+                    char current_char = input->buffer.data[input->input_index];
+                    if (current_char == '.' || current_char == '\\' || current_char == '-')
+                    {
+                        break;
+                    }
+                }
+            }
+            input->input_index = ftic_min(input->input_index, (i32)input->buffer.size);
             input->time = 0.4f;
         }
         input->time += (f32)delta_time;
