@@ -2334,7 +2334,7 @@ internal TabChange update_tabs(const WindowRenderDataArray* windows,
                 if (should_check_collision && collided &&
                     check_bit(window->flags, UI_WINDOW_AREA_HIT))
                 {
-                    if (event_is_mouse_button_clicked(FTIC_MOUSE_BUTTON_LEFT))
+                    if (event_is_mouse_button_pressed_once(FTIC_MOUSE_BUTTON_LEFT))
                     {
                         tab_change.close_tab = true;
                         tab_change.dock_space = dock_space;
