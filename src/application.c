@@ -1323,11 +1323,13 @@ internal b8 suggestion_selection(u32 index, b8 hit, b8 should_close, b8 item_cli
 internal void open_window(const V2 dimensions, const u32 window_id)
 {
     V2 end_size = v2i(200.0f);
-    V2 end_position =
-        v2f(middle(dimensions.width, end_size.width), middle(dimensions.height, end_size.height));
+    V2 start_position = v2_s_multi(dimensions, 0.5f);
+    start_position = v2f(round_f32(start_position.x), round_f32(start_position.y));
+    V2 end_position = v2f(round_f32(middle(dimensions.width, end_size.width)),
+                          round_f32(middle(dimensions.height, end_size.height)));
 
     ui_window_set_size(window_id, v2i(0.0f));
-    ui_window_set_position(window_id, v2_s_multi(dimensions, 0.5f));
+    ui_window_set_position(window_id, start_position);
     ui_window_start_size_animation(window_id, end_size);
     ui_window_start_position_animation(window_id, end_position);
 }
@@ -1618,8 +1620,6 @@ void application_initialize(ApplicationContext* app)
     app->top_bar_window = app->windows.data[window_index++];
     app->bottom_bar_window = app->windows.data[window_index++];
     app->preview_window = app->windows.data[window_index++];
-    app->menu_window = app->windows.data[window_index++];
-    app->windows_window = app->windows.data[window_index++];
     app->font_change_window = app->windows.data[window_index++];
 
     app->search_result_window_item.window = app->windows.data[window_index++];
@@ -1691,10 +1691,13 @@ void application_initialize(ApplicationContext* app)
     }
 
     app->context_menu_window = app->windows.data[window_index++];
-    app->style_menu_window = app->windows.data[window_index++];
     app->color_picker_window = app->windows.data[window_index++];
-    app->filter_menu_window = app->windows.data[window_index++];
     app->menu_bar_window = app->windows.data[window_index++];
+
+    for (u32 i = 0; i < static_array_size(app->menu_bar.windows); ++i)
+    {
+        app->menu_bar.windows[i] = app->windows.data[window_index++];
+    }
 
     theme_set_dark(&app->picker);
     application_set_colors(app);
@@ -1722,12 +1725,12 @@ void application_initialize(ApplicationContext* app)
     array_create(&app->preview_image.textures, 10);
     array_create(&app->preview_text.file_colored, 1000);
 
-    char* menu_options[] = { "Menu", "Windows", "Style", "Filter" };
-    array_create(&app->menu_values, 10);
-    array_push(&app->menu_values, menu_options[0]);
-    array_push(&app->menu_values, menu_options[1]);
-    array_push(&app->menu_values, menu_options[2]);
-    array_push(&app->menu_values, menu_options[3]);
+    char* menu_options[] = { "Menu", "Windows", "Style", "Filter", "Help" };
+    array_create(&app->menu_values, MENU_BAR_ITEM_COUNT);
+    for (u32 i = 0; i < static_array_size(menu_options); ++i)
+    {
+        array_push(&app->menu_values, menu_options[i]);
+    }
 
     enable_gldebugging();
     glEnable(GL_BLEND);
@@ -1800,26 +1803,7 @@ void application_begin_frame(ApplicationContext* app)
 
     if (event_is_ctrl_and_key_pressed(FTIC_KEY_T))
     {
-        DirectoryTab tab = { 0 };
-        array_push(&app->tabs, tab);
-        directory_tab_add("C:\\*", &app->thread_queue.task_queue, array_back(&app->tabs));
-        app->tab_index = app->tabs.size - 1;
-        u32 window_id = 0;
-        if (app->free_window_ids.size)
-        {
-            window_id = *array_back(&app->free_window_ids);
-            app->free_window_ids.size--;
-        }
-        else
-        {
-            if (app->tab_windows.size <= app->current_tab_window_index)
-            {
-                ftic_assert(false);
-            }
-            window_id = app->tab_windows.data[app->current_tab_window_index++];
-        }
-        array_back(&app->tabs)->window_id = window_id;
-        open_window(app->dimensions, window_id);
+        application_add_tab(app);
     }
 }
 
@@ -1836,6 +1820,30 @@ void application_end_frame(ApplicationContext* app)
 f64 application_get_last_mouse_move_time(const ApplicationContext* app)
 {
     return window_get_time() - app->last_moved_time;
+}
+
+void application_add_tab(ApplicationContext* app)
+{
+    DirectoryTab tab = { 0 };
+    array_push(&app->tabs, tab);
+    directory_tab_add("C:\\*", &app->thread_queue.task_queue, array_back(&app->tabs));
+    app->tab_index = app->tabs.size - 1;
+    u32 window_id = 0;
+    if (app->free_window_ids.size)
+    {
+        window_id = *array_back(&app->free_window_ids);
+        app->free_window_ids.size--;
+    }
+    else
+    {
+        if (app->tab_windows.size <= app->current_tab_window_index)
+        {
+            ftic_assert(false);
+        }
+        window_id = app->tab_windows.data[app->current_tab_window_index++];
+    }
+    array_back(&app->tabs)->window_id = window_id;
+    open_window(app->dimensions, window_id);
 }
 
 internal void clear_search_result(SafeFileArray* files)
@@ -1975,7 +1983,8 @@ void search_page_search(SearchPage* page, DirectoryHistory* directory_history,
 internal void application_open_menu_window(ApplicationContext* app, DropDownLayout layout,
                                            const V4 button_color)
 {
-    if (!ui_window_begin(app->menu_window, NULL, UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+    if (!ui_window_begin(app->menu_bar.menu_window, NULL,
+                         UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
     {
         return;
     }
@@ -2129,14 +2138,14 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
         ui_set_list_padding(0.0f);
     }
 
-    ui_window_dock_space_size(app->menu_window, v2f(layout.width, layout.ui_layout.at.y));
-    if (ui_window_end(false) && !app->open_font_change_window && app->open_menu_window)
+    ui_window_dock_space_size(app->menu_bar.menu_window, v2f(layout.width, layout.ui_layout.at.y));
+    if (ui_window_end(false) && !app->open_font_change_window && app->menu_bar.open_menu_window)
     {
         dark_mode_x = 0.0f;
         focused_window_x = 0.0f;
         animation_x = 0.0f;
         ui_frosted_x = 0.0f;
-        app->open_menu_window = false;
+        app->menu_bar.open_menu_window = false;
     }
 }
 
@@ -2165,7 +2174,8 @@ internal void window_open_menu_item_add(WindowOpenMenuItem* item, DropDownLayout
 internal void application_open_windows_window(ApplicationContext* app, DropDownLayout layout,
                                               const V4 button_color)
 {
-    if (ui_window_begin(app->windows_window, NULL, UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+    if (ui_window_begin(app->menu_bar.windows_window, NULL,
+                        UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
     {
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
 
@@ -2176,13 +2186,25 @@ internal void application_open_windows_window(ApplicationContext* app, DropDownL
         window_open_menu_item_add(&app->search_result_window_item, &layout,
                                   "Search result:", app->dimensions);
 
-        ui_window_dock_space_size(app->windows_window, v2f(layout.width, layout.ui_layout.at.y));
-        if (ui_window_end(false) && app->open_windows_window)
+        ui_window_add_text(layout.ui_layout.at, "Add Window", false, &layout.ui_layout);
+        V2 button_size = ui_window_get_button_dimensions(v2d(), "+", NULL);
+        V2 button_position =
+            v2f(layout.width - button_size.width - layout.ui_layout.at.x, layout.ui_layout.at.y);
+        if (ui_window_add_button(button_position, &button_size, &button_color, "+",
+                                 &layout.ui_layout))
+        {
+            application_add_tab(app);
+        }
+        ui_layout_row(&layout.ui_layout);
+
+        ui_window_dock_space_size(app->menu_bar.windows_window,
+                                  v2f(layout.width, layout.ui_layout.at.y));
+        if (ui_window_end(false) && app->menu_bar.open_windows_window)
         {
             app->quick_access.menu_item.switch_x = 0.0f;
             app->recent.panel.menu_item.switch_x = 0.0f;
             app->search_result_window_item.switch_x = 0.0f;
-            app->open_windows_window = false;
+            app->menu_bar.open_windows_window = false;
         }
     }
 }
@@ -2212,9 +2234,10 @@ internal void drop_down_layout_add_color_picker_button(DropDownLayout* layout, c
 internal void application_open_style_menu_window(ApplicationContext* app, DropDownLayout layout,
                                                  V4 button_color)
 {
-    if (ui_window_begin(app->style_menu_window, NULL, UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+    if (ui_window_begin(app->menu_bar.style_menu_window, NULL,
+                        UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
     {
-        const UiWindow* top_bar_style = ui_window_get(app->style_menu_window);
+        const UiWindow* top_bar_style = ui_window_get(app->menu_bar.style_menu_window);
 
         const f32 ui_font_pixel_height = ui_context_get_font_pixel_height();
         V2 button_size = v2i(8.0f + ui_font_pixel_height);
@@ -2312,10 +2335,12 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
             application_set_colors(app);
         }
 
-        ui_window_dock_space_size(app->style_menu_window, v2f(layout.width, layout.ui_layout.at.y));
-        if (ui_window_end(false) && !app->open_color_picker_window && app->open_style_menu_window)
+        ui_window_dock_space_size(app->menu_bar.style_menu_window,
+                                  v2f(layout.width, layout.ui_layout.at.y));
+        if (ui_window_end(false) && !app->open_color_picker_window &&
+            app->menu_bar.open_style_menu_window)
         {
-            app->open_style_menu_window = false;
+            app->menu_bar.open_style_menu_window = false;
         }
     }
 }
@@ -2323,7 +2348,8 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
 internal void application_open_filter_menu_window(ApplicationContext* app, DropDownLayout layout,
                                                   V4 button_color)
 {
-    if (ui_window_begin(app->filter_menu_window, NULL, UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+    if (ui_window_begin(app->menu_bar.filter_menu_window, NULL,
+                        UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
     {
         {
             V2 button_dim = ui_window_get_button_dimensions(v2d(), "Add", NULL);
@@ -2429,13 +2455,41 @@ internal void application_open_filter_menu_window(ApplicationContext* app, DropD
             }
         }
 
-        ui_window_dock_space_size(app->filter_menu_window,
+        ui_window_dock_space_size(app->menu_bar.filter_menu_window,
                                   v2f(layout.width, layout.ui_layout.at.y));
-        if (ui_window_end(false) && app->open_filter_menu_window)
+        if (ui_window_end(false) && app->menu_bar.open_filter_menu_window)
         {
-            app->open_filter_menu_window = false;
+            app->menu_bar.open_filter_menu_window = false;
             hidden_files_x = 0.0f;
             filter_on_x = 0.0f;
+        }
+    }
+}
+
+internal void application_open_help_menu_window(ApplicationContext* app, DropDownLayout layout,
+                                                V4 button_color)
+{
+    if (ui_window_begin(app->menu_bar.help_menu_widnow, NULL,
+                        UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
+    {
+        const FontTTF* ui_font = ui_context_get_font();
+        char* commands[] = { "Copy", "Paste", "Open preview", "Add window" };
+        char* value[] = { "CTRL + C", "CTRL + P", "SHFT + E", "CTRL + T" };
+        for (u32 i = 0; i < static_array_size(commands); ++i)
+        {
+            ui_window_add_text(layout.ui_layout.at, commands[i], false, &layout.ui_layout);
+            f32 x_advance = text_x_advance(ui_font->chars, value[i], (u32)strlen(value[i]), 1.0f);
+            V2 right_align_text_position =
+                v2f(layout.width - x_advance - layout.ui_layout.at.x, layout.ui_layout.at.y);
+            ui_window_add_text(right_align_text_position, value[i], false, &layout.ui_layout);
+            ui_layout_row(&layout.ui_layout);
+        }
+
+        ui_window_dock_space_size(app->menu_bar.help_menu_widnow,
+                                  v2f(layout.width, layout.ui_layout.at.y));
+        if (ui_window_end(false) && app->menu_bar.open_help_menu_window)
+        {
+            app->menu_bar.open_help_menu_window = false;
         }
     }
 }
@@ -2811,12 +2865,17 @@ void pre_open_context_menu(void* data)
     platform_context_menu_destroy(menu);
 }
 
-void open_menu_window(const u32 window, const V2 position, const f32 starting_width)
+void open_menu_window(ApplicationContext* app, const i32 index, const V2 position,
+                      const f32 starting_width)
 {
+    const u32 window = app->menu_bar.windows[index];
     ui_window_set_position(window, position);
     ui_window_set_size(window, v2f(starting_width * 0.8f, 0.0f));
     ui_window_start_size_animation(window, v2f(starting_width * 0.8f, 0.0f));
     ui_window_set_animation_x(window, 0.2f);
+
+    memset(app->menu_bar.open_windows, false, sizeof(app->menu_bar.open_windows));
+    app->menu_bar.open_windows[index] = true;
 }
 
 internal void application_handle_file_drag(ApplicationContext* app)
@@ -3065,7 +3124,7 @@ void application_update_ui(ApplicationContext* app)
                     ui_context_set_font_path(path);
                     ui_context_change_font_pixel_height(ui_font_pixel_height);
                     app->open_font_change_window = false;
-                    app->open_menu_window = true;
+                    app->menu_bar.open_menu_window = true;
                 }
                 app->open_font_change_window = !ui_window_end(false);
             }
@@ -3100,21 +3159,25 @@ void application_update_ui(ApplicationContext* app)
 
         DropDownLayout layout = drop_down_layout_create(350.0f, v2i(10.0f));
         layout.ui_layout.padding = 10.0f;
-        if (app->open_menu_window)
+        if (app->menu_bar.open_menu_window)
         {
             application_open_menu_window(app, layout, button_color);
         }
-        if (app->open_windows_window)
+        else if (app->menu_bar.open_windows_window)
         {
             application_open_windows_window(app, layout, button_color);
         }
-        if (app->open_style_menu_window)
+        else if (app->menu_bar.open_style_menu_window)
         {
             application_open_style_menu_window(app, layout, button_color);
         }
-        if (app->open_filter_menu_window)
+        else if (app->menu_bar.open_filter_menu_window)
         {
             application_open_filter_menu_window(app, layout, button_color);
+        }
+        else if (app->menu_bar.open_help_menu_window)
+        {
+            application_open_help_menu_window(app, layout, button_color);
         }
 
         ui_window_set_position(app->menu_bar_window, v2d());
@@ -3123,37 +3186,9 @@ void application_update_ui(ApplicationContext* app)
         {
             V2 drop_down_position = v2d();
             i32 index_clicked = ui_window_add_menu_bar(&app->menu_values, &drop_down_position);
-            if (index_clicked == 0)
+            if (index_clicked != -1)
             {
-                open_menu_window(app->menu_window, drop_down_position, layout.width);
-                app->open_windows_window = false;
-                app->open_style_menu_window = false;
-                app->open_filter_menu_window = false;
-                app->open_menu_window = true;
-            }
-            else if (index_clicked == 1)
-            {
-                open_menu_window(app->windows_window, drop_down_position, layout.width);
-                app->open_menu_window = false;
-                app->open_style_menu_window = false;
-                app->open_filter_menu_window = false;
-                app->open_windows_window = true;
-            }
-            else if (index_clicked == 2)
-            {
-                open_menu_window(app->style_menu_window, drop_down_position, layout.width);
-                app->open_menu_window = false;
-                app->open_windows_window = false;
-                app->open_filter_menu_window = false;
-                app->open_style_menu_window = true;
-            }
-            else if (index_clicked == 3)
-            {
-                open_menu_window(app->filter_menu_window, drop_down_position, layout.width);
-                app->open_menu_window = false;
-                app->open_windows_window = false;
-                app->open_style_menu_window = false;
-                app->open_filter_menu_window = true;
+                open_menu_window(app, index_clicked, drop_down_position, layout.width);
             }
             ui_window_end(false);
         }

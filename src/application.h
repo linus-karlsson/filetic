@@ -151,6 +151,35 @@ typedef struct Filter
     b8 on;
 } Filter;
 
+#define MENU_BAR_ITEM_COUNT 5
+
+typedef struct MenuBar
+{
+    union
+    {
+        u32 windows[MENU_BAR_ITEM_COUNT];
+        struct
+        {
+            u32 menu_window;
+            u32 windows_window;
+            u32 style_menu_window;
+            u32 filter_menu_window;
+            u32 help_menu_widnow;
+        };
+    };
+    union
+    {
+        b8 open_windows[MENU_BAR_ITEM_COUNT];
+        struct
+        {
+            b8 open_menu_window;
+            b8 open_windows_window;
+            b8 open_style_menu_window;
+            b8 open_filter_menu_window;
+            b8 open_help_menu_window;
+        };
+    };
+} MenuBar;
 
 typedef struct ApplicationContext
 {
@@ -196,14 +225,12 @@ typedef struct ApplicationContext
     u32 top_bar_window;
     u32 bottom_bar_window;
     u32 preview_window;
-    u32 menu_window;
-    u32 windows_window;
     u32 font_change_window;
     u32 context_menu_window;
     u32 color_picker_window;
-    u32 style_menu_window;
-    u32 filter_menu_window;
     u32 menu_bar_window;
+
+    MenuBar menu_bar;
 
     f32 context_menu_x;
 
@@ -250,11 +277,7 @@ typedef struct ApplicationContext
     b8 show_hidden_files;
 
     b8 open_font_change_window;
-    b8 open_menu_window;
-    b8 open_windows_window;
     b8 open_context_menu_window;
-    b8 open_style_menu_window;
-    b8 open_filter_menu_window;
     b8 open_color_picker_window;
 
     b8 check_collision_in_ui;
@@ -269,7 +292,9 @@ void application_uninitialize(ApplicationContext* application);
 void application_begin_frame(ApplicationContext* application);
 void application_end_frame(ApplicationContext* application);
 f64 application_get_last_mouse_move_time(const ApplicationContext* appliction);
+void application_add_tab(ApplicationContext* app);
 
 void search_page_clear_result(SearchPage* page);
 b8 search_page_has_result(const SearchPage* search_page);
-void search_page_search(SearchPage* page, DirectoryHistory* directory_history, ThreadTaskQueue* thread_task_queue);
+void search_page_search(SearchPage* page, DirectoryHistory* directory_history,
+                        ThreadTaskQueue* thread_task_queue);
