@@ -1479,7 +1479,7 @@ void ui_context_create()
     u32 index_buffer_id = index_buffer_create();
     index_buffer_orphan(index_buffer_id, ui_context.render.indices.size * sizeof(u32),
                         GL_STATIC_DRAW, ui_context.render.indices.data);
-    free(ui_context.render.indices.data);
+    array_free(&ui_context.render.indices);
 
     ui_context.render.render =
         render_create(shader, textures, &vertex_buffer_layout, vertex_buffer_id, index_buffer_id);
@@ -1513,7 +1513,7 @@ void ui_context_create()
         index_buffer_orphan(frosted_index_buffer_id,
                             ui_context.frosted_render.indices.size * sizeof(u32), GL_STATIC_DRAW,
                             ui_context.frosted_render.indices.data);
-        free(ui_context.frosted_render.indices.data);
+        array_free(&ui_context.frosted_render.indices);
 
         ui_context.frosted_render.render =
             render_create(frosted_shader, frosted_textures, &vertex_buffer_layout,
@@ -1843,6 +1843,8 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
     ui_context.render.vertices.size = 0;
     ui_context.current_index_offset = 0;
 
+    ui_context.non_docked_window_hover = false;
+
     for (u32 i = 0; i < ui_context.generated_textures.size; ++i)
     {
         texture_delete(ui_context.generated_textures.data[i]);
@@ -1853,6 +1855,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
     {
         ui_context.window_hover_clicked_indices.data[i] = (HoverClickedIndex){ .index = -1 };
     }
+
     reset_last_frame_windows(&ui_context.last_frame_docked_windows);
     reset_last_frame_windows(&ui_context.last_frame_windows);
     reset_last_frame_windows(&ui_context.last_frame_overlay_windows);
@@ -1860,14 +1863,17 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
     {
         set_bit(ui_context.pressed_window->flags, UI_WINDOW_AREA_HIT);
     }
-    if (check_collisions && !ui_context.dock_resize_hover && !ui_context.dock_resize &&
-        !ui_context.any_window_top_bar_hold && !ui_context.any_window_hold)
+    if (check_collisions && !ui_context.dock_resize && !ui_context.any_window_top_bar_hold &&
+        !ui_context.any_window_hold)
     {
+        window_set_cursor(window_get_current(), FTIC_NORMAL_CURSOR);
+
         for (i32 i = ((i32)ui_context.last_frame_overlay_windows.size) - 1; i >= 0; --i)
         {
             const WindowRenderData* render_data = ui_context.last_frame_overlay_windows.data + i;
             if (check_window_collisions(render_data))
             {
+                ui_context.non_docked_window_hover = true;
                 set_bit(ui_window_get_(render_data->id)->flags, UI_WINDOW_AREA_HIT);
                 goto collision_check_done;
             }
@@ -1894,6 +1900,7 @@ void ui_context_begin(const V2 dimensions, const AABB* dock_space, const f64 del
                     set_bit(window->flags, UI_WINDOW_AREA_HIT);
                     goto collision_check_done;
                 }
+                ui_context.non_docked_window_hover = true;
             }
             const u32 window_in_focus = ui_context.window_in_focus;
             if (check_window_collisions(render_data))
@@ -2649,6 +2656,33 @@ void ui_context_end()
 void ui_context_destroy()
 {
     save_layout();
+
+    array_free(&ui_context.id_to_index);
+    array_free(&ui_context.free_indices);
+    array_free(&ui_context.animation_x);
+
+    array_free(&ui_context.generated_textures);
+
+    array_free(&ui_context.last_frame_windows);
+    array_free(&ui_context.current_frame_windows);
+
+    array_free(&ui_context.last_frame_docked_windows);
+    array_free(&ui_context.current_frame_docked_windows);
+
+    array_free(&ui_context.last_frame_overlay_windows);
+    array_free(&ui_context.current_frame_overlay_windows);
+
+    array_free(&ui_context.windows);
+    array_free(&ui_context.window_aabbs);
+    array_free(&ui_context.window_hover_clicked_indices);
+
+    free(ui_context.particles.data);
+
+    render_destroy(&ui_context.render.render);
+    array_free(&ui_context.render.vertices);
+
+    render_destroy(&ui_context.frosted_render.render);
+    array_free(&ui_context.frosted_render.vertices);
 }
 
 void ui_context_set_window_in_focus(const u32 window_id)

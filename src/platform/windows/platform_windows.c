@@ -606,6 +606,11 @@ void platform_initialize_filter()
     g_filter_options = hash_table_create_char_u32(100, hash_murmur);
 }
 
+void platform_uninitialize_filter()
+{
+    free(g_filter_options.cells);
+}
+
 void platform_insert_filter_value(char* value, b8 selected)
 {
     hash_table_insert_char_u32(&g_filter_options, value, selected);

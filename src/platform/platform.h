@@ -212,6 +212,7 @@ PlatformTime platform_time_from_u64(u64 time);
 void platform_open_terminal(const char* path);
 
 void platform_initialize_filter();
+void platform_uninitialize_filter();
 void platform_insert_filter_value(char* value, b8 selected);
 void platform_set_filter_on(const char* value, b8 selected);
 void platform_set_filter(b8 on);

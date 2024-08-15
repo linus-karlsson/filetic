@@ -69,7 +69,16 @@ internal void look_for_same_items(const DirectoryItemArray* existing_items,
 
 void directory_reload(DirectoryPage* directory_page)
 {
-    char* path = platform_get_path_from_id(directory_page->directory.parent_id);
+    char* path = NULL;
+    if (string_compare_case_insensitive(directory_page->directory.parent, "C:") == 0)
+    {
+        path = string_copy(directory_page->directory.parent,
+                           (u32)strlen(directory_page->directory.parent), 3);
+    }
+    else
+    {
+        path = platform_get_path_from_id(directory_page->directory.parent_id);
+    }
     u32 length = (u32)strlen(path);
     path[length++] = '\\';
     path[length++] = '*';
@@ -82,6 +91,8 @@ void directory_reload(DirectoryPage* directory_page)
     platform_reset_directory(&directory_page->directory, false);
     directory_page->directory = reloaded_directory;
     directory_sort(directory_page);
+
+    free(path);
 }
 
 void directory_paste_in_directory(DirectoryPage* current_directory)

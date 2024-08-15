@@ -1729,7 +1729,7 @@ void application_initialize(ApplicationContext* app)
     array_create(&app->menu_values, MENU_BAR_ITEM_COUNT);
     for (u32 i = 0; i < static_array_size(menu_options); ++i)
     {
-        array_push(&app->menu_values, menu_options[i]);
+        array_push(&app->menu_values, string_copy_d(menu_options[i]));
     }
 
     enable_gldebugging();
@@ -1760,21 +1760,39 @@ void application_uninitialize(ApplicationContext* app)
     {
         directory_tab_clear(app->tabs.data + i);
     }
-    free(app->windows.data);
-    free(app->tab_windows.data);
-    free(app->free_window_ids.data);
+    array_free(&app->windows);
+    array_free(&app->tab_windows);
+    array_free(&app->free_window_ids);
 
     ui_context_destroy();
 
     render_destroy(&app->main_render.render);
     free(app->main_render.vertices.data);
+    render_destroy(&app->render_3d);
 
     access_panel_save(&app->quick_access, "saved/quick_access.txt");
     access_panel_save(&app->recent.panel, "saved/recent.txt");
 
-    platform_uninit_drag_drop();
+    array_free(&app->suggestions.options);
+    array_free(&app->suggestion_data.items);
+    array_free(&app->preview_image.textures);
+    array_free(&app->preview_text.file_colored);
+
+    for(u32 i = 0; i < app->menu_values.size; ++i)
+    {
+        free(app->menu_values.data[i]);
+    }
+    array_free(&app->menu_values);
+
+    free(app->font.chars);
+    platform_uninitialize_filter();
     threads_uninitialize(&app->thread_queue);
+    platform_uninit_drag_drop();
     event_uninitialize();
+
+    search_page_clear_result(&app->search_page);
+    array_free(&app->search_page.search_result_file_array.array);
+    array_free(&app->search_page.search_result_folder_array.array);
 }
 
 void application_begin_frame(ApplicationContext* app)
@@ -2138,7 +2156,7 @@ internal void application_open_menu_window(ApplicationContext* app, DropDownLayo
         ui_set_list_padding(0.0f);
     }
 
-    ui_window_dock_space_size(app->menu_bar.menu_window, v2f(layout.width, layout.ui_layout.at.y));
+    ui_window_dock_space_size(app->menu_bar.menu_window, v2f(layout.width, round_f32(layout.ui_layout.at.y)));
     if (ui_window_end(false) && !app->open_font_change_window && app->menu_bar.open_menu_window)
     {
         dark_mode_x = 0.0f;
@@ -2198,7 +2216,7 @@ internal void application_open_windows_window(ApplicationContext* app, DropDownL
         ui_layout_row(&layout.ui_layout);
 
         ui_window_dock_space_size(app->menu_bar.windows_window,
-                                  v2f(layout.width, layout.ui_layout.at.y));
+                                  v2f(layout.width, round_f32(layout.ui_layout.at.y)));
         if (ui_window_end(false) && app->menu_bar.open_windows_window)
         {
             app->quick_access.menu_item.switch_x = 0.0f;
@@ -2336,7 +2354,7 @@ internal void application_open_style_menu_window(ApplicationContext* app, DropDo
         }
 
         ui_window_dock_space_size(app->menu_bar.style_menu_window,
-                                  v2f(layout.width, layout.ui_layout.at.y));
+                                  v2f(layout.width, round_f32(layout.ui_layout.at.y)));
         if (ui_window_end(false) && !app->open_color_picker_window &&
             app->menu_bar.open_style_menu_window)
         {
@@ -2456,7 +2474,7 @@ internal void application_open_filter_menu_window(ApplicationContext* app, DropD
         }
 
         ui_window_dock_space_size(app->menu_bar.filter_menu_window,
-                                  v2f(layout.width, layout.ui_layout.at.y));
+                                  v2f(layout.width, round_f32(layout.ui_layout.at.y)));
         if (ui_window_end(false) && app->menu_bar.open_filter_menu_window)
         {
             app->menu_bar.open_filter_menu_window = false;
@@ -2473,8 +2491,8 @@ internal void application_open_help_menu_window(ApplicationContext* app, DropDow
                         UI_WINDOW_OVERLAY | UI_WINDOW_FROSTED_GLASS))
     {
         const FontTTF* ui_font = ui_context_get_font();
-        char* commands[] = { "Copy", "Paste", "Open preview", "Add window" };
-        char* value[] = { "CTRL + C", "CTRL + P", "SHFT + E", "CTRL + T" };
+        char* commands[] = { "Copy", "Paste", "Open preview", "Add window", "Multi rename" };
+        char* value[] = { "CTRL + C", "CTRL + P", "SHFT + E", "CTRL + T", "CTRL + R" };
         for (u32 i = 0; i < static_array_size(commands); ++i)
         {
             ui_window_add_text(layout.ui_layout.at, commands[i], false, &layout.ui_layout);
@@ -2486,7 +2504,7 @@ internal void application_open_help_menu_window(ApplicationContext* app, DropDow
         }
 
         ui_window_dock_space_size(app->menu_bar.help_menu_widnow,
-                                  v2f(layout.width, layout.ui_layout.at.y));
+                                  v2f(layout.width, round_f32(layout.ui_layout.at.y)));
         if (ui_window_end(false) && app->menu_bar.open_help_menu_window)
         {
             app->menu_bar.open_help_menu_window = false;
@@ -2541,6 +2559,7 @@ internal void display_context_menu_items(ContextMenu* context_menu, MenuItemArra
         }
         else if (clicked)
         {
+            log_u64(" ", item->id);
             if (item->id == 160 || item->id == 161 || item->id == 162)
             {
                 for (u32 j = 0; j < selected_paths->size; ++j)
@@ -3158,6 +3177,7 @@ void application_update_ui(ApplicationContext* app)
         }
 
         DropDownLayout layout = drop_down_layout_create(350.0f, v2i(10.0f));
+        layout.text_y_offset = 4.0f;
         layout.ui_layout.padding = 10.0f;
         if (app->menu_bar.open_menu_window)
         {

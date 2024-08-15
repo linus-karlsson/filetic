@@ -31,7 +31,7 @@ void render_destroy(Render* render)
     {
         texture_delete(render->textures.data[i]);
     }
-    free(render->textures.data);
+    array_free(&render->textures);
 }
 
 void rendering_properties_clear(RenderingProperties* rendering_properties)
